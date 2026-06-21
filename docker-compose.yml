@@ -22,6 +22,15 @@ services:
     ports:
       - 80:80    
     depends_on:
-      - db    
+      - db   
+  redis:
+    image: redis
+    container_name: redis
+    ports:
+      - 6379:6379
+    volumes:
+      - ./data/redis:/data  
+      - ./config/redis.conf:/redis.conf
+    command: redis-server /redis.conf
 volumes:
   pgdata:

@@ -1,19 +1,26 @@
 package helpers
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
+	"github.com/belllllx/social-media-go/internal/response"
+	"github.com/belllllx/social-media-go/pkg/errs"
+	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/gomail.v2"
 	"gorm.io/gorm"
 )
 
-func GenerateOTP() (string, error) {
+func NewOTP() (string, error) {
 	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
 	if err != nil {
 		return "", err
@@ -60,4 +67,40 @@ func NewJWT(claims jwt.Claims, secret []byte) (string, error) {
 		return "", err
 	}
 	return tokenString, nil
+}
+
+func RDBSet(rdb *redis.Client, key string, value []byte, expiration time.Duration) error {
+	return rdb.Set(context.Background(), key, string(value), expiration).Err()
+}
+
+func RDBGet(rdb *redis.Client, key string) (string, error) {
+	return rdb.Get(context.Background(), key).Result()
+}
+
+func GetErrorMessages(err validator.FieldError) string {
+	switch err.Tag() {
+	case "required":
+		return "This field is required"
+	case "email":
+		return "Invalid email format"
+	case "min":
+		return fmt.Sprintf("This field minimum length is %s", err.Param())
+	case "max":
+		return fmt.Sprintf("This field maximum length is %s", err.Param())
+	default:
+		return "Invalid value"
+	}
+}
+
+func HandleError(c *gin.Context, err error, msg string) {
+	switch e := err.(type) {
+	case *errs.AppError:
+		c.JSON(e.Status, gin.H{
+			"status":  e.Status,
+			"success": false,
+			"message": msg,
+		})
+	case error:
+		response.InternalServerError(c, err)
+	}
 }

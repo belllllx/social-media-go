@@ -24,3 +24,10 @@ func NewUnexpectedError() *AppError {
 		Message: "Unexpected error",
 	}
 }
+
+func NewBadRequestError() *AppError {
+	return &AppError{
+		Status:  http.StatusBadRequest,
+		Message: "Bad request error",
+	}
+}

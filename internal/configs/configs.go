@@ -5,9 +5,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 func InitTimeZone() {
@@ -39,9 +41,18 @@ func InitDB() *gorm.DB {
 		viper.GetString("db.name"),
 		viper.GetInt("db.port"),
 	)
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
 	if err != nil {
 		panic(err)
 	}
 	return db
+}
+
+func InitRedis() *redis.Client {
+	rdb := redis.NewClient(&redis.Options{
+		Addr: viper.GetString("redis.host"),
+	})
+	return rdb
 }
