@@ -7,7 +7,7 @@ import (
 )
 
 type OTP struct {
-	ID        int64  `gorm:"primaryKey"`
+	ID        int64
 	Email     string `gorm:"type:varchar(30);unique"`
 	OTPHash   string
 	ExpiredAt time.Time
@@ -18,6 +18,7 @@ type OTP struct {
 type OTPRepository interface {
 	Create(otp *OTP) error
 	FindByEmail(email string) (*OTP, error)
+	FindNotExpired(email string) (*OTP, error)
 	Delete(email string) error
 }
 
@@ -37,6 +38,15 @@ func (r *otpRepositoryDB) Create(otp *OTP) error {
 func (r *otpRepositoryDB) FindByEmail(email string) (*OTP, error) {
 	otp := &OTP{}
 	err := r.db.Where("email = ?", email).Take(otp).Error
+	if err != nil {
+		return nil, err
+	}
+	return otp, nil
+}
+
+func (r *otpRepositoryDB) FindNotExpired(email string) (*OTP, error) {
+	otp := &OTP{}
+	err := r.db.Where("email = ? AND expired_at > ?", email, time.Now()).Take(otp).Error
 	if err != nil {
 		return nil, err
 	}

@@ -30,7 +30,7 @@ func Debug(msg string, fields ...zap.Field) {
 	logger.Debug(msg, fields...)
 }
 
-func Warn(msg interface{}, fields ...zap.Field) {
+func Warn(msg any, fields ...zap.Field) {
 	switch v := msg.(type) {
 	case error:
 		logger.Warn(v.Error(), fields...)
@@ -39,7 +39,7 @@ func Warn(msg interface{}, fields ...zap.Field) {
 	}
 }
 
-func Error(msg interface{}, fields ...zap.Field) {
+func Error(msg any, fields ...zap.Field) {
 	switch v := msg.(type) {
 	case error:
 		logger.Error(v.Error(), fields...)

@@ -31,3 +31,10 @@ func NewBadRequestError() *AppError {
 		Message: "Bad request error",
 	}
 }
+
+func NewUnauthorizedError() *AppError {
+	return &AppError{
+		Status:  http.StatusUnauthorized,
+		Message: "Unauthorized",
+	}
+}

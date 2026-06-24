@@ -1,6 +1,6 @@
 basePath: /api
 definitions:
-  auth.RegisterRequest:
+  auth.SendEmailRegisterRequest:
     properties:
       email:
         maxLength: 30
@@ -21,12 +21,37 @@ definitions:
     - password
     - username
     type: object
-  response.RegisterResponse:
+  auth.VerifyOTPRegisterRequest:
+    properties:
+      otp:
+        type: string
+    required:
+    - otp
+    type: object
+  response.SwaggerBadRequestResponse:
     properties:
       error_fields:
         additionalProperties:
           type: string
         type: object
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  response.SwaggerInternalServerErrorResponse:
+    properties:
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  response.SwaggerResponse:
+    properties:
       message:
         type: string
       status:
@@ -51,36 +76,84 @@ info:
   title: Social Media API
   version: "1.0"
 paths:
-  /auth/register:
+  /auth/register/resend-email:
     post:
       consumes:
       - application/json
-      description: create user pending and send email to verify otp
-      parameters:
-      - description: register payload
-        in: body
-        name: payload
-        required: true
-        schema:
-          $ref: '#/definitions/auth.RegisterRequest'
+      description: resend email register
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/response.RegisterResponse'
+            $ref: '#/definitions/response.SwaggerResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/response.RegisterResponse'
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/response.RegisterResponse'
+            $ref: '#/definitions/response.SwaggerInternalServerErrorResponse'
       tags:
       - auth
-securityDefinitions:
-  BasicAuth:
-    type: basic
+  /auth/register/send-email:
+    post:
+      consumes:
+      - application/json
+      description: create user store and send email to verify otp
+      parameters:
+      - description: send email register payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/auth.SendEmailRegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerInternalServerErrorResponse'
+      tags:
+      - auth
+  /auth/register/verify-otp:
+    post:
+      consumes:
+      - application/json
+      description: verify otp and create user
+      parameters:
+      - description: verify otp register payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/auth.VerifyOTPRegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerInternalServerErrorResponse'
+      tags:
+      - auth
 swagger: "2.0"

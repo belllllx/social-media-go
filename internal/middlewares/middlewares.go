@@ -10,6 +10,8 @@ import (
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
@@ -54,5 +56,34 @@ func ZapLogger() gin.HandlerFunc {
 			zap.String("client_ip", c.ClientIP()),
 			zap.Int("body_size", c.Writer.Size()),
 		)
+	}
+}
+
+func AuthRegister() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		token, err := c.Cookie("register_token")
+		if err != nil {
+			response.Unauthorized(c)
+			c.Abort()
+			return
+		}
+
+		t, err := helpers.VerifyJWT(token, viper.GetString("app.register_secret"))
+		if err != nil {
+			response.Unauthorized(c)
+			c.Abort()
+			return
+		}
+
+		claims, ok := t.Claims.(jwt.MapClaims)
+		if !ok {
+			response.Unauthorized(c)
+			c.Abort()
+			return
+		}
+
+		value := claims["email"]
+		c.Set("email", value)
+		c.Next()
 	}
 }

@@ -37,6 +37,10 @@ func HashSecret(secret string) (string, error) {
 	return string(hash), nil
 }
 
+func CompareSecret(hashedSecret, secret string) error {
+	return bcrypt.CompareHashAndPassword([]byte(hashedSecret), []byte(secret))
+}
+
 func IsErrRecordNotFound(err error) bool {
 	return errors.Is(err, gorm.ErrRecordNotFound)
 }
@@ -62,11 +66,17 @@ func SendEmail(email, otp, verifyEmailType string) error {
 
 func NewJWT(claims jwt.Claims, secret []byte) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(secret)
-	if err != nil {
-		return "", err
-	}
-	return tokenString, nil
+	return token.SignedString(secret)
+}
+
+func VerifyJWT(token, secret string) (*jwt.Token, error) {
+	return jwt.Parse(
+		token,
+		func(t *jwt.Token) (any, error) {
+			return []byte(secret), nil
+		},
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+	)
 }
 
 func RDBSet(rdb *redis.Client, key string, value []byte, expiration time.Duration) error {
@@ -87,6 +97,8 @@ func GetErrorMessages(err validator.FieldError) string {
 		return fmt.Sprintf("This field minimum length is %s", err.Param())
 	case "max":
 		return fmt.Sprintf("This field maximum length is %s", err.Param())
+	case "len":
+		return fmt.Sprintf("This field length is %s", err.Param())
 	default:
 		return "Invalid value"
 	}

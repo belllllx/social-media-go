@@ -24,9 +24,43 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/auth/register": {
+        "/auth/register/resend-email": {
             "post": {
-                "description": "create user pending and send email to verify otp",
+                "description": "resend email register",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerInternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/register/send-email": {
+            "post": {
+                "description": "create user store and send email to verify otp",
                 "consumes": [
                     "application/json"
                 ],
@@ -38,12 +72,12 @@ const docTemplate = `{
                 ],
                 "parameters": [
                     {
-                        "description": "register payload",
+                        "description": "send email register payload",
                         "name": "payload",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.RegisterRequest"
+                            "$ref": "#/definitions/auth.SendEmailRegisterRequest"
                         }
                     }
                 ],
@@ -51,19 +85,64 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/response.RegisterResponse"
+                            "$ref": "#/definitions/response.SwaggerResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/response.RegisterResponse"
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/response.RegisterResponse"
+                            "$ref": "#/definitions/response.SwaggerInternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/register/verify-otp": {
+            "post": {
+                "description": "verify otp and create user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "parameters": [
+                    {
+                        "description": "verify otp register payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.VerifyOTPRegisterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerInternalServerErrorResponse"
                         }
                     }
                 }
@@ -71,7 +150,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "auth.RegisterRequest": {
+        "auth.SendEmailRegisterRequest": {
             "type": "object",
             "required": [
                 "email",
@@ -99,7 +178,18 @@ const docTemplate = `{
                 }
             }
         },
-        "response.RegisterResponse": {
+        "auth.VerifyOTPRegisterRequest": {
+            "type": "object",
+            "required": [
+                "otp"
+            ],
+            "properties": {
+                "otp": {
+                    "type": "string"
+                }
+            }
+        },
+        "response.SwaggerBadRequestResponse": {
             "type": "object",
             "properties": {
                 "error_fields": {
@@ -118,11 +208,34 @@ const docTemplate = `{
                     "type": "boolean"
                 }
             }
-        }
-    },
-    "securityDefinitions": {
-        "BasicAuth": {
-            "type": "basic"
+        },
+        "response.SwaggerInternalServerErrorResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "response.SwaggerResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
         }
     },
     "externalDocs": {

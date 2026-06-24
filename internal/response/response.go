@@ -7,19 +7,38 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type ResponseShape struct {
+type GlobalResponse struct {
 	Status      int               `json:"status"`
 	Success     bool              `json:"success"`
 	Message     string            `json:"message"`
-	Data        interface{}       `json:"data,omitempty"`
+	Data        any               `json:"data,omitempty"`
 	ErrorFields map[string]string `json:"error_fields,omitempty"`
 }
 
-type RegisterResponse struct {
+type SwaggerResponse struct {
+	Status  int    `json:"status"`
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+type SwaggerResponseWithData struct {
+	Status  int    `json:"status"`
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Data    any    `json:"data"`
+}
+
+type SwaggerBadRequestResponse struct {
 	Status      int               `json:"status"`
 	Success     bool              `json:"success"`
 	Message     string            `json:"message"`
-	ErrorFields map[string]string `json:"error_fields,omitempty"`
+	ErrorFields map[string]string `json:"error_fields"`
+}
+
+type SwaggerInternalServerErrorResponse struct {
+	Status  int    `json:"status"`
+	Success bool   `json:"success"`
+	Message string `json:"message"`
 }
 
 type CookieOptions struct {
@@ -39,8 +58,12 @@ func SetSecureCookie(c *gin.Context, cookieOptions CookieOptions) {
 	})
 }
 
-func Ok(c *gin.Context, msg string, result interface{}) {
-	c.JSON(http.StatusOK, ResponseShape{
+func ClearCookie(c *gin.Context, key string) {
+	c.SetCookie(key, "", -1, "/", "localhost", true, true)
+}
+
+func Ok(c *gin.Context, msg string, result any) {
+	c.JSON(http.StatusOK, GlobalResponse{
 		Status:  http.StatusOK,
 		Success: true,
 		Message: msg,
@@ -48,8 +71,8 @@ func Ok(c *gin.Context, msg string, result interface{}) {
 	})
 }
 
-func Created(c *gin.Context, msg string, result interface{}) {
-	c.JSON(http.StatusCreated, ResponseShape{
+func Created(c *gin.Context, msg string, result any) {
+	c.JSON(http.StatusCreated, GlobalResponse{
 		Status:  http.StatusCreated,
 		Success: true,
 		Message: msg,
@@ -58,7 +81,7 @@ func Created(c *gin.Context, msg string, result interface{}) {
 }
 
 func BadRequest(c *gin.Context, errorField map[string]string) {
-	c.JSON(http.StatusBadRequest, ResponseShape{
+	c.JSON(http.StatusBadRequest, GlobalResponse{
 		Status:      http.StatusBadRequest,
 		Success:     false,
 		Message:     "Invalid input",
@@ -67,7 +90,7 @@ func BadRequest(c *gin.Context, errorField map[string]string) {
 }
 
 func Unauthorized(c *gin.Context) {
-	c.JSON(http.StatusUnauthorized, ResponseShape{
+	c.JSON(http.StatusUnauthorized, GlobalResponse{
 		Status:  http.StatusUnauthorized,
 		Success: false,
 		Message: "Unauthorized",
@@ -75,7 +98,7 @@ func Unauthorized(c *gin.Context) {
 }
 
 func NotFound(c *gin.Context) {
-	c.JSON(http.StatusNotFound, ResponseShape{
+	c.JSON(http.StatusNotFound, GlobalResponse{
 		Status:  http.StatusNotFound,
 		Success: false,
 		Message: "Not found",
@@ -83,7 +106,7 @@ func NotFound(c *gin.Context) {
 }
 
 func InternalServerError(c *gin.Context, err error) {
-	c.JSON(http.StatusInternalServerError, ResponseShape{
+	c.JSON(http.StatusInternalServerError, GlobalResponse{
 		Status:  http.StatusInternalServerError,
 		Success: false,
 		Message: err.Error(),
