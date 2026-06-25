@@ -13,9 +13,47 @@ import (
 	"github.com/belllllx/social-media-go/pkg/errs"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
 )
+
+type SecureUser struct {
+	ID                   uuid.UUID
+	Fullname             string
+	Username             *string
+	Email                string
+	DateOfBirth          *time.Time
+	ProfileUrl           *string
+	ProfileBackgroundUrl *string
+	Info                 *string
+	Role                 user.Role
+	ProviderType         user.ProviderType
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
+type tokens struct {
+	accessToken  string
+	refreshToken string
+}
+
+type UserAccessTokenJWTPayload struct {
+	ID           uuid.UUID
+	AuthVerified bool
+	jwt.RegisteredClaims
+}
+
+type UserRefreshTokenJWTPayload struct {
+	ID uuid.UUID
+	jwt.RegisteredClaims
+}
+
+type SendEmailRegisterJWTPayload struct {
+	Email             string
+	SendEmailVerified bool
+	jwt.RegisteredClaims
+}
 
 type registerPayload struct {
 	Fullname     string
@@ -27,6 +65,8 @@ type registerPayload struct {
 type AuthService interface {
 	SendEmailRegister(sendEmailRegisterRequest *SendEmailRegisterRequest) (result, token string, err error)
 	VerifyOTPRegister(registerEmail, otp string) (result string, err error)
+	ValidateUserLogin(loginRequest *LoginRequest) (secureUser *SecureUser, err error)
+	Login(userID uuid.UUID) (result string, tokens *tokens, err error)
 }
 
 type authService struct {
@@ -80,15 +120,19 @@ func (s *authService) SendEmailRegister(sendEmailRegisterRequest *SendEmailRegis
 	}
 
 	token, err := helpers.NewJWT(
-		jwt.MapClaims{
-			"email":             sendEmailRegisterRequest.Email,
-			"sendEmailVerified": true,
+		&SendEmailRegisterJWTPayload{
+			Email:             sendEmailRegisterRequest.Email,
+			SendEmailVerified: true,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 10)),
+				IssuedAt:  jwt.NewNumericDate(time.Now()),
+			},
 		},
-		[]byte(viper.GetString("app.register_secret")),
+		viper.GetString("app.register_token_secret"),
 	)
 	if err != nil {
 		logs.Error(err)
-		return "Failed to sign jwt", "", errs.NewUnexpectedError()
+		return "Failed to sign register token jwt", "", errs.NewUnexpectedError()
 	}
 
 	passwordHash, err := helpers.HashSecret(sendEmailRegisterRequest.Password)
@@ -159,4 +203,76 @@ func (s *authService) VerifyOTPRegister(registerEmail, otp string) (string, erro
 	}
 
 	return "Register user successfully", nil
+}
+
+func (s *authService) ValidateUserLogin(loginRequest *LoginRequest) (*SecureUser, error) {
+	userExist, err := s.userRepository.FindByUsername(loginRequest.Username)
+	if err != nil && !helpers.IsErrRecordNotFound(err) {
+		logs.Error(err)
+		return nil, errs.NewInternalServerError()
+	}
+
+	if helpers.IsErrRecordNotFound(err) {
+		return nil, errs.NewUnauthorizedError()
+	}
+
+	err = helpers.CompareSecret(*userExist.PasswordHash, loginRequest.Password)
+	if err != nil {
+		return nil, errs.NewUnauthorizedError()
+	}
+
+	secureUser := &SecureUser{
+		ID:                   userExist.ID,
+		Fullname:             userExist.Fullname,
+		Username:             userExist.Username,
+		Email:                userExist.Email,
+		DateOfBirth:          userExist.DateOfBirth,
+		ProfileUrl:           userExist.ProfileUrl,
+		ProfileBackgroundUrl: userExist.ProfileBackgroundUrl,
+		Info:                 userExist.Info,
+		Role:                 userExist.Role,
+		ProviderType:         userExist.ProviderType,
+		CreatedAt:            userExist.CreatedAt,
+		UpdatedAt:            userExist.UpdatedAt,
+	}
+	return secureUser, nil
+}
+
+func (s *authService) Login(userID uuid.UUID) (string, *tokens, error) {
+	accessToken, err := helpers.NewJWT(
+		&UserAccessTokenJWTPayload{
+			ID:           userID,
+			AuthVerified: true,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 10)),
+				IssuedAt:  jwt.NewNumericDate(time.Now()),
+			},
+		},
+		viper.GetString("app.access_token_secret"),
+	)
+	if err != nil {
+		logs.Error(err)
+		return "Failed to sign access token jwt", nil, errs.NewUnexpectedError()
+	}
+
+	refreshToken, err := helpers.NewJWT(
+		&UserRefreshTokenJWTPayload{
+			ID: userID,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 72)),
+				IssuedAt:  jwt.NewNumericDate(time.Now()),
+			},
+		},
+		viper.GetString("app.refresh_token_secret"),
+	)
+	if err != nil {
+		logs.Error(err)
+		return "Failed to sign refresh token jwt", nil, errs.NewUnexpectedError()
+	}
+
+	tokens := &tokens{
+		accessToken:  accessToken,
+		refreshToken: refreshToken,
+	}
+	return "Login successfully", tokens, nil
 }

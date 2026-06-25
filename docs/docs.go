@@ -24,6 +24,57 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/auth/login": {
+            "post": {
+                "description": "authentication and set cookie",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "parameters": [
+                    {
+                        "description": "login payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.LoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/register/resend-email": {
             "post": {
                 "description": "resend email register",
@@ -52,7 +103,7 @@ const docTemplate = `{
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/response.SwaggerInternalServerErrorResponse"
+                            "$ref": "#/definitions/response.SwaggerResponse"
                         }
                     }
                 }
@@ -60,7 +111,7 @@ const docTemplate = `{
         },
         "/auth/register/send-email": {
             "post": {
-                "description": "create user store and send email to verify otp",
+                "description": "create user store send email to verify otp and set cookie",
                 "consumes": [
                     "application/json"
                 ],
@@ -97,7 +148,7 @@ const docTemplate = `{
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/response.SwaggerInternalServerErrorResponse"
+                            "$ref": "#/definitions/response.SwaggerResponse"
                         }
                     }
                 }
@@ -142,7 +193,7 @@ const docTemplate = `{
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/response.SwaggerInternalServerErrorResponse"
+                            "$ref": "#/definitions/response.SwaggerResponse"
                         }
                     }
                 }
@@ -150,6 +201,21 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "auth.LoginRequest": {
+            "type": "object",
+            "required": [
+                "password",
+                "username"
+            ],
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
         "auth.SendEmailRegisterRequest": {
             "type": "object",
             "required": [
@@ -198,20 +264,6 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
-                "message": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "success": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "response.SwaggerInternalServerErrorResponse": {
-            "type": "object",
-            "properties": {
                 "message": {
                     "type": "string"
                 },

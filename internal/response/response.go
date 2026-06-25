@@ -35,12 +35,6 @@ type SwaggerBadRequestResponse struct {
 	ErrorFields map[string]string `json:"error_fields"`
 }
 
-type SwaggerInternalServerErrorResponse struct {
-	Status  int    `json:"status"`
-	Success bool   `json:"success"`
-	Message string `json:"message"`
-}
-
 type CookieOptions struct {
 	Key    string
 	Value  string

@@ -7,16 +7,16 @@ import (
 	"gorm.io/gorm"
 )
 
-type role string
-type providerType string
+type Role string
+type ProviderType string
 
 const (
-	RoleUser  role = "USER"
-	RoleAdmin role = "ADMIN"
+	RoleUser  Role = "USER"
+	RoleAdmin Role = "ADMIN"
 
-	ProviderTypeLocal  providerType = "LOCAL"
-	ProviderTypeGoogle providerType = "GOOGLE"
-	ProviderTypeGithub providerType = "GITHUB"
+	ProviderTypeLocal  ProviderType = "LOCAL"
+	ProviderTypeGoogle ProviderType = "GOOGLE"
+	ProviderTypeGithub ProviderType = "GITHUB"
 )
 
 type User struct {
@@ -29,8 +29,8 @@ type User struct {
 	ProfileUrl           *string
 	ProfileBackgroundUrl *string
 	Info                 *string      `gorm:"type:varchar(30)"`
-	Role                 role         `gorm:"type:user_role;default:'USER'"`
-	ProviderType         providerType `gorm:"type:provider_type;default:'LOCAL'"`
+	Role                 Role         `gorm:"type:user_role;default:'USER'"`
+	ProviderType         ProviderType `gorm:"type:provider_type;default:'LOCAL'"`
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
 }

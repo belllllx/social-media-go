@@ -20,10 +20,16 @@ type VerifyOTPRegisterRequest struct {
 	OTP string `json:"otp" binding:"required,len=6"`
 }
 
+type LoginRequest struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
 type AuthHandler interface {
 	SendEmailRegister(c *gin.Context)
 	ResendEmailRegister(c *gin.Context)
 	VerifyOTPRegister(c *gin.Context)
+	Login(c *gin.Context)
 }
 
 type authHandler struct {
@@ -40,14 +46,14 @@ func NewAuthHandler(authService AuthService, emailService email.EmailService) Au
 
 // SendEmailRegister godoc
 //
-//	@Description	create user store and send email to verify otp
+//	@Description	create user store send email to verify otp and set cookie
 //	@Tags			auth
 //	@Accept			json
 //	@Produce		json
 //	@Param			payload	body		SendEmailRegisterRequest	true	"send email register payload"
 //	@Success		200		{object}	response.SwaggerResponse
 //	@Failure		400		{object}	response.SwaggerBadRequestResponse
-//	@Failure		500		{object}	response.SwaggerInternalServerErrorResponse
+//	@Failure		500		{object}	response.SwaggerResponse
 //	@Router			/auth/register/send-email [post]
 func (h *authHandler) SendEmailRegister(c *gin.Context) {
 	sendEmailRegisterRequest := &SendEmailRegisterRequest{}
@@ -80,7 +86,7 @@ func (h *authHandler) SendEmailRegister(c *gin.Context) {
 //	@Produce		json
 //	@Success		200	{object}	response.SwaggerResponse
 //	@Failure		400	{object}	response.SwaggerBadRequestResponse
-//	@Failure		500	{object}	response.SwaggerInternalServerErrorResponse
+//	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/register/resend-email [post]
 func (h *authHandler) ResendEmailRegister(c *gin.Context) {
 	email, ok := c.MustGet("email").(string)
@@ -107,7 +113,7 @@ func (h *authHandler) ResendEmailRegister(c *gin.Context) {
 //	@Param			payload	body		VerifyOTPRegisterRequest	true	"verify otp register payload"
 //	@Success		201		{object}	response.SwaggerResponse
 //	@Failure		400		{object}	response.SwaggerBadRequestResponse
-//	@Failure		500		{object}	response.SwaggerInternalServerErrorResponse
+//	@Failure		500		{object}	response.SwaggerResponse
 //	@Router			/auth/register/verify-otp [post]
 func (h *authHandler) VerifyOTPRegister(c *gin.Context) {
 	verifyOTPRegisterRequest := &VerifyOTPRegisterRequest{}
@@ -131,4 +137,42 @@ func (h *authHandler) VerifyOTPRegister(c *gin.Context) {
 
 	response.ClearCookie(c, "register_token")
 	response.Created(c, result, nil)
+}
+
+// Login godoc
+//
+//	@Description	authentication and set cookie
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			payload	body		LoginRequest	true	"login payload"
+//	@Success		200		{object}	response.SwaggerResponse
+//	@Failure		400		{object}	response.SwaggerBadRequestResponse
+//	@Failure		401		{object}	response.SwaggerResponse
+//	@Failure		500		{object}	response.SwaggerResponse
+//	@Router			/auth/login [post]
+func (h *authHandler) Login(c *gin.Context) {
+	secureUser, ok := c.MustGet("user").(*SecureUser)
+	if !ok {
+		response.Unauthorized(c)
+		return
+	}
+
+	result, tokens, err := h.authService.Login(secureUser.ID)
+	if err != nil {
+		helpers.HandleError(c, err, result)
+		return
+	}
+
+	response.SetSecureCookie(c, response.CookieOptions{
+		Key:    "access_token",
+		Value:  tokens.accessToken,
+		MaxAge: time.Minute * 10,
+	})
+	response.SetSecureCookie(c, response.CookieOptions{
+		Key:    "refresh_token",
+		Value:  tokens.refreshToken,
+		MaxAge: time.Hour * 72,
+	})
+	response.Ok(c, result, nil)
 }

@@ -5,12 +5,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/belllllx/social-media-go/internal/auth"
 	"github.com/belllllx/social-media-go/internal/logs"
 	"github.com/belllllx/social-media-go/internal/response"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
@@ -29,11 +29,13 @@ func GlobalErrorsHandler() gin.HandlerFunc {
 						errorField[strings.ToLower(e.Field())] = helpers.GetErrorMessages(e)
 					}
 					response.BadRequest(c, errorField)
+					c.Abort()
 					return
 				}
 
 				logs.Error(err)
 				response.InternalServerError(c, err)
+				c.Abort()
 			}
 		}
 	}
@@ -68,22 +70,44 @@ func AuthRegister() gin.HandlerFunc {
 			return
 		}
 
-		t, err := helpers.VerifyJWT(token, viper.GetString("app.register_secret"))
+		t, err := helpers.VerifyJWT(token, &auth.SendEmailRegisterJWTPayload{}, viper.GetString("app.register_secret"))
 		if err != nil {
 			response.Unauthorized(c)
 			c.Abort()
 			return
 		}
 
-		claims, ok := t.Claims.(jwt.MapClaims)
+		claims, ok := t.Claims.(*auth.SendEmailRegisterJWTPayload)
 		if !ok {
 			response.Unauthorized(c)
 			c.Abort()
 			return
 		}
 
-		value := claims["email"]
-		c.Set("email", value)
+		email := claims.Email
+		c.Set("email", email)
+		c.Next()
+	}
+}
+
+func AuthLogin(authService auth.AuthService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		loginRequest := &auth.LoginRequest{}
+		err := c.ShouldBind(loginRequest)
+		if err != nil {
+			c.Error(err)
+			c.Abort()
+			return
+		}
+
+		secureUser, err := authService.ValidateUserLogin(loginRequest)
+		if err != nil {
+			helpers.HandleError(c, err, err.Error())
+			c.Abort()
+			return
+		}
+
+		c.Set("user", secureUser)
 		c.Next()
 	}
 }

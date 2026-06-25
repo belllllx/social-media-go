@@ -1,5 +1,15 @@
 basePath: /api
 definitions:
+  auth.LoginRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
   auth.SendEmailRegisterRequest:
     properties:
       email:
@@ -41,15 +51,6 @@ definitions:
       success:
         type: boolean
     type: object
-  response.SwaggerInternalServerErrorResponse:
-    properties:
-      message:
-        type: string
-      status:
-        type: integer
-      success:
-        type: boolean
-    type: object
   response.SwaggerResponse:
     properties:
       message:
@@ -76,6 +77,39 @@ info:
   title: Social Media API
   version: "1.0"
 paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: authentication and set cookie
+      parameters:
+      - description: login payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/auth.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - auth
   /auth/register/resend-email:
     post:
       consumes:
@@ -95,14 +129,14 @@ paths:
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/response.SwaggerInternalServerErrorResponse'
+            $ref: '#/definitions/response.SwaggerResponse'
       tags:
       - auth
   /auth/register/send-email:
     post:
       consumes:
       - application/json
-      description: create user store and send email to verify otp
+      description: create user store send email to verify otp and set cookie
       parameters:
       - description: send email register payload
         in: body
@@ -124,7 +158,7 @@ paths:
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/response.SwaggerInternalServerErrorResponse'
+            $ref: '#/definitions/response.SwaggerResponse'
       tags:
       - auth
   /auth/register/verify-otp:
@@ -153,7 +187,7 @@ paths:
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/response.SwaggerInternalServerErrorResponse'
+            $ref: '#/definitions/response.SwaggerResponse'
       tags:
       - auth
 swagger: "2.0"

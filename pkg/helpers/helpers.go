@@ -64,14 +64,15 @@ func SendEmail(email, otp, verifyEmailType string) error {
 	return d.DialAndSend(m)
 }
 
-func NewJWT(claims jwt.Claims, secret []byte) (string, error) {
+func NewJWT(claims jwt.Claims, secret string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(secret)
+	return token.SignedString([]byte(secret))
 }
 
-func VerifyJWT(token, secret string) (*jwt.Token, error) {
-	return jwt.Parse(
+func VerifyJWT(token string, claims jwt.Claims, secret string) (*jwt.Token, error) {
+	return jwt.ParseWithClaims(
 		token,
+		claims,
 		func(t *jwt.Token) (any, error) {
 			return []byte(secret), nil
 		},

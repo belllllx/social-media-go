@@ -86,6 +86,8 @@ func main() {
 	{
 		auth := api.Group("/auth")
 
+		auth.POST("/login", middlewares.AuthLogin(authService), authHandler.Login)
+
 		register := auth.Group("/register")
 		register.POST("/send-email", authHandler.SendEmailRegister)
 
