@@ -1,10 +1,8 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/belllllx/social-media-go/internal/auth"
-	"github.com/belllllx/social-media-go/internal/configs"
+	"github.com/belllllx/social-media-go/internal/bootstrap"
 	"github.com/belllllx/social-media-go/internal/email"
 	"github.com/belllllx/social-media-go/internal/logs"
 	"github.com/belllllx/social-media-go/internal/middlewares"
@@ -38,55 +36,56 @@ import (
 // @externalDocs.description	OpenAPI
 // @externalDocs.url			https://swagger.io/resources/open-api/
 func main() {
-	configs.InitTimeZone()
-	configs.InitConfig()
-	db := configs.InitDB()
-	rdb := configs.InitRedis()
-	defer rdb.Close()
-	defer logs.Sync()
+	app := bootstrap.NewApp()
+	defer app.Close()
 
-	userRepositoryDB := user.NewUserRepositoryDB(db)
+	userRepositoryDB := user.NewUserRepositoryDB(app.DB)
 	emailRepositoryImpl := email.NewEmailRepositoryImpl()
-	otpRepositoryDB := otp.NewOTPRepositoryDB(db)
+	otpRepositoryDB := otp.NewOTPRepositoryDB(app.DB)
 
-	emailService := email.NewEmailService(
-		rdb,
-		emailRepositoryImpl,
-		otpRepositoryDB,
-	)
+	emailService := email.NewEmailService(emailRepositoryImpl, otpRepositoryDB)
 	otpService := otp.NewOTPService(otpRepositoryDB)
 	authService := auth.NewAuthService(
-		rdb,
+		app.RedisClient,
 		otpRepositoryDB,
 		userRepositoryDB,
 		emailService,
 		otpService,
 	)
+	userService := user.NewUserService(userRepositoryDB)
 
 	authHandler := auth.NewAuthHandler(authService, emailService)
 
-	r := gin.New()
-	r.Use(cors.New(cors.Config{
+	app.Cron.AddFunc("*/30 * * * *", func() {
+		err := otpService.DeleteWithExpired()
+		if err == nil {
+			logs.Info("Delete otp expired by cron successfully")
+		}
+	})
+	app.Cron.Start()
+
+	app.Router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{viper.GetString("app.client_url")},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
 		AllowHeaders:     []string{"Origin", "Content-Type"},
 		AllowWebSockets:  true,
 		AllowCredentials: true,
 	}))
-	r.Use(gin.Recovery())
-	r.Use(middlewares.ZapLogger())
-	r.Use(middlewares.GlobalErrorsHandler())
+	app.Router.Use(gin.Recovery())
+	app.Router.Use(middlewares.ZapLogger())
+	app.Router.Use(middlewares.GlobalErrorsHandler())
 
-	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-	r.GET("/swagger", func(c *gin.Context) {
+	app.Router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	app.Router.GET("/swagger", func(c *gin.Context) {
 		c.Redirect(302, "/swagger/index.html")
 	})
-	api := r.Group("/api")
+	api := app.Router.Group("/api")
 
 	{
 		auth := api.Group("/auth")
 
 		auth.POST("/login", middlewares.AuthLogin(authService), authHandler.Login)
+		auth.GET("/profile", middlewares.RequireAuth(userService), authHandler.Profile)
 
 		register := auth.Group("/register")
 		register.POST("/send-email", authHandler.SendEmailRegister)
@@ -96,6 +95,5 @@ func main() {
 		register.POST("/verify-otp", authHandler.VerifyOTPRegister)
 	}
 
-	port := fmt.Sprintf(":%s", viper.GetString("app.port"))
-	r.Run(port)
+	app.Run()
 }

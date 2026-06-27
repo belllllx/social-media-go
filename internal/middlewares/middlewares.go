@@ -8,6 +8,7 @@ import (
 	"github.com/belllllx/social-media-go/internal/auth"
 	"github.com/belllllx/social-media-go/internal/logs"
 	"github.com/belllllx/social-media-go/internal/response"
+	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -20,10 +21,9 @@ func GlobalErrorsHandler() gin.HandlerFunc {
 		c.Next()
 
 		if len(c.Errors) > 0 {
-			err := c.Errors.Last().Err
-			if err != nil {
+			for _, ginErr := range c.Errors {
 				var validateErrs validator.ValidationErrors
-				if errors.As(err, &validateErrs) {
+				if errors.As(ginErr.Err, &validateErrs) {
 					errorField := map[string]string{}
 					for _, e := range validateErrs {
 						errorField[strings.ToLower(e.Field())] = helpers.GetErrorMessages(e)
@@ -32,11 +32,11 @@ func GlobalErrorsHandler() gin.HandlerFunc {
 					c.Abort()
 					return
 				}
-
-				logs.Error(err)
-				response.InternalServerError(c, err)
-				c.Abort()
 			}
+
+			logs.Error(c.Errors.Last().Err)
+			response.InternalServerError(c, c.Errors.Last().Err)
+			c.Abort()
 		}
 	}
 }
@@ -63,21 +63,21 @@ func ZapLogger() gin.HandlerFunc {
 
 func AuthRegister() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		token, err := c.Cookie("register_token")
+		registerToken, err := c.Cookie("register_token")
 		if err != nil {
 			response.Unauthorized(c)
 			c.Abort()
 			return
 		}
 
-		t, err := helpers.VerifyJWT(token, &auth.SendEmailRegisterJWTPayload{}, viper.GetString("app.register_secret"))
+		token, err := helpers.VerifyJWT(registerToken, &auth.SendEmailRegisterJWTPayload{}, viper.GetString("app.register_token_secret"))
 		if err != nil {
 			response.Unauthorized(c)
 			c.Abort()
 			return
 		}
 
-		claims, ok := t.Claims.(*auth.SendEmailRegisterJWTPayload)
+		claims, ok := token.Claims.(*auth.SendEmailRegisterJWTPayload)
 		if !ok {
 			response.Unauthorized(c)
 			c.Abort()
@@ -101,6 +101,41 @@ func AuthLogin(authService auth.AuthService) gin.HandlerFunc {
 		}
 
 		secureUser, err := authService.ValidateUserLogin(loginRequest)
+		if err != nil {
+			helpers.HandleError(c, err, err.Error())
+			c.Abort()
+			return
+		}
+
+		c.Set("user", secureUser)
+		c.Next()
+	}
+}
+
+func RequireAuth(userService user.UserService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		accessToken, err := c.Cookie("access_token")
+		if err != nil {
+			response.Unauthorized(c)
+			c.Abort()
+			return
+		}
+
+		token, err := helpers.VerifyJWT(accessToken, &auth.UserAccessTokenJWTPayload{}, viper.GetString("app.access_token_secret"))
+		if err != nil {
+			response.Unauthorized(c)
+			c.Abort()
+			return
+		}
+
+		claims, ok := token.Claims.(*auth.UserAccessTokenJWTPayload)
+		if !ok {
+			response.Unauthorized(c)
+			c.Abort()
+			return
+		}
+
+		secureUser, err := userService.SecureFindWithID(claims.ID)
 		if err != nil {
 			helpers.HandleError(c, err, err.Error())
 			c.Abort()

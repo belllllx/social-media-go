@@ -18,21 +18,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-type SecureUser struct {
-	ID                   uuid.UUID
-	Fullname             string
-	Username             *string
-	Email                string
-	DateOfBirth          *time.Time
-	ProfileUrl           *string
-	ProfileBackgroundUrl *string
-	Info                 *string
-	Role                 user.Role
-	ProviderType         user.ProviderType
-	CreatedAt            time.Time
-	UpdatedAt            time.Time
-}
-
 type tokens struct {
 	accessToken  string
 	refreshToken string
@@ -55,7 +40,7 @@ type SendEmailRegisterJWTPayload struct {
 	jwt.RegisteredClaims
 }
 
-type registerPayload struct {
+type RegisterPayload struct {
 	Fullname     string
 	Username     string
 	Email        string
@@ -65,12 +50,12 @@ type registerPayload struct {
 type AuthService interface {
 	SendEmailRegister(sendEmailRegisterRequest *SendEmailRegisterRequest) (result, token string, err error)
 	VerifyOTPRegister(registerEmail, otp string) (result string, err error)
-	ValidateUserLogin(loginRequest *LoginRequest) (secureUser *SecureUser, err error)
+	ValidateUserLogin(loginRequest *LoginRequest) (secureUser *user.SecureUser, err error)
 	Login(userID uuid.UUID) (result string, tokens *tokens, err error)
 }
 
 type authService struct {
-	rdb            *redis.Client
+	redisClient    *redis.Client
 	otpRepository  otp.OTPRepository
 	userRepository user.UserRepository
 	emailService   email.EmailService
@@ -78,14 +63,14 @@ type authService struct {
 }
 
 func NewAuthService(
-	rdb *redis.Client,
+	redisClient *redis.Client,
 	otpRepository otp.OTPRepository,
 	userRepository user.UserRepository,
 	emailService email.EmailService,
 	otpService otp.OTPService,
 ) AuthService {
 	return &authService{
-		rdb:            rdb,
+		redisClient:    redisClient,
 		otpRepository:  otpRepository,
 		userRepository: userRepository,
 		emailService:   emailService,
@@ -141,7 +126,7 @@ func (s *authService) SendEmailRegister(sendEmailRegisterRequest *SendEmailRegis
 		return "Failed to hash secret", "", errs.NewUnexpectedError()
 	}
 
-	registerPayload := &registerPayload{
+	registerPayload := &RegisterPayload{
 		Fullname:     sendEmailRegisterRequest.Fullname,
 		Username:     sendEmailRegisterRequest.Username,
 		Email:        sendEmailRegisterRequest.Email,
@@ -153,7 +138,7 @@ func (s *authService) SendEmailRegister(sendEmailRegisterRequest *SendEmailRegis
 		logs.Error(err)
 		return "Failed to marshal json", "", errs.NewUnexpectedError()
 	}
-	err = helpers.RDBSet(s.rdb, key, data, time.Minute*15)
+	err = helpers.RedisSet(s.redisClient, key, data, time.Minute*15)
 	if err != nil {
 		logs.Error(err)
 		return "Failed to set redis", "", errs.NewInternalServerError()
@@ -169,7 +154,7 @@ func (s *authService) VerifyOTPRegister(registerEmail, otp string) (string, erro
 	}
 
 	key := fmt.Sprintf("email:register-pending:%s", registerEmail)
-	value, err := helpers.RDBGet(s.rdb, key)
+	value, err := helpers.RedisGet(s.redisClient, key)
 	if err == redis.Nil {
 		logs.Warn(err)
 		return "Failed to register", errs.NewUnexpectedError()
@@ -178,7 +163,7 @@ func (s *authService) VerifyOTPRegister(registerEmail, otp string) (string, erro
 		return "Failed to register", errs.NewInternalServerError()
 	}
 
-	registerPayload := &registerPayload{}
+	registerPayload := &RegisterPayload{}
 	err = json.Unmarshal([]byte(value), registerPayload)
 	if err != nil {
 		logs.Error(err)
@@ -205,7 +190,7 @@ func (s *authService) VerifyOTPRegister(registerEmail, otp string) (string, erro
 	return "Register user successfully", nil
 }
 
-func (s *authService) ValidateUserLogin(loginRequest *LoginRequest) (*SecureUser, error) {
+func (s *authService) ValidateUserLogin(loginRequest *LoginRequest) (*user.SecureUser, error) {
 	userExist, err := s.userRepository.FindByUsername(loginRequest.Username)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
@@ -221,7 +206,7 @@ func (s *authService) ValidateUserLogin(loginRequest *LoginRequest) (*SecureUser
 		return nil, errs.NewUnauthorizedError()
 	}
 
-	secureUser := &SecureUser{
+	secureUser := &user.SecureUser{
 		ID:                   userExist.ID,
 		Fullname:             userExist.Fullname,
 		Username:             userExist.Username,

@@ -5,6 +5,7 @@ import (
 
 	"github.com/belllllx/social-media-go/internal/email"
 	"github.com/belllllx/social-media-go/internal/response"
+	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/gin-gonic/gin"
 )
@@ -30,6 +31,7 @@ type AuthHandler interface {
 	ResendEmailRegister(c *gin.Context)
 	VerifyOTPRegister(c *gin.Context)
 	Login(c *gin.Context)
+	Profile(c *gin.Context)
 }
 
 type authHandler struct {
@@ -82,10 +84,10 @@ func (h *authHandler) SendEmailRegister(c *gin.Context) {
 //
 //	@Description	resend email register
 //	@Tags			auth
-//	@Accept			json
 //	@Produce		json
 //	@Success		200	{object}	response.SwaggerResponse
 //	@Failure		400	{object}	response.SwaggerBadRequestResponse
+//	@Failure		401	{object}	response.SwaggerResponse
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/register/resend-email [post]
 func (h *authHandler) ResendEmailRegister(c *gin.Context) {
@@ -113,6 +115,7 @@ func (h *authHandler) ResendEmailRegister(c *gin.Context) {
 //	@Param			payload	body		VerifyOTPRegisterRequest	true	"verify otp register payload"
 //	@Success		201		{object}	response.SwaggerResponse
 //	@Failure		400		{object}	response.SwaggerBadRequestResponse
+//	@Failure		401		{object}	response.SwaggerResponse
 //	@Failure		500		{object}	response.SwaggerResponse
 //	@Router			/auth/register/verify-otp [post]
 func (h *authHandler) VerifyOTPRegister(c *gin.Context) {
@@ -152,7 +155,7 @@ func (h *authHandler) VerifyOTPRegister(c *gin.Context) {
 //	@Failure		500		{object}	response.SwaggerResponse
 //	@Router			/auth/login [post]
 func (h *authHandler) Login(c *gin.Context) {
-	secureUser, ok := c.MustGet("user").(*SecureUser)
+	secureUser, ok := c.MustGet("user").(*user.SecureUser)
 	if !ok {
 		response.Unauthorized(c)
 		return
@@ -175,4 +178,23 @@ func (h *authHandler) Login(c *gin.Context) {
 		MaxAge: time.Hour * 72,
 	})
 	response.Ok(c, result, nil)
+}
+
+// Profile godoc
+//
+//	@Description	authentication and set cookie
+//	@Tags			auth
+//	@Produce		json
+//	@Success		200	{object}	response.SwaggerResponseWithData{data=user.SecureUser}
+//	@Failure		401	{object}	response.SwaggerResponse
+//	@Failure		500	{object}	response.SwaggerResponse
+//	@Router			/auth/profile [get]
+func (h *authHandler) Profile(c *gin.Context) {
+	secureUser, ok := c.MustGet("user").(*user.SecureUser)
+	if !ok {
+		response.Unauthorized(c)
+		return
+	}
+
+	response.Ok(c, "User retrieved successfully", secureUser)
 }

@@ -39,6 +39,7 @@ type UserRepository interface {
 	Create(user *User) error
 	FindByUsername(username string) (*User, error)
 	FindByEmail(email string) (*User, error)
+	FindByID(ID uuid.UUID) (*User, error)
 }
 
 type userRepositoryDB struct {
@@ -66,6 +67,15 @@ func (r *userRepositoryDB) FindByUsername(username string) (*User, error) {
 func (r *userRepositoryDB) FindByEmail(email string) (*User, error) {
 	user := &User{}
 	err := r.db.Where("email = ?", email).Take(user).Error
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+func (r *userRepositoryDB) FindByID(ID uuid.UUID) (*User, error) {
+	user := &User{}
+	err := r.db.Where("id = ?", ID).Take(user).Error
 	if err != nil {
 		return nil, err
 	}

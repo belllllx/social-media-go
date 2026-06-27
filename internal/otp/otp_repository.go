@@ -20,6 +20,7 @@ type OTPRepository interface {
 	FindByEmail(email string) (*OTP, error)
 	FindNotExpired(email string) (*OTP, error)
 	Delete(email string) error
+	DeleteByExpired() error
 }
 
 type otpRepositoryDB struct {
@@ -56,4 +57,9 @@ func (r *otpRepositoryDB) FindNotExpired(email string) (*OTP, error) {
 func (r *otpRepositoryDB) Delete(email string) error {
 	otp := &OTP{}
 	return r.db.Where("email = ?", email).Delete(otp).Error
+}
+
+func (r *otpRepositoryDB) DeleteByExpired() error {
+	otp := &OTP{}
+	return r.db.Where("expired_at < ?", time.Now()).Delete(otp).Error
 }

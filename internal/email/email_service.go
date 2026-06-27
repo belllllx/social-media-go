@@ -8,7 +8,6 @@ import (
 	"github.com/belllllx/social-media-go/internal/otp"
 	"github.com/belllllx/social-media-go/pkg/errs"
 	"github.com/belllllx/social-media-go/pkg/helpers"
-	"github.com/redis/go-redis/v9"
 )
 
 type EmailService interface {
@@ -16,18 +15,15 @@ type EmailService interface {
 }
 
 type emailService struct {
-	rdb             *redis.Client
 	emailRepository EmailRepository
 	otpRepository   otp.OTPRepository
 }
 
 func NewEmailService(
-	rdb *redis.Client,
 	emailRepository EmailRepository,
 	otpRepository otp.OTPRepository,
 ) EmailService {
 	return &emailService{
-		rdb:             rdb,
 		emailRepository: emailRepository,
 		otpRepository:   otpRepository,
 	}

@@ -8,6 +8,7 @@ import (
 
 type OTPService interface {
 	Verify(email, otp string) (result string, err error)
+	DeleteWithExpired() error
 }
 
 type otpService struct {
@@ -41,4 +42,12 @@ func (s *otpService) Verify(email, otp string) (string, error) {
 	}
 
 	return "Verify otp successfully", nil
+}
+
+func (s *otpService) DeleteWithExpired() error {
+	err := s.otpRepository.DeleteByExpired()
+	if err != nil {
+		logs.Error(err)
+	}
+	return nil
 }

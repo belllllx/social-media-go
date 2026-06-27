@@ -80,12 +80,12 @@ func VerifyJWT(token string, claims jwt.Claims, secret string) (*jwt.Token, erro
 	)
 }
 
-func RDBSet(rdb *redis.Client, key string, value []byte, expiration time.Duration) error {
-	return rdb.Set(context.Background(), key, string(value), expiration).Err()
+func RedisSet(redisClient *redis.Client, key string, value []byte, expiration time.Duration) error {
+	return redisClient.Set(context.Background(), key, string(value), expiration).Err()
 }
 
-func RDBGet(rdb *redis.Client, key string) (string, error) {
-	return rdb.Get(context.Background(), key).Result()
+func RedisGet(redisClient *redis.Client, key string) (string, error) {
+	return redisClient.Get(context.Background(), key).Result()
 }
 
 func GetErrorMessages(err validator.FieldError) string {

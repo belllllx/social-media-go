@@ -51,8 +51,8 @@ func InitDB() *gorm.DB {
 }
 
 func InitRedis() *redis.Client {
-	rdb := redis.NewClient(&redis.Options{
+	redisClient := redis.NewClient(&redis.Options{
 		Addr: viper.GetString("redis.host"),
 	})
-	return rdb
+	return redisClient
 }
