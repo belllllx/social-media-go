@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/belllllx/social-media-go/internal/response"
@@ -100,6 +101,8 @@ func GetErrorMessages(err validator.FieldError) string {
 		return fmt.Sprintf("This field maximum length is %s", err.Param())
 	case "len":
 		return fmt.Sprintf("This field length is %s", err.Param())
+	case "eqfield":
+		return fmt.Sprintf("This field does not match the %s field", strings.ToLower(err.Param()))
 	default:
 		return "Invalid value"
 	}

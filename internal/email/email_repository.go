@@ -5,7 +5,7 @@ import (
 )
 
 type EmailRepository interface {
-	Send(email, otp string) error
+	Send(email, otp, verifyEmailType string) error
 }
 
 type emailRepositoryImpl struct {
@@ -15,8 +15,8 @@ func NewEmailRepositoryImpl() EmailRepository {
 	return &emailRepositoryImpl{}
 }
 
-func (r *emailRepositoryImpl) Send(email, otp string) error {
-	err := helpers.SendEmail(email, otp, "register")
+func (r *emailRepositoryImpl) Send(email, otp, verifyEmailType string) error {
+	err := helpers.SendEmail(email, otp, verifyEmailType)
 	if err != nil {
 		return err
 	}

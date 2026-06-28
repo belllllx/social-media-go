@@ -11,7 +11,7 @@ import (
 )
 
 type EmailService interface {
-	SendEmailRegister(email string) (result string, err error)
+	SendEmail(email, sendEmailType string) (result string, err error)
 }
 
 type emailService struct {
@@ -29,11 +29,11 @@ func NewEmailService(
 	}
 }
 
-func (s *emailService) SendEmailRegister(email string) (string, error) {
+func (s *emailService) SendEmail(email, sendEmailType string) (string, error) {
 	isOTPExist, err := s.otpRepository.FindByEmail(email)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
-		return "Failed to send email register", errs.NewInternalServerError()
+		return "Failed to send email", errs.NewInternalServerError()
 	}
 
 	// ลบ otp ของเก่าถ้าเจอ
@@ -67,7 +67,7 @@ func (s *emailService) SendEmailRegister(email string) (string, error) {
 	}
 
 	result := ""
-	err = s.emailRepository.Send(email, otpString)
+	err = s.emailRepository.Send(email, otpString, sendEmailType)
 	if err != nil {
 		logs.Error(err)
 		if err := s.otpRepository.Delete(email); err != nil {

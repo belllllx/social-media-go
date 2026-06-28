@@ -10,6 +10,28 @@ definitions:
     - password
     - username
     type: object
+  auth.ResetPasswordRequest:
+    properties:
+      confirmPassword:
+        maxLength: 20
+        minLength: 6
+        type: string
+      password:
+        maxLength: 20
+        minLength: 6
+        type: string
+    required:
+    - confirmPassword
+    - password
+    type: object
+  auth.SendEmailForgotPasswordRequest:
+    properties:
+      email:
+        maxLength: 30
+        type: string
+    required:
+    - email
+    type: object
   auth.SendEmailRegisterRequest:
     properties:
       email:
@@ -31,7 +53,14 @@ definitions:
     - password
     - username
     type: object
-  auth.VerifyOTPRegisterRequest:
+  auth.Tokens:
+    properties:
+      accessToken:
+        type: string
+      refreshToken:
+        type: string
+    type: object
+  auth.VerifyOTPRequest:
     properties:
       otp:
         type: string
@@ -40,7 +69,7 @@ definitions:
     type: object
   response.SwaggerBadRequestResponse:
     properties:
-      error_fields:
+      errorFields:
         additionalProperties:
           type: string
         type: object
@@ -132,6 +161,125 @@ info:
   title: Social Media API
   version: "1.0"
 paths:
+  /auth/forgot-password/resend-email:
+    post:
+      description: authentication and resend email forgot password
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - auth
+  /auth/forgot-password/reset-password:
+    patch:
+      consumes:
+      - application/json
+      description: authentication and reset password
+      parameters:
+      - description: reset password payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/auth.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - auth
+  /auth/forgot-password/send-email:
+    post:
+      consumes:
+      - application/json
+      description: send email to verify otp and set cookie
+      parameters:
+      - description: send email forgot password payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/auth.SendEmailForgotPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - auth
+  /auth/forgot-password/verify-otp:
+    post:
+      consumes:
+      - application/json
+      description: authentication verify otp and set cookie
+      parameters:
+      - description: verify otp forgot password payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/auth.VerifyOTPRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - auth
   /auth/login:
     post:
       consumes:
@@ -155,6 +303,26 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - auth
+  /auth/logout:
+    post:
+      description: authentication and clear cookies
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
         "401":
           description: Unauthorized
           schema:
@@ -190,9 +358,34 @@ paths:
             $ref: '#/definitions/response.SwaggerResponse'
       tags:
       - auth
+  /auth/refresh-token:
+    post:
+      description: authentication refresh token
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SwaggerResponseWithData'
+            - properties:
+                data:
+                  $ref: '#/definitions/auth.Tokens'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - auth
   /auth/register/resend-email:
     post:
-      description: resend email register
+      description: authentication and resend email register
       produces:
       - application/json
       responses:
@@ -200,10 +393,6 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/response.SwaggerResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.SwaggerBadRequestResponse'
         "401":
           description: Unauthorized
           schema:
@@ -247,14 +436,14 @@ paths:
     post:
       consumes:
       - application/json
-      description: verify otp and create user
+      description: "authentication\tverify otp and create user"
       parameters:
       - description: verify otp register payload
         in: body
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/auth.VerifyOTPRegisterRequest'
+          $ref: '#/definitions/auth.VerifyOTPRequest'
       produces:
       - application/json
       responses:

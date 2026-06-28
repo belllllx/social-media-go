@@ -12,7 +12,7 @@ type GlobalResponse struct {
 	Success     bool              `json:"success"`
 	Message     string            `json:"message"`
 	Data        any               `json:"data,omitempty"`
-	ErrorFields map[string]string `json:"error_fields,omitempty"`
+	ErrorFields map[string]string `json:"errorFields,omitempty"`
 }
 
 type SwaggerResponse struct {
@@ -32,7 +32,7 @@ type SwaggerBadRequestResponse struct {
 	Status      int               `json:"status"`
 	Success     bool              `json:"success"`
 	Message     string            `json:"message"`
-	ErrorFields map[string]string `json:"error_fields"`
+	ErrorFields map[string]string `json:"errorFields"`
 }
 
 type CookieOptions struct {

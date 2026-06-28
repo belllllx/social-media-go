@@ -40,6 +40,7 @@ type UserRepository interface {
 	FindByUsername(username string) (*User, error)
 	FindByEmail(email string) (*User, error)
 	FindByID(ID uuid.UUID) (*User, error)
+	UpdatePassword(email, passwordHash string) error
 }
 
 type userRepositoryDB struct {
@@ -80,4 +81,9 @@ func (r *userRepositoryDB) FindByID(ID uuid.UUID) (*User, error) {
 		return nil, err
 	}
 	return user, nil
+}
+
+func (r *userRepositoryDB) UpdatePassword(email, passwordHash string) error {
+	user := &User{}
+	return r.db.Model(user).Where("email = ?", email).Update("password_hash", passwordHash).Error
 }

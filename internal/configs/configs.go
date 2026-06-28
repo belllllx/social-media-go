@@ -2,9 +2,12 @@ package configs
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator/v10"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
 	"gorm.io/driver/postgres"
@@ -55,4 +58,19 @@ func InitRedis() *redis.Client {
 		Addr: viper.GetString("redis.host"),
 	})
 	return redisClient
+}
+
+func InitValidator() {
+	v, ok := binding.Validator.Engine().(*validator.Validate)
+	if !ok {
+		return
+	}
+
+	v.RegisterTagNameFunc(func(fld reflect.StructField) string {
+		name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
+		if name == "-" {
+			return ""
+		}
+		return name
+	})
 }

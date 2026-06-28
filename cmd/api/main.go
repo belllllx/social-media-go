@@ -54,7 +54,11 @@ func main() {
 	)
 	userService := user.NewUserService(userRepositoryDB)
 
-	authHandler := auth.NewAuthHandler(authService, emailService)
+	authHandler := auth.NewAuthHandler(
+		authService,
+		emailService,
+		userService,
+	)
 
 	app.Cron.AddFunc("*/30 * * * *", func() {
 		err := otpService.DeleteWithExpired()
@@ -66,7 +70,7 @@ func main() {
 
 	app.Router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{viper.GetString("app.client_url")},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE"},
 		AllowHeaders:     []string{"Origin", "Content-Type"},
 		AllowWebSockets:  true,
 		AllowCredentials: true,
@@ -86,6 +90,16 @@ func main() {
 
 		auth.POST("/login", middlewares.AuthLogin(authService), authHandler.Login)
 		auth.GET("/profile", middlewares.RequireAuth(userService), authHandler.Profile)
+		auth.POST("/refresh-token", middlewares.AuthRefresh(), authHandler.Refresh)
+		auth.POST("/logout", middlewares.RequireAuth(userService), authHandler.Logout)
+
+		forgotPassword := auth.Group("/forgot-password")
+		forgotPassword.POST("/send-email", authHandler.SendEmailForgotPassword)
+
+		forgotPassword.Use(middlewares.AuthForgotPassword())
+		forgotPassword.POST("/verify-otp", authHandler.VerifyOTPForgotPassword)
+		forgotPassword.POST("/resend-email", authHandler.ResendEmailForgotPassword)
+		forgotPassword.PATCH("/reset-password", authHandler.ResetPassword)
 
 		register := auth.Group("/register")
 		register.POST("/send-email", authHandler.SendEmailRegister)

@@ -18,25 +18,31 @@ import (
 	"github.com/spf13/viper"
 )
 
-type tokens struct {
-	accessToken  string
-	refreshToken string
+type Tokens struct {
+	AccessToken  string `json:"accessToken"`
+	RefreshToken string `json:"refreshToken"`
 }
 
 type UserAccessTokenJWTPayload struct {
-	ID           uuid.UUID
-	AuthVerified bool
+	ID           uuid.UUID `json:"id"`
+	AuthVerified bool      `json:"authVerified"`
 	jwt.RegisteredClaims
 }
 
 type UserRefreshTokenJWTPayload struct {
-	ID uuid.UUID
+	ID uuid.UUID `json:"id"`
 	jwt.RegisteredClaims
 }
 
-type SendEmailRegisterJWTPayload struct {
-	Email             string
-	SendEmailVerified bool
+type ResetPasswordTokenJWTPayload struct {
+	Email       string `json:"email"`
+	OTPVerified bool   `json:"otpVerified"`
+	jwt.RegisteredClaims
+}
+
+type SendEmailTokenJWTPayload struct {
+	Email             string `json:"email"`
+	SendEmailVerified bool   `json:"sendEmailVerified"`
 	jwt.RegisteredClaims
 }
 
@@ -49,9 +55,12 @@ type RegisterPayload struct {
 
 type AuthService interface {
 	SendEmailRegister(sendEmailRegisterRequest *SendEmailRegisterRequest) (result, token string, err error)
-	VerifyOTPRegister(registerEmail, otp string) (result string, err error)
-	ValidateUserLogin(loginRequest *LoginRequest) (secureUser *user.SecureUser, err error)
-	Login(userID uuid.UUID) (result string, tokens *tokens, err error)
+	SendEmailForgotPassword(sendEmailForgotPasswordRequest *SendEmailForgotPasswordRequest) (result, token string, err error)
+	VerifyOTPRegister(email, otp string) (result string, err error)
+	VerifyOTPForgotPassword(email, otp string) (result, token string, err error)
+	ValidateUserLogin(loginRequest *LoginRequest) (userID *uuid.UUID, err error)
+	Login(userID uuid.UUID) (result string, tokens *Tokens, err error)
+	Refresh(userID uuid.UUID) (result string, tokens *Tokens, err error)
 }
 
 type authService struct {
@@ -99,17 +108,17 @@ func (s *authService) SendEmailRegister(sendEmailRegisterRequest *SendEmailRegis
 		return "Email is already exist", "", errs.NewBadRequestError()
 	}
 
-	result, err := s.emailService.SendEmailRegister(sendEmailRegisterRequest.Email)
+	result, err := s.emailService.SendEmail(sendEmailRegisterRequest.Email, "register")
 	if err != nil {
 		return result, "", err
 	}
 
 	token, err := helpers.NewJWT(
-		&SendEmailRegisterJWTPayload{
+		&SendEmailTokenJWTPayload{
 			Email:             sendEmailRegisterRequest.Email,
 			SendEmailVerified: true,
 			RegisteredClaims: jwt.RegisteredClaims{
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 10)),
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 15)),
 				IssuedAt:  jwt.NewNumericDate(time.Now()),
 			},
 		},
@@ -123,7 +132,7 @@ func (s *authService) SendEmailRegister(sendEmailRegisterRequest *SendEmailRegis
 	passwordHash, err := helpers.HashSecret(sendEmailRegisterRequest.Password)
 	if err != nil {
 		logs.Error(err)
-		return "Failed to hash secret", "", errs.NewUnexpectedError()
+		return "Failed to hash password", "", errs.NewUnexpectedError()
 	}
 
 	registerPayload := &RegisterPayload{
@@ -147,13 +156,54 @@ func (s *authService) SendEmailRegister(sendEmailRegisterRequest *SendEmailRegis
 	return result, token, nil
 }
 
-func (s *authService) VerifyOTPRegister(registerEmail, otp string) (string, error) {
-	result, err := s.otpService.Verify(registerEmail, otp)
+func (s *authService) SendEmailForgotPassword(sendEmailForgotPasswordRequest *SendEmailForgotPasswordRequest) (string, string, error) {
+	userExist, err := s.userRepository.FindByEmail(sendEmailForgotPasswordRequest.Email)
+	if err != nil && !helpers.IsErrRecordNotFound(err) {
+		logs.Error(err)
+		return "Failed to find user by email", "", errs.NewInternalServerError()
+	}
+
+	if helpers.IsErrRecordNotFound(err) {
+		logs.Warn(err)
+		return fmt.Sprintf("Email %s is not found", sendEmailForgotPasswordRequest.Email), "", errs.NewNotFoundError()
+	}
+
+	// กรณี social account ห้าม
+	if userExist.ProviderType == user.ProviderTypeGoogle || userExist.ProviderType == user.ProviderTypeGithub {
+		return "Cannot reset password for social media account", "", errs.NewBadRequestError()
+	}
+
+	result, err := s.emailService.SendEmail(sendEmailForgotPasswordRequest.Email, "reset password")
+	if err != nil {
+		return result, "", err
+	}
+
+	token, err := helpers.NewJWT(
+		&SendEmailTokenJWTPayload{
+			Email:             sendEmailForgotPasswordRequest.Email,
+			SendEmailVerified: true,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 15)),
+				IssuedAt:  jwt.NewNumericDate(time.Now()),
+			},
+		},
+		viper.GetString("app.forgot_password_token_secret"),
+	)
+	if err != nil {
+		logs.Error(err)
+		return "Failed to sign forgot password token jwt", "", errs.NewUnexpectedError()
+	}
+
+	return result, token, nil
+}
+
+func (s *authService) VerifyOTPRegister(email, otp string) (string, error) {
+	result, err := s.otpService.Verify(email, otp)
 	if err != nil {
 		return result, err
 	}
 
-	key := fmt.Sprintf("email:register-pending:%s", registerEmail)
+	key := fmt.Sprintf("email:register-pending:%s", email)
 	value, err := helpers.RedisGet(s.redisClient, key)
 	if err == redis.Nil {
 		logs.Warn(err)
@@ -181,7 +231,7 @@ func (s *authService) VerifyOTPRegister(registerEmail, otp string) (string, erro
 		return "Failed to create user", errs.NewInternalServerError()
 	}
 
-	err = s.otpRepository.Delete(registerEmail)
+	err = s.otpRepository.Delete(email)
 	if err != nil {
 		logs.Error(err)
 		return "Failed to delete otp", errs.NewInternalServerError()
@@ -190,7 +240,38 @@ func (s *authService) VerifyOTPRegister(registerEmail, otp string) (string, erro
 	return "Register user successfully", nil
 }
 
-func (s *authService) ValidateUserLogin(loginRequest *LoginRequest) (*user.SecureUser, error) {
+func (s *authService) VerifyOTPForgotPassword(email, otp string) (string, string, error) {
+	result, err := s.otpService.Verify(email, otp)
+	if err != nil {
+		return result, "", err
+	}
+
+	token, err := helpers.NewJWT(
+		&ResetPasswordTokenJWTPayload{
+			Email:       email,
+			OTPVerified: true,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 10)),
+				IssuedAt:  jwt.NewNumericDate(time.Now()),
+			},
+		},
+		viper.GetString("app.reset_password_token_secret"),
+	)
+	if err != nil {
+		logs.Error(err)
+		return "Failed to sign reset password token jwt", "", errs.NewUnexpectedError()
+	}
+
+	err = s.otpRepository.Delete(email)
+	if err != nil {
+		logs.Error(err)
+		return "Failed to delete otp", "", errs.NewInternalServerError()
+	}
+
+	return "Verify otp successfully", token, nil
+}
+
+func (s *authService) ValidateUserLogin(loginRequest *LoginRequest) (*uuid.UUID, error) {
 	userExist, err := s.userRepository.FindByUsername(loginRequest.Username)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
@@ -206,24 +287,10 @@ func (s *authService) ValidateUserLogin(loginRequest *LoginRequest) (*user.Secur
 		return nil, errs.NewUnauthorizedError()
 	}
 
-	secureUser := &user.SecureUser{
-		ID:                   userExist.ID,
-		Fullname:             userExist.Fullname,
-		Username:             userExist.Username,
-		Email:                userExist.Email,
-		DateOfBirth:          userExist.DateOfBirth,
-		ProfileUrl:           userExist.ProfileUrl,
-		ProfileBackgroundUrl: userExist.ProfileBackgroundUrl,
-		Info:                 userExist.Info,
-		Role:                 userExist.Role,
-		ProviderType:         userExist.ProviderType,
-		CreatedAt:            userExist.CreatedAt,
-		UpdatedAt:            userExist.UpdatedAt,
-	}
-	return secureUser, nil
+	return &userExist.ID, nil
 }
 
-func (s *authService) Login(userID uuid.UUID) (string, *tokens, error) {
+func (s *authService) Login(userID uuid.UUID) (string, *Tokens, error) {
 	accessToken, err := helpers.NewJWT(
 		&UserAccessTokenJWTPayload{
 			ID:           userID,
@@ -255,9 +322,48 @@ func (s *authService) Login(userID uuid.UUID) (string, *tokens, error) {
 		return "Failed to sign refresh token jwt", nil, errs.NewUnexpectedError()
 	}
 
-	tokens := &tokens{
-		accessToken:  accessToken,
-		refreshToken: refreshToken,
+	tokens := &Tokens{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
 	}
 	return "Login successfully", tokens, nil
+}
+
+func (s *authService) Refresh(userID uuid.UUID) (string, *Tokens, error) {
+	accessToken, err := helpers.NewJWT(
+		&UserAccessTokenJWTPayload{
+			ID:           userID,
+			AuthVerified: true,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 10)),
+				IssuedAt:  jwt.NewNumericDate(time.Now()),
+			},
+		},
+		viper.GetString("app.access_token_secret"),
+	)
+	if err != nil {
+		logs.Error(err)
+		return "Failed to sign access token jwt", nil, errs.NewUnexpectedError()
+	}
+
+	refreshToken, err := helpers.NewJWT(
+		&UserRefreshTokenJWTPayload{
+			ID: userID,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 72)),
+				IssuedAt:  jwt.NewNumericDate(time.Now()),
+			},
+		},
+		viper.GetString("app.refresh_token_secret"),
+	)
+	if err != nil {
+		logs.Error(err)
+		return "Failed to sign refresh token jwt", nil, errs.NewUnexpectedError()
+	}
+
+	tokens := &Tokens{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}
+	return "Refresh token successfully", tokens, nil
 }

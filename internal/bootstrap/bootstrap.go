@@ -22,6 +22,7 @@ type App struct {
 func NewApp() *App {
 	configs.InitTimeZone()
 	configs.InitConfig()
+	configs.InitValidator()
 
 	db := configs.InitDB()
 	redisClient := configs.InitRedis()

@@ -8,7 +8,17 @@ import (
 	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
+
+type ResetPasswordRequest struct {
+	Password        string `json:"password" binding:"required,min=6,max=20"`
+	ConfirmPassword string `json:"confirmPassword" binding:"required,min=6,max=20,eqfield=Password"`
+}
+
+type SendEmailForgotPasswordRequest struct {
+	Email string `json:"email" binding:"required,email,max=30"`
+}
 
 type SendEmailRegisterRequest struct {
 	Fullname string `json:"fullname" binding:"required,max=30"`
@@ -17,7 +27,7 @@ type SendEmailRegisterRequest struct {
 	Password string `json:"password" binding:"required,min=6,max=20"`
 }
 
-type VerifyOTPRegisterRequest struct {
+type VerifyOTPRequest struct {
 	OTP string `json:"otp" binding:"required,len=6"`
 }
 
@@ -28,21 +38,33 @@ type LoginRequest struct {
 
 type AuthHandler interface {
 	SendEmailRegister(c *gin.Context)
+	SendEmailForgotPassword(c *gin.Context)
 	ResendEmailRegister(c *gin.Context)
+	ResendEmailForgotPassword(c *gin.Context)
 	VerifyOTPRegister(c *gin.Context)
+	VerifyOTPForgotPassword(c *gin.Context)
 	Login(c *gin.Context)
 	Profile(c *gin.Context)
+	Refresh(c *gin.Context)
+	Logout(c *gin.Context)
+	ResetPassword(c *gin.Context)
 }
 
 type authHandler struct {
 	authService  AuthService
 	emailService email.EmailService
+	userService  user.UserService
 }
 
-func NewAuthHandler(authService AuthService, emailService email.EmailService) AuthHandler {
+func NewAuthHandler(
+	authService AuthService,
+	emailService email.EmailService,
+	userService user.UserService,
+) AuthHandler {
 	return &authHandler{
 		authService:  authService,
 		emailService: emailService,
+		userService:  userService,
 	}
 }
 
@@ -74,7 +96,42 @@ func (h *authHandler) SendEmailRegister(c *gin.Context) {
 	response.SetSecureCookie(c, response.CookieOptions{
 		Key:    "register_token",
 		Value:  token,
-		MaxAge: time.Minute * 10,
+		MaxAge: time.Minute * 15,
+	})
+
+	response.Ok(c, result, nil)
+}
+
+// SendEmailForgotPassword godoc
+//
+//	@Description	send email to verify otp and set cookie
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			payload	body		SendEmailForgotPasswordRequest	true	"send email forgot password payload"
+//	@Success		200		{object}	response.SwaggerResponse
+//	@Failure		400		{object}	response.SwaggerBadRequestResponse
+//	@Failure		404		{object}	response.SwaggerResponse
+//	@Failure		500		{object}	response.SwaggerResponse
+//	@Router			/auth/forgot-password/send-email [post]
+func (h *authHandler) SendEmailForgotPassword(c *gin.Context) {
+	sendEmailForgotPasswordRequest := &SendEmailForgotPasswordRequest{}
+	err := c.ShouldBind(sendEmailForgotPasswordRequest)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	result, token, err := h.authService.SendEmailForgotPassword(sendEmailForgotPasswordRequest)
+	if err != nil {
+		helpers.HandleError(c, err, result)
+		return
+	}
+
+	response.SetSecureCookie(c, response.CookieOptions{
+		Key:    "forgot_password_token",
+		Value:  token,
+		MaxAge: time.Minute * 15,
 	})
 
 	response.Ok(c, result, nil)
@@ -82,11 +139,10 @@ func (h *authHandler) SendEmailRegister(c *gin.Context) {
 
 // ResendEmailRegister godoc
 //
-//	@Description	resend email register
+//	@Description	authentication and resend email register
 //	@Tags			auth
 //	@Produce		json
 //	@Success		200	{object}	response.SwaggerResponse
-//	@Failure		400	{object}	response.SwaggerBadRequestResponse
 //	@Failure		401	{object}	response.SwaggerResponse
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/register/resend-email [post]
@@ -97,7 +153,32 @@ func (h *authHandler) ResendEmailRegister(c *gin.Context) {
 		return
 	}
 
-	result, err := h.emailService.SendEmailRegister(email)
+	result, err := h.emailService.SendEmail(email, "register")
+	if err != nil {
+		helpers.HandleError(c, err, result)
+		return
+	}
+
+	response.Ok(c, result, nil)
+}
+
+// ResendEmailForgotPassword godoc
+//
+//	@Description	authentication and resend email forgot password
+//	@Tags			auth
+//	@Produce		json
+//	@Success		200	{object}	response.SwaggerResponse
+//	@Failure		401	{object}	response.SwaggerResponse
+//	@Failure		500	{object}	response.SwaggerResponse
+//	@Router			/auth/forgot-password/resend-email [post]
+func (h *authHandler) ResendEmailForgotPassword(c *gin.Context) {
+	email, ok := c.MustGet("email").(string)
+	if !ok {
+		response.Unauthorized(c)
+		return
+	}
+
+	result, err := h.emailService.SendEmail(email, "reset password")
 	if err != nil {
 		helpers.HandleError(c, err, result)
 		return
@@ -108,19 +189,19 @@ func (h *authHandler) ResendEmailRegister(c *gin.Context) {
 
 // VerifyOTPRegister godoc
 //
-//	@Description	verify otp and create user
+//	@Description	authentication	verify otp and create user
 //	@Tags			auth
 //	@Accept			json
 //	@Produce		json
-//	@Param			payload	body		VerifyOTPRegisterRequest	true	"verify otp register payload"
+//	@Param			payload	body		VerifyOTPRequest	true	"verify otp register payload"
 //	@Success		201		{object}	response.SwaggerResponse
 //	@Failure		400		{object}	response.SwaggerBadRequestResponse
 //	@Failure		401		{object}	response.SwaggerResponse
 //	@Failure		500		{object}	response.SwaggerResponse
 //	@Router			/auth/register/verify-otp [post]
 func (h *authHandler) VerifyOTPRegister(c *gin.Context) {
-	verifyOTPRegisterRequest := &VerifyOTPRegisterRequest{}
-	err := c.ShouldBind(verifyOTPRegisterRequest)
+	verifyOTPRequest := &VerifyOTPRequest{}
+	err := c.ShouldBind(verifyOTPRequest)
 	if err != nil {
 		c.Error(err)
 		return
@@ -132,7 +213,7 @@ func (h *authHandler) VerifyOTPRegister(c *gin.Context) {
 		return
 	}
 
-	result, err := h.authService.VerifyOTPRegister(email, verifyOTPRegisterRequest.OTP)
+	result, err := h.authService.VerifyOTPRegister(email, verifyOTPRequest.OTP)
 	if err != nil {
 		helpers.HandleError(c, err, result)
 		return
@@ -140,6 +221,46 @@ func (h *authHandler) VerifyOTPRegister(c *gin.Context) {
 
 	response.ClearCookie(c, "register_token")
 	response.Created(c, result, nil)
+}
+
+// VerifyOTPForgotPassword godoc
+//
+//	@Description	authentication verify otp and set cookie
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			payload	body		VerifyOTPRequest	true	"verify otp forgot password payload"
+//	@Success		200		{object}	response.SwaggerResponse
+//	@Failure		400		{object}	response.SwaggerBadRequestResponse
+//	@Failure		401		{object}	response.SwaggerResponse
+//	@Failure		500		{object}	response.SwaggerResponse
+//	@Router			/auth/forgot-password/verify-otp [post]
+func (h *authHandler) VerifyOTPForgotPassword(c *gin.Context) {
+	verifyOTPRequest := &VerifyOTPRequest{}
+	err := c.ShouldBind(verifyOTPRequest)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	email, ok := c.MustGet("email").(string)
+	if !ok {
+		response.Unauthorized(c)
+		return
+	}
+
+	result, token, err := h.authService.VerifyOTPForgotPassword(email, verifyOTPRequest.OTP)
+	if err != nil {
+		helpers.HandleError(c, err, result)
+		return
+	}
+
+	response.SetSecureCookie(c, response.CookieOptions{
+		Key:    "reset_password_token",
+		Value:  token,
+		MaxAge: time.Minute * 10,
+	})
+	response.Ok(c, result, nil)
 }
 
 // Login godoc
@@ -155,13 +276,13 @@ func (h *authHandler) VerifyOTPRegister(c *gin.Context) {
 //	@Failure		500		{object}	response.SwaggerResponse
 //	@Router			/auth/login [post]
 func (h *authHandler) Login(c *gin.Context) {
-	secureUser, ok := c.MustGet("user").(*user.SecureUser)
+	userID, ok := c.MustGet("userID").(*uuid.UUID)
 	if !ok {
 		response.Unauthorized(c)
 		return
 	}
 
-	result, tokens, err := h.authService.Login(secureUser.ID)
+	result, tokens, err := h.authService.Login(*userID)
 	if err != nil {
 		helpers.HandleError(c, err, result)
 		return
@@ -169,12 +290,12 @@ func (h *authHandler) Login(c *gin.Context) {
 
 	response.SetSecureCookie(c, response.CookieOptions{
 		Key:    "access_token",
-		Value:  tokens.accessToken,
+		Value:  tokens.AccessToken,
 		MaxAge: time.Minute * 10,
 	})
 	response.SetSecureCookie(c, response.CookieOptions{
 		Key:    "refresh_token",
-		Value:  tokens.refreshToken,
+		Value:  tokens.RefreshToken,
 		MaxAge: time.Hour * 72,
 	})
 	response.Ok(c, result, nil)
@@ -197,4 +318,81 @@ func (h *authHandler) Profile(c *gin.Context) {
 	}
 
 	response.Ok(c, "User retrieved successfully", secureUser)
+}
+
+// Refresh godoc
+//
+//	@Description	authentication refresh token
+//	@Tags			auth
+//	@Produce		json
+//	@Success		200	{object}	response.SwaggerResponseWithData{data=auth.Tokens}
+//	@Failure		401	{object}	response.SwaggerResponse
+//	@Failure		500	{object}	response.SwaggerResponse
+//	@Router			/auth/refresh-token [post]
+func (h *authHandler) Refresh(c *gin.Context) {
+	userID, ok := c.MustGet("userID").(uuid.UUID)
+	if !ok {
+		response.Unauthorized(c)
+		return
+	}
+
+	result, tokens, err := h.authService.Refresh(userID)
+	if err != nil {
+		helpers.HandleError(c, err, result)
+		return
+	}
+
+	response.Ok(c, result, tokens)
+}
+
+// Logout godoc
+//
+//	@Description	authentication and clear cookies
+//	@Tags			auth
+//	@Produce		json
+//	@Success		200	{object}	response.SwaggerResponse
+//	@Failure		401	{object}	response.SwaggerResponse
+//	@Failure		500	{object}	response.SwaggerResponse
+//	@Router			/auth/logout [post]
+func (h *authHandler) Logout(c *gin.Context) {
+	response.ClearCookie(c, "access_token")
+	response.ClearCookie(c, "refresh_token")
+	response.Ok(c, "Logout successfully", nil)
+}
+
+// ResetPassword godoc
+//
+//	@Description	authentication and reset password
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			payload	body		ResetPasswordRequest	true	"reset password payload"
+//	@Success		200		{object}	response.SwaggerResponse
+//	@Failure		400		{object}	response.SwaggerBadRequestResponse
+//	@Failure		401		{object}	response.SwaggerResponse
+//	@Failure		500		{object}	response.SwaggerResponse
+//	@Router			/auth/forgot-password/reset-password [patch]
+func (h *authHandler) ResetPassword(c *gin.Context) {
+	resetPasswordRequest := &ResetPasswordRequest{}
+	err := c.ShouldBind(resetPasswordRequest)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	email, ok := c.MustGet("email").(string)
+	if !ok {
+		response.Unauthorized(c)
+		return
+	}
+
+	result, err := h.userService.ResetPassword(email, resetPasswordRequest.ConfirmPassword)
+	if err != nil {
+		helpers.HandleError(c, err, result)
+		return
+	}
+
+	response.ClearCookie(c, "forgot_password_token")
+	response.ClearCookie(c, "reset_password_token")
+	response.Ok(c, result, nil)
 }

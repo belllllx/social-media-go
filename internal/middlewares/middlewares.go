@@ -2,7 +2,6 @@ package middlewares
 
 import (
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/belllllx/social-media-go/internal/auth"
@@ -23,10 +22,11 @@ func GlobalErrorsHandler() gin.HandlerFunc {
 		if len(c.Errors) > 0 {
 			for _, ginErr := range c.Errors {
 				var validateErrs validator.ValidationErrors
+
 				if errors.As(ginErr.Err, &validateErrs) {
 					errorField := map[string]string{}
 					for _, e := range validateErrs {
-						errorField[strings.ToLower(e.Field())] = helpers.GetErrorMessages(e)
+						errorField[e.Field()] = helpers.GetErrorMessages(e)
 					}
 					response.BadRequest(c, errorField)
 					c.Abort()
@@ -70,14 +70,14 @@ func AuthRegister() gin.HandlerFunc {
 			return
 		}
 
-		token, err := helpers.VerifyJWT(registerToken, &auth.SendEmailRegisterJWTPayload{}, viper.GetString("app.register_token_secret"))
+		token, err := helpers.VerifyJWT(registerToken, &auth.SendEmailTokenJWTPayload{}, viper.GetString("app.register_token_secret"))
 		if err != nil {
 			response.Unauthorized(c)
 			c.Abort()
 			return
 		}
 
-		claims, ok := token.Claims.(*auth.SendEmailRegisterJWTPayload)
+		claims, ok := token.Claims.(*auth.SendEmailTokenJWTPayload)
 		if !ok {
 			response.Unauthorized(c)
 			c.Abort()
@@ -100,14 +100,14 @@ func AuthLogin(authService auth.AuthService) gin.HandlerFunc {
 			return
 		}
 
-		secureUser, err := authService.ValidateUserLogin(loginRequest)
+		userID, err := authService.ValidateUserLogin(loginRequest)
 		if err != nil {
 			helpers.HandleError(c, err, err.Error())
 			c.Abort()
 			return
 		}
 
-		c.Set("user", secureUser)
+		c.Set("userID", userID)
 		c.Next()
 	}
 }
@@ -143,6 +143,62 @@ func RequireAuth(userService user.UserService) gin.HandlerFunc {
 		}
 
 		c.Set("user", secureUser)
+		c.Next()
+	}
+}
+
+func AuthRefresh() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		refreshToken, err := c.Cookie("refresh_token")
+		if err != nil {
+			response.Unauthorized(c)
+			c.Abort()
+			return
+		}
+
+		token, err := helpers.VerifyJWT(refreshToken, &auth.UserRefreshTokenJWTPayload{}, viper.GetString("app.refresh_token_secret"))
+		if err != nil {
+			response.Unauthorized(c)
+			c.Abort()
+			return
+		}
+
+		claims, ok := token.Claims.(*auth.UserRefreshTokenJWTPayload)
+		if !ok {
+			response.Unauthorized(c)
+			c.Abort()
+			return
+		}
+
+		c.Set("userID", claims.ID)
+		c.Next()
+	}
+}
+
+func AuthForgotPassword() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		forgotPasswordToken, err := c.Cookie("forgot_password_token")
+		if err != nil {
+			response.Unauthorized(c)
+			c.Abort()
+			return
+		}
+
+		token, err := helpers.VerifyJWT(forgotPasswordToken, &auth.SendEmailTokenJWTPayload{}, viper.GetString("app.forgot_password_token_secret"))
+		if err != nil {
+			response.Unauthorized(c)
+			c.Abort()
+			return
+		}
+
+		claims, ok := token.Claims.(*auth.SendEmailTokenJWTPayload)
+		if !ok {
+			response.Unauthorized(c)
+			c.Abort()
+			return
+		}
+
+		c.Set("email", claims.Email)
 		c.Next()
 	}
 }
