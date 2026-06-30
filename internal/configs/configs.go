@@ -1,15 +1,20 @@
 package configs
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
 	"time"
 
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/github"
+	"golang.org/x/oauth2/google"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -72,5 +77,43 @@ func InitValidator() {
 			return ""
 		}
 		return name
+	})
+}
+
+func InitOAuth2GoogleConfig() *oauth2.Config {
+	return &oauth2.Config{
+		ClientID:     viper.GetString("app.google_client_id"),
+		ClientSecret: viper.GetString("app.google_client_secret"),
+		Endpoint:     google.Endpoint,
+		RedirectURL:  viper.GetString("app.google_callback_url"),
+		Scopes: []string{
+			"openid",
+			"email",
+			"profile",
+		},
+	}
+}
+
+func InitOAuth2GithubConfig() *oauth2.Config {
+	return &oauth2.Config{
+		ClientID:     viper.GetString("app.github_client_id"),
+		ClientSecret: viper.GetString("app.github_client_secret"),
+		Endpoint:     github.Endpoint,
+		RedirectURL:  viper.GetString("app.github_callback_url"),
+		Scopes: []string{
+			"read:user",
+			"user:email",
+		},
+	}
+}
+
+func InitOIDCVerifier() *oidc.IDTokenVerifier {
+	provider, err := oidc.NewProvider(context.Background(), "https://accounts.google.com")
+	if err != nil {
+		panic(err)
+	}
+
+	return provider.Verifier(&oidc.Config{
+		ClientID: viper.GetString("app.google_client_id"),
 	})
 }

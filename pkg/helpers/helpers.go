@@ -3,13 +3,14 @@ package helpers
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"math/big"
+	"net/http"
 	"strings"
 	"time"
 
-	"github.com/belllllx/social-media-go/internal/response"
 	"github.com/belllllx/social-media-go/pkg/errs"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -89,6 +90,10 @@ func RedisGet(redisClient *redis.Client, key string) (string, error) {
 	return redisClient.Get(context.Background(), key).Result()
 }
 
+func RedisDel(redisClient *redis.Client, key string) error {
+	return redisClient.Del(context.Background(), key).Err()
+}
+
 func GetErrorMessages(err validator.FieldError) string {
 	switch err.Tag() {
 	case "required":
@@ -111,12 +116,27 @@ func GetErrorMessages(err validator.FieldError) string {
 func HandleError(c *gin.Context, err error, msg string) {
 	switch e := err.(type) {
 	case *errs.AppError:
-		c.JSON(e.Status, gin.H{
+		c.AbortWithStatusJSON(e.Status, gin.H{
 			"status":  e.Status,
 			"success": false,
 			"message": msg,
 		})
 	case error:
-		response.InternalServerError(c, err)
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+			"status":  http.StatusInternalServerError,
+			"success": false,
+			"message": e.Error(),
+		})
 	}
+}
+
+func GenerateRandomState() (string, error) {
+	b := make([]byte, 32)
+
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
+
+	return base64.RawURLEncoding.EncodeToString(b), nil
 }

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/belllllx/social-media-go/internal/email"
@@ -48,6 +49,10 @@ type AuthHandler interface {
 	Refresh(c *gin.Context)
 	Logout(c *gin.Context)
 	ResetPassword(c *gin.Context)
+	GoogleLogin(c *gin.Context)
+	GithubLogin(c *gin.Context)
+	GoogleCallback(c *gin.Context)
+	GithubCallback(c *gin.Context)
 }
 
 type authHandler struct {
@@ -83,7 +88,7 @@ func (h *authHandler) SendEmailRegister(c *gin.Context) {
 	sendEmailRegisterRequest := &SendEmailRegisterRequest{}
 	err := c.ShouldBind(sendEmailRegisterRequest)
 	if err != nil {
-		c.Error(err)
+		response.AbortWithError(c, err)
 		return
 	}
 
@@ -118,7 +123,7 @@ func (h *authHandler) SendEmailForgotPassword(c *gin.Context) {
 	sendEmailForgotPasswordRequest := &SendEmailForgotPasswordRequest{}
 	err := c.ShouldBind(sendEmailForgotPasswordRequest)
 	if err != nil {
-		c.Error(err)
+		response.AbortWithError(c, err)
 		return
 	}
 
@@ -149,7 +154,7 @@ func (h *authHandler) SendEmailForgotPassword(c *gin.Context) {
 func (h *authHandler) ResendEmailRegister(c *gin.Context) {
 	email, ok := c.MustGet("email").(string)
 	if !ok {
-		response.Unauthorized(c)
+		response.AbortWithUnauthorized(c)
 		return
 	}
 
@@ -174,7 +179,7 @@ func (h *authHandler) ResendEmailRegister(c *gin.Context) {
 func (h *authHandler) ResendEmailForgotPassword(c *gin.Context) {
 	email, ok := c.MustGet("email").(string)
 	if !ok {
-		response.Unauthorized(c)
+		response.AbortWithUnauthorized(c)
 		return
 	}
 
@@ -203,13 +208,13 @@ func (h *authHandler) VerifyOTPRegister(c *gin.Context) {
 	verifyOTPRequest := &VerifyOTPRequest{}
 	err := c.ShouldBind(verifyOTPRequest)
 	if err != nil {
-		c.Error(err)
+		response.AbortWithError(c, err)
 		return
 	}
 
 	email, ok := c.MustGet("email").(string)
 	if !ok {
-		response.Unauthorized(c)
+		response.AbortWithUnauthorized(c)
 		return
 	}
 
@@ -239,13 +244,13 @@ func (h *authHandler) VerifyOTPForgotPassword(c *gin.Context) {
 	verifyOTPRequest := &VerifyOTPRequest{}
 	err := c.ShouldBind(verifyOTPRequest)
 	if err != nil {
-		c.Error(err)
+		response.AbortWithError(c, err)
 		return
 	}
 
 	email, ok := c.MustGet("email").(string)
 	if !ok {
-		response.Unauthorized(c)
+		response.AbortWithUnauthorized(c)
 		return
 	}
 
@@ -278,7 +283,7 @@ func (h *authHandler) VerifyOTPForgotPassword(c *gin.Context) {
 func (h *authHandler) Login(c *gin.Context) {
 	userID, ok := c.MustGet("userID").(*uuid.UUID)
 	if !ok {
-		response.Unauthorized(c)
+		response.AbortWithUnauthorized(c)
 		return
 	}
 
@@ -313,7 +318,7 @@ func (h *authHandler) Login(c *gin.Context) {
 func (h *authHandler) Profile(c *gin.Context) {
 	secureUser, ok := c.MustGet("user").(*user.SecureUser)
 	if !ok {
-		response.Unauthorized(c)
+		response.AbortWithUnauthorized(c)
 		return
 	}
 
@@ -332,7 +337,7 @@ func (h *authHandler) Profile(c *gin.Context) {
 func (h *authHandler) Refresh(c *gin.Context) {
 	userID, ok := c.MustGet("userID").(uuid.UUID)
 	if !ok {
-		response.Unauthorized(c)
+		response.AbortWithUnauthorized(c)
 		return
 	}
 
@@ -376,13 +381,13 @@ func (h *authHandler) ResetPassword(c *gin.Context) {
 	resetPasswordRequest := &ResetPasswordRequest{}
 	err := c.ShouldBind(resetPasswordRequest)
 	if err != nil {
-		c.Error(err)
+		response.AbortWithError(c, err)
 		return
 	}
 
 	email, ok := c.MustGet("email").(string)
 	if !ok {
-		response.Unauthorized(c)
+		response.AbortWithUnauthorized(c)
 		return
 	}
 
@@ -395,4 +400,120 @@ func (h *authHandler) ResetPassword(c *gin.Context) {
 	response.ClearCookie(c, "forgot_password_token")
 	response.ClearCookie(c, "reset_password_token")
 	response.Ok(c, result, nil)
+}
+
+// GoogleLogin godoc
+//
+//	@Summary		login with google
+//	@Description	redirect to google login
+//	@Tags			auth
+//	@Success		307
+//	@Failure		500	{object}	response.SwaggerResponse
+//	@Router			/auth/google [get]
+func (h *authHandler) GoogleLogin(c *gin.Context) {
+	result, url, err := h.authService.GoogleLogin()
+	if err != nil {
+		helpers.HandleError(c, err, result)
+		return
+	}
+
+	c.Redirect(http.StatusTemporaryRedirect, url)
+}
+
+// GithubLogin godoc
+//
+//	@Summary		login with github
+//	@Description	redirect to github login
+//	@Tags			auth
+//	@Success		307
+//	@Failure		500	{object}	response.SwaggerResponse
+//	@Router			/auth/github [get]
+func (h *authHandler) GithubLogin(c *gin.Context) {
+	result, url, err := h.authService.GithubLogin()
+	if err != nil {
+		helpers.HandleError(c, err, result)
+		return
+	}
+
+	c.Redirect(http.StatusTemporaryRedirect, url)
+}
+
+// GoogleCallback godoc
+//
+//	@Summary		google login callback
+//	@Description	authentications set cookies and redirect
+//	@Tags			auth
+//	@Success		308
+//	@Failure		401	{object}	response.SwaggerResponse
+//	@Failure		500	{object}	response.SwaggerResponse
+//	@Router			/auth/google/callback [get]
+func (h *authHandler) GoogleCallback(c *gin.Context) {
+	googleClaims, ok := c.MustGet("googleClaims").(*GoogleClaims)
+	if !ok {
+		response.AbortWithUnauthorized(c)
+		return
+	}
+
+	result, tokens, url, err := h.authService.GoogleCallback(googleClaims)
+	if err != nil {
+		helpers.HandleError(c, err, result)
+		return
+	}
+
+	if tokens != nil {
+		response.SetSecureCookie(c, response.CookieOptions{
+			Key:    "access_token",
+			Value:  tokens.AccessToken,
+			MaxAge: time.Minute * 10,
+		})
+		response.SetSecureCookie(c, response.CookieOptions{
+			Key:    "refresh_token",
+			Value:  tokens.RefreshToken,
+			MaxAge: time.Hour * 72,
+		})
+
+		c.Redirect(http.StatusPermanentRedirect, url)
+	}
+
+	c.Redirect(http.StatusPermanentRedirect, url)
+}
+
+// GithubCallback godoc
+//
+//	@Summary		github login callback
+//	@Description	authentications set cookies and redirect
+//	@Tags			auth
+//	@Success		308
+//	@Failure		401	{object}	response.SwaggerResponse
+//	@Failure		500	{object}	response.SwaggerResponse
+//	@Router			/auth/github/callback [get]
+func (h *authHandler) GithubCallback(c *gin.Context) {
+	githubUser, ok := c.MustGet("githubUser").(*GithubUser)
+	if !ok {
+		response.AbortWithUnauthorized(c)
+		return
+	}
+
+	result, tokens, url, err := h.authService.GithubCallback(githubUser)
+	if err != nil {
+		helpers.HandleError(c, err, result)
+		return
+	}
+
+	if tokens != nil {
+		response.SetSecureCookie(c, response.CookieOptions{
+			Key:    "access_token",
+			Value:  tokens.AccessToken,
+			MaxAge: time.Minute * 10,
+		})
+		response.SetSecureCookie(c, response.CookieOptions{
+			Key:    "refresh_token",
+			Value:  tokens.RefreshToken,
+			MaxAge: time.Hour * 72,
+		})
+
+		c.Redirect(http.StatusPermanentRedirect, url)
+	}
+
+	c.Redirect(http.StatusPermanentRedirect, url)
 }

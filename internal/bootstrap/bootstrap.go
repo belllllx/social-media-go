@@ -5,6 +5,7 @@ import (
 
 	"github.com/belllllx/social-media-go/internal/configs"
 	"github.com/belllllx/social-media-go/internal/logs"
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"github.com/robfig/cron/v3"
@@ -17,6 +18,7 @@ type App struct {
 	RedisClient *redis.Client
 	Router      *gin.Engine
 	Cron        *cron.Cron
+	Verifier    *oidc.IDTokenVerifier
 }
 
 func NewApp() *App {
@@ -26,6 +28,8 @@ func NewApp() *App {
 
 	db := configs.InitDB()
 	redisClient := configs.InitRedis()
+	verifier := configs.InitOIDCVerifier()
+
 	router := gin.New()
 	cron := cron.New()
 
@@ -34,6 +38,7 @@ func NewApp() *App {
 		RedisClient: redisClient,
 		Router:      router,
 		Cron:        cron,
+		Verifier:    verifier,
 	}
 }
 

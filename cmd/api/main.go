@@ -93,6 +93,14 @@ func main() {
 		auth.POST("/refresh-token", middlewares.AuthRefresh(), authHandler.Refresh)
 		auth.POST("/logout", middlewares.RequireAuth(userService), authHandler.Logout)
 
+		google := auth.Group("/google")
+		google.GET("/", authHandler.GoogleLogin)
+		google.GET("/callback", middlewares.AuthGoogleCallback(app.RedisClient, app.Verifier), authHandler.GoogleCallback)
+
+		github := auth.Group("github")
+		github.GET("/", authHandler.GithubLogin)
+		github.GET("/callback", middlewares.AuthGithubCallback(app.RedisClient), authHandler.GithubCallback)
+
 		forgotPassword := auth.Group("/forgot-password")
 		forgotPassword.POST("/send-email", authHandler.SendEmailForgotPassword)
 

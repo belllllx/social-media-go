@@ -202,6 +202,98 @@
                 }
             }
         },
+        "/auth/github": {
+            "get": {
+                "description": "redirect to github login",
+                "tags": [
+                    "auth"
+                ],
+                "summary": "login with github",
+                "responses": {
+                    "307": {
+                        "description": "Temporary Redirect"
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/github/callback": {
+            "get": {
+                "description": "authentications set cookies and redirect",
+                "tags": [
+                    "auth"
+                ],
+                "summary": "github login callback",
+                "responses": {
+                    "308": {
+                        "description": "Permanent Redirect"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/google": {
+            "get": {
+                "description": "redirect to google login",
+                "tags": [
+                    "auth"
+                ],
+                "summary": "login with google",
+                "responses": {
+                    "307": {
+                        "description": "Temporary Redirect"
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/google/callback": {
+            "get": {
+                "description": "authentications set cookies and redirect",
+                "tags": [
+                    "auth"
+                ],
+                "summary": "google login callback",
+                "responses": {
+                    "308": {
+                        "description": "Permanent Redirect"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/login": {
             "post": {
                 "description": "authentication and set cookie",

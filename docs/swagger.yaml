@@ -280,6 +280,66 @@ paths:
             $ref: '#/definitions/response.SwaggerResponse'
       tags:
       - auth
+  /auth/github:
+    get:
+      description: redirect to github login
+      responses:
+        "307":
+          description: Temporary Redirect
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      summary: login with github
+      tags:
+      - auth
+  /auth/github/callback:
+    get:
+      description: authentications set cookies and redirect
+      responses:
+        "308":
+          description: Permanent Redirect
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      summary: github login callback
+      tags:
+      - auth
+  /auth/google:
+    get:
+      description: redirect to google login
+      responses:
+        "307":
+          description: Temporary Redirect
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      summary: login with google
+      tags:
+      - auth
+  /auth/google/callback:
+    get:
+      description: authentications set cookies and redirect
+      responses:
+        "308":
+          description: Permanent Redirect
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      summary: google login callback
+      tags:
+      - auth
   /auth/login:
     post:
       consumes:

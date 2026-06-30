@@ -106,3 +106,40 @@ func InternalServerError(c *gin.Context, err error) {
 		Message: err.Error(),
 	})
 }
+
+func AbortWithError(c *gin.Context, err error) {
+	c.AbortWithError(http.StatusBadRequest, err)
+}
+
+func AbortWithUnauthorized(c *gin.Context) {
+	c.AbortWithStatusJSON(http.StatusUnauthorized, GlobalResponse{
+		Status:  http.StatusUnauthorized,
+		Success: false,
+		Message: "Unauthorized",
+	})
+}
+
+func AbortWithBadRequest(c *gin.Context) {
+	c.AbortWithStatusJSON(http.StatusBadRequest, GlobalResponse{
+		Status:  http.StatusBadRequest,
+		Success: false,
+		Message: "Bad request",
+	})
+}
+
+func AbortWithBadRequestErrorField(c *gin.Context, errorField map[string]string) {
+	c.AbortWithStatusJSON(http.StatusBadRequest, GlobalResponse{
+		Status:      http.StatusBadRequest,
+		Success:     false,
+		Message:     "Invalid input",
+		ErrorFields: errorField,
+	})
+}
+
+func AbortWithInternalServerError(c *gin.Context, err error) {
+	c.AbortWithStatusJSON(http.StatusInternalServerError, GlobalResponse{
+		Status:  http.StatusInternalServerError,
+		Success: false,
+		Message: err.Error(),
+	})
+}

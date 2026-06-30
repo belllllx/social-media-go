@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"time"
 
+	"github.com/belllllx/social-media-go/internal/configs"
 	"github.com/belllllx/social-media-go/internal/email"
 	"github.com/belllllx/social-media-go/internal/logs"
 	"github.com/belllllx/social-media-go/internal/otp"
@@ -16,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
+	"golang.org/x/oauth2"
 )
 
 type Tokens struct {
@@ -23,24 +26,52 @@ type Tokens struct {
 	RefreshToken string `json:"refreshToken"`
 }
 
-type UserAccessTokenJWTPayload struct {
+type GithubEmail struct {
+	Email      string `json:"email"`
+	Primary    bool   `json:"primary"`
+	Verified   bool   `json:"verified"`
+	Visibility string `json:"visibility"`
+}
+
+type GithubUser struct {
+	ID        int64  `json:"id"`
+	Login     string `json:"login"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	AvatarURL string `json:"avatar_url"`
+}
+
+type GoogleClaims struct {
+	Sub           string `json:"sub"`
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"emailVerified"`
+	Name          string `json:"name"`
+	Picture       string `json:"picture"`
+}
+
+type SocialAuthErrorTokenClaims struct {
+	SocialAuthVerified bool `json:"socialAuthVerified"`
+	jwt.RegisteredClaims
+}
+
+type UserAccessTokenClaims struct {
 	ID           uuid.UUID `json:"id"`
 	AuthVerified bool      `json:"authVerified"`
 	jwt.RegisteredClaims
 }
 
-type UserRefreshTokenJWTPayload struct {
+type UserRefreshTokenClaims struct {
 	ID uuid.UUID `json:"id"`
 	jwt.RegisteredClaims
 }
 
-type ResetPasswordTokenJWTPayload struct {
+type ResetPasswordTokenClaims struct {
 	Email       string `json:"email"`
 	OTPVerified bool   `json:"otpVerified"`
 	jwt.RegisteredClaims
 }
 
-type SendEmailTokenJWTPayload struct {
+type SendEmailTokenClaims struct {
 	Email             string `json:"email"`
 	SendEmailVerified bool   `json:"sendEmailVerified"`
 	jwt.RegisteredClaims
@@ -61,6 +92,10 @@ type AuthService interface {
 	ValidateUserLogin(loginRequest *LoginRequest) (userID *uuid.UUID, err error)
 	Login(userID uuid.UUID) (result string, tokens *Tokens, err error)
 	Refresh(userID uuid.UUID) (result string, tokens *Tokens, err error)
+	GoogleLogin() (result, url string, err error)
+	GithubLogin() (result, url string, err error)
+	GoogleCallback(googleClaims *GoogleClaims) (result string, tokens *Tokens, url string, err error)
+	GithubCallback(githubUser *GithubUser) (result string, tokens *Tokens, url string, err error)
 }
 
 type authService struct {
@@ -69,6 +104,8 @@ type authService struct {
 	userRepository user.UserRepository
 	emailService   email.EmailService
 	otpService     otp.OTPService
+	googleConfig   *oauth2.Config
+	githubConfig   *oauth2.Config
 }
 
 func NewAuthService(
@@ -78,12 +115,17 @@ func NewAuthService(
 	emailService email.EmailService,
 	otpService otp.OTPService,
 ) AuthService {
+	googleConfig := configs.InitOAuth2GoogleConfig()
+	githubConfig := configs.InitOAuth2GithubConfig()
+
 	return &authService{
 		redisClient:    redisClient,
 		otpRepository:  otpRepository,
 		userRepository: userRepository,
 		emailService:   emailService,
 		otpService:     otpService,
+		googleConfig:   googleConfig,
+		githubConfig:   githubConfig,
 	}
 }
 
@@ -114,7 +156,7 @@ func (s *authService) SendEmailRegister(sendEmailRegisterRequest *SendEmailRegis
 	}
 
 	token, err := helpers.NewJWT(
-		&SendEmailTokenJWTPayload{
+		&SendEmailTokenClaims{
 			Email:             sendEmailRegisterRequest.Email,
 			SendEmailVerified: true,
 			RegisteredClaims: jwt.RegisteredClaims{
@@ -126,7 +168,7 @@ func (s *authService) SendEmailRegister(sendEmailRegisterRequest *SendEmailRegis
 	)
 	if err != nil {
 		logs.Error(err)
-		return "Failed to sign register token jwt", "", errs.NewUnexpectedError()
+		return "Failed to sign register token", "", errs.NewUnexpectedError()
 	}
 
 	passwordHash, err := helpers.HashSecret(sendEmailRegisterRequest.Password)
@@ -179,7 +221,7 @@ func (s *authService) SendEmailForgotPassword(sendEmailForgotPasswordRequest *Se
 	}
 
 	token, err := helpers.NewJWT(
-		&SendEmailTokenJWTPayload{
+		&SendEmailTokenClaims{
 			Email:             sendEmailForgotPasswordRequest.Email,
 			SendEmailVerified: true,
 			RegisteredClaims: jwt.RegisteredClaims{
@@ -191,7 +233,7 @@ func (s *authService) SendEmailForgotPassword(sendEmailForgotPasswordRequest *Se
 	)
 	if err != nil {
 		logs.Error(err)
-		return "Failed to sign forgot password token jwt", "", errs.NewUnexpectedError()
+		return "Failed to sign forgot password token", "", errs.NewUnexpectedError()
 	}
 
 	return result, token, nil
@@ -207,10 +249,10 @@ func (s *authService) VerifyOTPRegister(email, otp string) (string, error) {
 	value, err := helpers.RedisGet(s.redisClient, key)
 	if err == redis.Nil {
 		logs.Warn(err)
-		return "Failed to register", errs.NewUnexpectedError()
+		return "Failed to get does not exist key redis", errs.NewUnexpectedError()
 	} else if err != nil {
 		logs.Error(err)
-		return "Failed to register", errs.NewInternalServerError()
+		return "Failed to get value redis", errs.NewInternalServerError()
 	}
 
 	registerPayload := &RegisterPayload{}
@@ -237,6 +279,12 @@ func (s *authService) VerifyOTPRegister(email, otp string) (string, error) {
 		return "Failed to delete otp", errs.NewInternalServerError()
 	}
 
+	err = helpers.RedisDel(s.redisClient, key)
+	if err != nil {
+		logs.Error(err)
+		return "Failed to delete key redis", errs.NewInternalServerError()
+	}
+
 	return "Register user successfully", nil
 }
 
@@ -247,7 +295,7 @@ func (s *authService) VerifyOTPForgotPassword(email, otp string) (string, string
 	}
 
 	token, err := helpers.NewJWT(
-		&ResetPasswordTokenJWTPayload{
+		&ResetPasswordTokenClaims{
 			Email:       email,
 			OTPVerified: true,
 			RegisteredClaims: jwt.RegisteredClaims{
@@ -259,7 +307,7 @@ func (s *authService) VerifyOTPForgotPassword(email, otp string) (string, string
 	)
 	if err != nil {
 		logs.Error(err)
-		return "Failed to sign reset password token jwt", "", errs.NewUnexpectedError()
+		return "Failed to sign reset password token", "", errs.NewUnexpectedError()
 	}
 
 	err = s.otpRepository.Delete(email)
@@ -292,7 +340,7 @@ func (s *authService) ValidateUserLogin(loginRequest *LoginRequest) (*uuid.UUID,
 
 func (s *authService) Login(userID uuid.UUID) (string, *Tokens, error) {
 	accessToken, err := helpers.NewJWT(
-		&UserAccessTokenJWTPayload{
+		&UserAccessTokenClaims{
 			ID:           userID,
 			AuthVerified: true,
 			RegisteredClaims: jwt.RegisteredClaims{
@@ -304,11 +352,11 @@ func (s *authService) Login(userID uuid.UUID) (string, *Tokens, error) {
 	)
 	if err != nil {
 		logs.Error(err)
-		return "Failed to sign access token jwt", nil, errs.NewUnexpectedError()
+		return "Failed to sign access token", nil, errs.NewUnexpectedError()
 	}
 
 	refreshToken, err := helpers.NewJWT(
-		&UserRefreshTokenJWTPayload{
+		&UserRefreshTokenClaims{
 			ID: userID,
 			RegisteredClaims: jwt.RegisteredClaims{
 				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 72)),
@@ -319,7 +367,7 @@ func (s *authService) Login(userID uuid.UUID) (string, *Tokens, error) {
 	)
 	if err != nil {
 		logs.Error(err)
-		return "Failed to sign refresh token jwt", nil, errs.NewUnexpectedError()
+		return "Failed to sign refresh token", nil, errs.NewUnexpectedError()
 	}
 
 	tokens := &Tokens{
@@ -331,7 +379,7 @@ func (s *authService) Login(userID uuid.UUID) (string, *Tokens, error) {
 
 func (s *authService) Refresh(userID uuid.UUID) (string, *Tokens, error) {
 	accessToken, err := helpers.NewJWT(
-		&UserAccessTokenJWTPayload{
+		&UserAccessTokenClaims{
 			ID:           userID,
 			AuthVerified: true,
 			RegisteredClaims: jwt.RegisteredClaims{
@@ -343,11 +391,11 @@ func (s *authService) Refresh(userID uuid.UUID) (string, *Tokens, error) {
 	)
 	if err != nil {
 		logs.Error(err)
-		return "Failed to sign access token jwt", nil, errs.NewUnexpectedError()
+		return "Failed to sign access token", nil, errs.NewUnexpectedError()
 	}
 
 	refreshToken, err := helpers.NewJWT(
-		&UserRefreshTokenJWTPayload{
+		&UserRefreshTokenClaims{
 			ID: userID,
 			RegisteredClaims: jwt.RegisteredClaims{
 				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 72)),
@@ -358,7 +406,7 @@ func (s *authService) Refresh(userID uuid.UUID) (string, *Tokens, error) {
 	)
 	if err != nil {
 		logs.Error(err)
-		return "Failed to sign refresh token jwt", nil, errs.NewUnexpectedError()
+		return "Failed to sign refresh token", nil, errs.NewUnexpectedError()
 	}
 
 	tokens := &Tokens{
@@ -366,4 +414,282 @@ func (s *authService) Refresh(userID uuid.UUID) (string, *Tokens, error) {
 		RefreshToken: refreshToken,
 	}
 	return "Refresh token successfully", tokens, nil
+}
+
+func (s *authService) GoogleLogin() (string, string, error) {
+	state, err := helpers.GenerateRandomState()
+	if err != nil {
+		logs.Error(err)
+		return "Failed to generate oauth2 state", "", errs.NewUnexpectedError()
+	}
+
+	key := fmt.Sprintf("auth:oauth2-state:%s", state)
+	err = helpers.RedisSet(s.redisClient, key, []byte(state), time.Minute*5)
+	if err != nil {
+		logs.Error(err)
+		return "Failed to set redis", "", errs.NewInternalServerError()
+	}
+
+	url := s.googleConfig.AuthCodeURL(state, oauth2.AccessTypeOnline)
+	return "Generate url for google login successfully", url, nil
+}
+
+func (s *authService) GithubLogin() (string, string, error) {
+	state, err := helpers.GenerateRandomState()
+	if err != nil {
+		logs.Error(err)
+		return "Failed to generate oauth2 state", "", errs.NewUnexpectedError()
+	}
+
+	key := fmt.Sprintf("auth:oauth2-state:%s", state)
+	err = helpers.RedisSet(s.redisClient, key, []byte(state), time.Minute*5)
+	if err != nil {
+		logs.Error(err)
+		return "Failed to set redis", "", errs.NewInternalServerError()
+	}
+
+	url := s.githubConfig.AuthCodeURL(state, oauth2.AccessTypeOnline)
+	return "Generate url for google login successfully", url, nil
+}
+
+func (s *authService) GoogleCallback(googleClaims *GoogleClaims) (string, *Tokens, string, error) {
+	userExist, err := s.userRepository.FindByEmail(googleClaims.Email)
+	if err != nil && !helpers.IsErrRecordNotFound(err) {
+		logs.Error(err)
+		return "Failed to find user", nil, "", errs.NewInternalServerError()
+	}
+
+	authSuccessURL := fmt.Sprintf("%s%s", viper.GetString("app.client_url"), viper.GetString("app.client_redirect_auth_success_path"))
+	authErrorURL := fmt.Sprintf("%s%s", viper.GetString("app.client_url"), viper.GetString("app.client_redirect_auth_error_path"))
+
+	// ยังไม่มี account -> create
+	if helpers.IsErrRecordNotFound(err) {
+		createUser := &user.User{
+			Fullname:     googleClaims.Name,
+			Email:        googleClaims.Email,
+			ProviderType: user.ProviderTypeGoogle,
+			ProfileUrl:   &googleClaims.Picture,
+		}
+		err = s.userRepository.Create(createUser)
+		if err != nil {
+			logs.Error(err)
+			return "Failed to create social account", nil, "", errs.NewInternalServerError()
+		}
+
+		accessToken, err := helpers.NewJWT(
+			&UserAccessTokenClaims{
+				ID:           createUser.ID,
+				AuthVerified: true,
+				RegisteredClaims: jwt.RegisteredClaims{
+					ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 10)),
+					IssuedAt:  jwt.NewNumericDate(time.Now()),
+				},
+			},
+			viper.GetString("app.access_token_secret"),
+		)
+		if err != nil {
+			logs.Error(err)
+			return "Failed to sign access token", nil, "", errs.NewUnexpectedError()
+		}
+
+		refreshToken, err := helpers.NewJWT(
+			&UserRefreshTokenClaims{
+				ID: createUser.ID,
+				RegisteredClaims: jwt.RegisteredClaims{
+					ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 72)),
+					IssuedAt:  jwt.NewNumericDate(time.Now()),
+				},
+			},
+			viper.GetString("app.refresh_token_secret"),
+		)
+		if err != nil {
+			logs.Error(err)
+			return "Failed to sign refresh token", nil, "", errs.NewUnexpectedError()
+		}
+
+		tokens := &Tokens{
+			AccessToken:  accessToken,
+			RefreshToken: refreshToken,
+		}
+		return "Login successfully", tokens, authSuccessURL, nil
+	}
+
+	// กรณี provider ไม่ใช่ google
+	if userExist != nil && userExist.ProviderType != user.ProviderTypeGoogle {
+		socialAuthErrToken, err := helpers.NewJWT(
+			&SocialAuthErrorTokenClaims{
+				SocialAuthVerified: true,
+				RegisteredClaims: jwt.RegisteredClaims{
+					ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 5)),
+					IssuedAt:  jwt.NewNumericDate(time.Now()),
+				},
+			},
+			viper.GetString("app.social_login_error_token_secret"),
+		)
+		if err != nil {
+			logs.Error(err)
+			return "Failed to sign social login error token", nil, "", errs.NewUnexpectedError()
+		}
+
+		msg := "email already registered with a different provider"
+		return "Failed to login with google", nil, fmt.Sprintf("%s?message=%s&error_token=%s", authErrorURL, url.PathEscape(msg), socialAuthErrToken), nil
+	}
+
+	accessToken, err := helpers.NewJWT(
+		&UserAccessTokenClaims{
+			ID:           userExist.ID,
+			AuthVerified: true,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 10)),
+				IssuedAt:  jwt.NewNumericDate(time.Now()),
+			},
+		},
+		viper.GetString("app.access_token_secret"),
+	)
+	if err != nil {
+		logs.Error(err)
+		return "Failed to sign access token", nil, "", errs.NewUnexpectedError()
+	}
+
+	refreshToken, err := helpers.NewJWT(
+		&UserRefreshTokenClaims{
+			ID: userExist.ID,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 72)),
+				IssuedAt:  jwt.NewNumericDate(time.Now()),
+			},
+		},
+		viper.GetString("app.refresh_token_secret"),
+	)
+	if err != nil {
+		logs.Error(err)
+		return "Failed to sign refresh token", nil, "", errs.NewUnexpectedError()
+	}
+
+	tokens := &Tokens{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}
+	return "Login successfully", tokens, authSuccessURL, nil
+}
+
+func (s *authService) GithubCallback(githubUser *GithubUser) (string, *Tokens, string, error) {
+	userExist, err := s.userRepository.FindByEmail(githubUser.Email)
+	if err != nil && !helpers.IsErrRecordNotFound(err) {
+		logs.Error(err)
+		return "Failed to find user", nil, "", errs.NewInternalServerError()
+	}
+
+	authSuccessURL := fmt.Sprintf("%s%s", viper.GetString("app.client_url"), viper.GetString("app.client_redirect_auth_success_path"))
+	authErrorURL := fmt.Sprintf("%s%s", viper.GetString("app.client_url"), viper.GetString("app.client_redirect_auth_error_path"))
+
+	// ยังไม่มี account -> create
+	if helpers.IsErrRecordNotFound(err) {
+		createUser := &user.User{
+			Fullname:     githubUser.Name,
+			Email:        githubUser.Email,
+			ProviderType: user.ProviderTypeGithub,
+			ProfileUrl:   &githubUser.AvatarURL,
+		}
+		err = s.userRepository.Create(createUser)
+		if err != nil {
+			logs.Error(err)
+			return "Failed to create social account", nil, "", errs.NewInternalServerError()
+		}
+
+		accessToken, err := helpers.NewJWT(
+			&UserAccessTokenClaims{
+				ID:           createUser.ID,
+				AuthVerified: true,
+				RegisteredClaims: jwt.RegisteredClaims{
+					ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 10)),
+					IssuedAt:  jwt.NewNumericDate(time.Now()),
+				},
+			},
+			viper.GetString("app.access_token_secret"),
+		)
+		if err != nil {
+			logs.Error(err)
+			return "Failed to sign access token", nil, "", errs.NewUnexpectedError()
+		}
+
+		refreshToken, err := helpers.NewJWT(
+			&UserRefreshTokenClaims{
+				ID: createUser.ID,
+				RegisteredClaims: jwt.RegisteredClaims{
+					ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 72)),
+					IssuedAt:  jwt.NewNumericDate(time.Now()),
+				},
+			},
+			viper.GetString("app.refresh_token_secret"),
+		)
+		if err != nil {
+			logs.Error(err)
+			return "Failed to sign refresh token", nil, "", errs.NewUnexpectedError()
+		}
+
+		tokens := &Tokens{
+			AccessToken:  accessToken,
+			RefreshToken: refreshToken,
+		}
+		return "Login successfully", tokens, authSuccessURL, nil
+	}
+
+	// กรณี provider ไม่ใช่ github
+	if userExist != nil && userExist.ProviderType != user.ProviderTypeGithub {
+		socialAuthErrToken, err := helpers.NewJWT(
+			&SocialAuthErrorTokenClaims{
+				SocialAuthVerified: true,
+				RegisteredClaims: jwt.RegisteredClaims{
+					ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 5)),
+					IssuedAt:  jwt.NewNumericDate(time.Now()),
+				},
+			},
+			viper.GetString("app.social_login_error_token_secret"),
+		)
+		if err != nil {
+			logs.Error(err)
+			return "Failed to sign social login error token", nil, "", errs.NewUnexpectedError()
+		}
+
+		msg := "email already registered with a different provider"
+		return "Failed to login with google", nil, fmt.Sprintf("%s?message=%s&error_token=%s", authErrorURL, url.PathEscape(msg), socialAuthErrToken), nil
+	}
+
+	accessToken, err := helpers.NewJWT(
+		&UserAccessTokenClaims{
+			ID:           userExist.ID,
+			AuthVerified: true,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 10)),
+				IssuedAt:  jwt.NewNumericDate(time.Now()),
+			},
+		},
+		viper.GetString("app.access_token_secret"),
+	)
+	if err != nil {
+		logs.Error(err)
+		return "Failed to sign access token", nil, "", errs.NewUnexpectedError()
+	}
+
+	refreshToken, err := helpers.NewJWT(
+		&UserRefreshTokenClaims{
+			ID: userExist.ID,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 72)),
+				IssuedAt:  jwt.NewNumericDate(time.Now()),
+			},
+		},
+		viper.GetString("app.refresh_token_secret"),
+	)
+	if err != nil {
+		logs.Error(err)
+		return "Failed to sign refresh token", nil, "", errs.NewUnexpectedError()
+	}
+
+	tokens := &Tokens{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}
+	return "Login successfully", tokens, authSuccessURL, nil
 }
