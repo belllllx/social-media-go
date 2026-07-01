@@ -24,6 +24,52 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/auth/facebook": {
+            "get": {
+                "description": "redirect to facebook login",
+                "tags": [
+                    "auth"
+                ],
+                "summary": "login with facebook",
+                "responses": {
+                    "307": {
+                        "description": "Temporary Redirect"
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/facebook/callback": {
+            "get": {
+                "description": "authentications set cookies and redirect",
+                "tags": [
+                    "auth"
+                ],
+                "summary": "facebook login callback",
+                "responses": {
+                    "308": {
+                        "description": "Permanent Redirect"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/forgot-password/resend-email": {
             "post": {
                 "description": "authentication and resend email forgot password",
@@ -747,11 +793,13 @@ const docTemplate = `{
             "enum": [
                 "LOCAL",
                 "GOOGLE",
+                "FACEBOOK",
                 "GITHUB"
             ],
             "x-enum-varnames": [
                 "ProviderTypeLocal",
                 "ProviderTypeGoogle",
+                "ProviderTypeFacebook",
                 "ProviderTypeGithub"
             ]
         },

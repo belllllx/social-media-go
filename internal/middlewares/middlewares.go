@@ -247,7 +247,14 @@ func AuthGoogleCallback(redisClient *redis.Client, verifier *oidc.IDTokenVerifie
 			return
 		}
 
-		c.Set("googleClaims", googleClaims)
+		socialUser := &auth.SocialUser{
+			ProviderType: user.ProviderTypeGoogle,
+			Email:        googleClaims.Email,
+			Name:         googleClaims.Name,
+			AvatarURL:    googleClaims.Picture,
+		}
+
+		c.Set("socialUser", socialUser)
 		c.Next()
 	}
 }
@@ -342,7 +349,86 @@ func AuthGithubCallback(redisClient *redis.Client) gin.HandlerFunc {
 			return
 		}
 
-		c.Set("githubUser", githubUser)
+		socialUser := &auth.SocialUser{
+			ProviderType: user.ProviderTypeGithub,
+			Email:        githubUser.Email,
+			Name:         githubUser.Name,
+			AvatarURL:    githubUser.AvatarURL,
+		}
+
+		c.Set("socialUser", socialUser)
+		c.Next()
+	}
+}
+
+func AuthFacebookCallback(redisClient *redis.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		state := c.Query("state")
+		code := c.Query("code")
+
+		key := fmt.Sprintf("auth:oauth2-state:%s", state)
+		oauth2State, err := helpers.RedisGet(redisClient, key)
+		if err == redis.Nil {
+			response.AbortWithUnauthorized(c)
+			return
+		} else if err != nil {
+			response.AbortWithInternalServerError(c, err)
+			return
+		}
+
+		if state != oauth2State {
+			response.AbortWithUnauthorized(c)
+			return
+		}
+
+		facebookConfig := configs.InitOAuth2FacebookConfig()
+		ctx := context.Background()
+
+		token, err := facebookConfig.Exchange(ctx, code)
+		if err != nil {
+			response.AbortWithUnauthorized(c)
+			return
+		}
+
+		client := facebookConfig.Client(ctx, token)
+		resp, err := client.Get(viper.GetString("app.facebook_user_resources_api"))
+		if err != nil {
+			response.AbortWithInternalServerError(c, err)
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			response.AbortWithUnauthorized(c)
+			return
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			response.AbortWithInternalServerError(c, errors.New("Failed to get facebook user data"))
+			return
+		}
+
+		facebookUser := &auth.FacebookUser{}
+		err = json.NewDecoder(resp.Body).Decode(facebookUser)
+		if err != nil {
+			response.AbortWithBadRequest(c)
+			return
+		}
+
+		err = helpers.RedisDel(redisClient, key)
+		if err != nil {
+			response.AbortWithInternalServerError(c, err)
+			return
+		}
+
+		socialUser := &auth.SocialUser{
+			ProviderType: user.ProviderTypeFacebook,
+			Email:        facebookUser.Email,
+			Name:         facebookUser.Name,
+			AvatarURL:    facebookUser.Picture.Data.URL,
+		}
+
+		c.Set("socialUser", socialUser)
 		c.Next()
 	}
 }

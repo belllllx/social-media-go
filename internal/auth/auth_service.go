@@ -26,6 +26,24 @@ type Tokens struct {
 	RefreshToken string `json:"refreshToken"`
 }
 
+type SocialUser struct {
+	ProviderType user.ProviderType
+	Email        string
+	Name         string
+	AvatarURL    string
+}
+
+type FacebookUser struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Email   string `json:"email"`
+	Picture struct {
+		Data struct {
+			URL string `json:"url"`
+		} `json:"data"`
+	} `json:"picture"`
+}
+
 type GithubEmail struct {
 	Email      string `json:"email"`
 	Primary    bool   `json:"primary"`
@@ -92,10 +110,8 @@ type AuthService interface {
 	ValidateUserLogin(loginRequest *LoginRequest) (userID *uuid.UUID, err error)
 	Login(userID uuid.UUID) (result string, tokens *Tokens, err error)
 	Refresh(userID uuid.UUID) (result string, tokens *Tokens, err error)
-	GoogleLogin() (result, url string, err error)
-	GithubLogin() (result, url string, err error)
-	GoogleCallback(googleClaims *GoogleClaims) (result string, tokens *Tokens, url string, err error)
-	GithubCallback(githubUser *GithubUser) (result string, tokens *Tokens, url string, err error)
+	SocialLogin(providerType user.ProviderType) (result, url string, err error)
+	SocialLoginCallback(socialUser *SocialUser) (result string, tokens *Tokens, url string, err error)
 }
 
 type authService struct {
@@ -106,6 +122,7 @@ type authService struct {
 	otpService     otp.OTPService
 	googleConfig   *oauth2.Config
 	githubConfig   *oauth2.Config
+	facebookConfig *oauth2.Config
 }
 
 func NewAuthService(
@@ -117,6 +134,7 @@ func NewAuthService(
 ) AuthService {
 	googleConfig := configs.InitOAuth2GoogleConfig()
 	githubConfig := configs.InitOAuth2GithubConfig()
+	facebookConfig := configs.InitOAuth2FacebookConfig()
 
 	return &authService{
 		redisClient:    redisClient,
@@ -126,6 +144,7 @@ func NewAuthService(
 		otpService:     otpService,
 		googleConfig:   googleConfig,
 		githubConfig:   githubConfig,
+		facebookConfig: facebookConfig,
 	}
 }
 
@@ -211,7 +230,9 @@ func (s *authService) SendEmailForgotPassword(sendEmailForgotPasswordRequest *Se
 	}
 
 	// กรณี social account ห้าม
-	if userExist.ProviderType == user.ProviderTypeGoogle || userExist.ProviderType == user.ProviderTypeGithub {
+	if userExist.ProviderType == user.ProviderTypeGoogle ||
+		userExist.ProviderType == user.ProviderTypeGithub ||
+		userExist.ProviderType == user.ProviderTypeFacebook {
 		return "Cannot reset password for social media account", "", errs.NewBadRequestError()
 	}
 
@@ -416,7 +437,7 @@ func (s *authService) Refresh(userID uuid.UUID) (string, *Tokens, error) {
 	return "Refresh token successfully", tokens, nil
 }
 
-func (s *authService) GoogleLogin() (string, string, error) {
+func (s *authService) SocialLogin(providerType user.ProviderType) (string, string, error) {
 	state, err := helpers.GenerateRandomState()
 	if err != nil {
 		logs.Error(err)
@@ -430,30 +451,20 @@ func (s *authService) GoogleLogin() (string, string, error) {
 		return "Failed to set redis", "", errs.NewInternalServerError()
 	}
 
-	url := s.googleConfig.AuthCodeURL(state, oauth2.AccessTypeOnline)
-	return "Generate url for google login successfully", url, nil
+	url := ""
+	switch providerType {
+	case user.ProviderTypeGoogle:
+		url = s.googleConfig.AuthCodeURL(state, oauth2.AccessTypeOnline)
+	case user.ProviderTypeGithub:
+		url = s.githubConfig.AuthCodeURL(state, oauth2.AccessTypeOnline)
+	case user.ProviderTypeFacebook:
+		url = s.facebookConfig.AuthCodeURL(state, oauth2.AccessTypeOnline)
+	}
+	return "Generate url for social login successfully", url, nil
 }
 
-func (s *authService) GithubLogin() (string, string, error) {
-	state, err := helpers.GenerateRandomState()
-	if err != nil {
-		logs.Error(err)
-		return "Failed to generate oauth2 state", "", errs.NewUnexpectedError()
-	}
-
-	key := fmt.Sprintf("auth:oauth2-state:%s", state)
-	err = helpers.RedisSet(s.redisClient, key, []byte(state), time.Minute*5)
-	if err != nil {
-		logs.Error(err)
-		return "Failed to set redis", "", errs.NewInternalServerError()
-	}
-
-	url := s.githubConfig.AuthCodeURL(state, oauth2.AccessTypeOnline)
-	return "Generate url for google login successfully", url, nil
-}
-
-func (s *authService) GoogleCallback(googleClaims *GoogleClaims) (string, *Tokens, string, error) {
-	userExist, err := s.userRepository.FindByEmail(googleClaims.Email)
+func (s *authService) SocialLoginCallback(socialUser *SocialUser) (string, *Tokens, string, error) {
+	userExist, err := s.userRepository.FindByEmail(socialUser.Email)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return "Failed to find user", nil, "", errs.NewInternalServerError()
@@ -465,10 +476,10 @@ func (s *authService) GoogleCallback(googleClaims *GoogleClaims) (string, *Token
 	// ยังไม่มี account -> create
 	if helpers.IsErrRecordNotFound(err) {
 		createUser := &user.User{
-			Fullname:     googleClaims.Name,
-			Email:        googleClaims.Email,
-			ProviderType: user.ProviderTypeGoogle,
-			ProfileUrl:   &googleClaims.Picture,
+			Fullname:     socialUser.Name,
+			Email:        socialUser.Email,
+			ProviderType: socialUser.ProviderType,
+			ProfileUrl:   &socialUser.AvatarURL,
 		}
 		err = s.userRepository.Create(createUser)
 		if err != nil {
@@ -514,8 +525,8 @@ func (s *authService) GoogleCallback(googleClaims *GoogleClaims) (string, *Token
 		return "Login successfully", tokens, authSuccessURL, nil
 	}
 
-	// กรณี provider ไม่ใช่ google
-	if userExist != nil && userExist.ProviderType != user.ProviderTypeGoogle {
+	// กรณี provider ไม่ตรงกับ social login ที่ใช้
+	if userExist != nil && userExist.ProviderType != socialUser.ProviderType {
 		socialAuthErrToken, err := helpers.NewJWT(
 			&SocialAuthErrorTokenClaims{
 				SocialAuthVerified: true,
@@ -532,128 +543,7 @@ func (s *authService) GoogleCallback(googleClaims *GoogleClaims) (string, *Token
 		}
 
 		msg := "email already registered with a different provider"
-		return "Failed to login with google", nil, fmt.Sprintf("%s?message=%s&error_token=%s", authErrorURL, url.PathEscape(msg), socialAuthErrToken), nil
-	}
-
-	accessToken, err := helpers.NewJWT(
-		&UserAccessTokenClaims{
-			ID:           userExist.ID,
-			AuthVerified: true,
-			RegisteredClaims: jwt.RegisteredClaims{
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 10)),
-				IssuedAt:  jwt.NewNumericDate(time.Now()),
-			},
-		},
-		viper.GetString("app.access_token_secret"),
-	)
-	if err != nil {
-		logs.Error(err)
-		return "Failed to sign access token", nil, "", errs.NewUnexpectedError()
-	}
-
-	refreshToken, err := helpers.NewJWT(
-		&UserRefreshTokenClaims{
-			ID: userExist.ID,
-			RegisteredClaims: jwt.RegisteredClaims{
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 72)),
-				IssuedAt:  jwt.NewNumericDate(time.Now()),
-			},
-		},
-		viper.GetString("app.refresh_token_secret"),
-	)
-	if err != nil {
-		logs.Error(err)
-		return "Failed to sign refresh token", nil, "", errs.NewUnexpectedError()
-	}
-
-	tokens := &Tokens{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-	}
-	return "Login successfully", tokens, authSuccessURL, nil
-}
-
-func (s *authService) GithubCallback(githubUser *GithubUser) (string, *Tokens, string, error) {
-	userExist, err := s.userRepository.FindByEmail(githubUser.Email)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return "Failed to find user", nil, "", errs.NewInternalServerError()
-	}
-
-	authSuccessURL := fmt.Sprintf("%s%s", viper.GetString("app.client_url"), viper.GetString("app.client_redirect_auth_success_path"))
-	authErrorURL := fmt.Sprintf("%s%s", viper.GetString("app.client_url"), viper.GetString("app.client_redirect_auth_error_path"))
-
-	// ยังไม่มี account -> create
-	if helpers.IsErrRecordNotFound(err) {
-		createUser := &user.User{
-			Fullname:     githubUser.Name,
-			Email:        githubUser.Email,
-			ProviderType: user.ProviderTypeGithub,
-			ProfileUrl:   &githubUser.AvatarURL,
-		}
-		err = s.userRepository.Create(createUser)
-		if err != nil {
-			logs.Error(err)
-			return "Failed to create social account", nil, "", errs.NewInternalServerError()
-		}
-
-		accessToken, err := helpers.NewJWT(
-			&UserAccessTokenClaims{
-				ID:           createUser.ID,
-				AuthVerified: true,
-				RegisteredClaims: jwt.RegisteredClaims{
-					ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 10)),
-					IssuedAt:  jwt.NewNumericDate(time.Now()),
-				},
-			},
-			viper.GetString("app.access_token_secret"),
-		)
-		if err != nil {
-			logs.Error(err)
-			return "Failed to sign access token", nil, "", errs.NewUnexpectedError()
-		}
-
-		refreshToken, err := helpers.NewJWT(
-			&UserRefreshTokenClaims{
-				ID: createUser.ID,
-				RegisteredClaims: jwt.RegisteredClaims{
-					ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 72)),
-					IssuedAt:  jwt.NewNumericDate(time.Now()),
-				},
-			},
-			viper.GetString("app.refresh_token_secret"),
-		)
-		if err != nil {
-			logs.Error(err)
-			return "Failed to sign refresh token", nil, "", errs.NewUnexpectedError()
-		}
-
-		tokens := &Tokens{
-			AccessToken:  accessToken,
-			RefreshToken: refreshToken,
-		}
-		return "Login successfully", tokens, authSuccessURL, nil
-	}
-
-	// กรณี provider ไม่ใช่ github
-	if userExist != nil && userExist.ProviderType != user.ProviderTypeGithub {
-		socialAuthErrToken, err := helpers.NewJWT(
-			&SocialAuthErrorTokenClaims{
-				SocialAuthVerified: true,
-				RegisteredClaims: jwt.RegisteredClaims{
-					ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 5)),
-					IssuedAt:  jwt.NewNumericDate(time.Now()),
-				},
-			},
-			viper.GetString("app.social_login_error_token_secret"),
-		)
-		if err != nil {
-			logs.Error(err)
-			return "Failed to sign social login error token", nil, "", errs.NewUnexpectedError()
-		}
-
-		msg := "email already registered with a different provider"
-		return "Failed to login with google", nil, fmt.Sprintf("%s?message=%s&error_token=%s", authErrorURL, url.PathEscape(msg), socialAuthErrToken), nil
+		return "Failed to login with social", nil, fmt.Sprintf("%s?message=%s&error_token=%s", authErrorURL, url.PathEscape(msg), socialAuthErrToken), nil
 	}
 
 	accessToken, err := helpers.NewJWT(

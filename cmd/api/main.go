@@ -97,6 +97,10 @@ func main() {
 		google.GET("/", authHandler.GoogleLogin)
 		google.GET("/callback", middlewares.AuthGoogleCallback(app.RedisClient, app.Verifier), authHandler.GoogleCallback)
 
+		facebook := auth.Group("/facebook")
+		facebook.GET("/", authHandler.FacebookLogin)
+		facebook.GET("/callback", middlewares.AuthFacebookCallback(app.RedisClient), authHandler.FacebookCallback)
+
 		github := auth.Group("github")
 		github.GET("/", authHandler.GithubLogin)
 		github.GET("/callback", middlewares.AuthGithubCallback(app.RedisClient), authHandler.GithubCallback)

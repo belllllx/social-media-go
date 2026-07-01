@@ -107,6 +107,22 @@ func InitOAuth2GithubConfig() *oauth2.Config {
 	}
 }
 
+func InitOAuth2FacebookConfig() *oauth2.Config {
+	return &oauth2.Config{
+		ClientID:     viper.GetString("app.facebook_client_id"),
+		ClientSecret: viper.GetString("app.facebook_client_secret"),
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  viper.GetString("app.facebook_auth_url"),
+			TokenURL: viper.GetString("app.facebook_token_url"),
+		},
+		RedirectURL: viper.GetString("app.facebook_callback_url"),
+		Scopes: []string{
+			"email",
+			"public_profile",
+		},
+	}
+}
+
 func InitOIDCVerifier() *oidc.IDTokenVerifier {
 	provider, err := oidc.NewProvider(context.Background(), "https://accounts.google.com")
 	if err != nil {

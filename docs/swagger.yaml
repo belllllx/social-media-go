@@ -103,11 +103,13 @@ definitions:
     enum:
     - LOCAL
     - GOOGLE
+    - FACEBOOK
     - GITHUB
     type: string
     x-enum-varnames:
     - ProviderTypeLocal
     - ProviderTypeGoogle
+    - ProviderTypeFacebook
     - ProviderTypeGithub
   user.Role:
     enum:
@@ -161,6 +163,36 @@ info:
   title: Social Media API
   version: "1.0"
 paths:
+  /auth/facebook:
+    get:
+      description: redirect to facebook login
+      responses:
+        "307":
+          description: Temporary Redirect
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      summary: login with facebook
+      tags:
+      - auth
+  /auth/facebook/callback:
+    get:
+      description: authentications set cookies and redirect
+      responses:
+        "308":
+          description: Permanent Redirect
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      summary: facebook login callback
+      tags:
+      - auth
   /auth/forgot-password/resend-email:
     post:
       description: authentication and resend email forgot password

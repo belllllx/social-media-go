@@ -14,9 +14,10 @@ const (
 	RoleUser  Role = "USER"
 	RoleAdmin Role = "ADMIN"
 
-	ProviderTypeLocal  ProviderType = "LOCAL"
-	ProviderTypeGoogle ProviderType = "GOOGLE"
-	ProviderTypeGithub ProviderType = "GITHUB"
+	ProviderTypeLocal    ProviderType = "LOCAL"
+	ProviderTypeGoogle   ProviderType = "GOOGLE"
+	ProviderTypeFacebook ProviderType = "FACEBOOK"
+	ProviderTypeGithub   ProviderType = "GITHUB"
 )
 
 type User struct {

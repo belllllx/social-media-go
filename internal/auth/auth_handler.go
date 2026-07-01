@@ -50,8 +50,10 @@ type AuthHandler interface {
 	Logout(c *gin.Context)
 	ResetPassword(c *gin.Context)
 	GoogleLogin(c *gin.Context)
+	FacebookLogin(c *gin.Context)
 	GithubLogin(c *gin.Context)
 	GoogleCallback(c *gin.Context)
+	FacebookCallback(c *gin.Context)
 	GithubCallback(c *gin.Context)
 }
 
@@ -411,7 +413,25 @@ func (h *authHandler) ResetPassword(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/google [get]
 func (h *authHandler) GoogleLogin(c *gin.Context) {
-	result, url, err := h.authService.GoogleLogin()
+	result, url, err := h.authService.SocialLogin(user.ProviderTypeGoogle)
+	if err != nil {
+		helpers.HandleError(c, err, result)
+		return
+	}
+
+	c.Redirect(http.StatusTemporaryRedirect, url)
+}
+
+// FacebookLogin godoc
+//
+//	@Summary		login with facebook
+//	@Description	redirect to facebook login
+//	@Tags			auth
+//	@Success		307
+//	@Failure		500	{object}	response.SwaggerResponse
+//	@Router			/auth/facebook [get]
+func (h *authHandler) FacebookLogin(c *gin.Context) {
+	result, url, err := h.authService.SocialLogin(user.ProviderTypeFacebook)
 	if err != nil {
 		helpers.HandleError(c, err, result)
 		return
@@ -429,7 +449,7 @@ func (h *authHandler) GoogleLogin(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/github [get]
 func (h *authHandler) GithubLogin(c *gin.Context) {
-	result, url, err := h.authService.GithubLogin()
+	result, url, err := h.authService.SocialLogin(user.ProviderTypeGithub)
 	if err != nil {
 		helpers.HandleError(c, err, result)
 		return
@@ -448,13 +468,53 @@ func (h *authHandler) GithubLogin(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/google/callback [get]
 func (h *authHandler) GoogleCallback(c *gin.Context) {
-	googleClaims, ok := c.MustGet("googleClaims").(*GoogleClaims)
+	socialUser, ok := c.MustGet("socialUser").(*SocialUser)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
 	}
 
-	result, tokens, url, err := h.authService.GoogleCallback(googleClaims)
+	result, tokens, url, err := h.authService.SocialLoginCallback(socialUser)
+	if err != nil {
+		helpers.HandleError(c, err, result)
+		return
+	}
+
+	if tokens != nil {
+		response.SetSecureCookie(c, response.CookieOptions{
+			Key:    "access_token",
+			Value:  tokens.AccessToken,
+			MaxAge: time.Minute * 10,
+		})
+		response.SetSecureCookie(c, response.CookieOptions{
+			Key:    "refresh_token",
+			Value:  tokens.RefreshToken,
+			MaxAge: time.Hour * 72,
+		})
+
+		c.Redirect(http.StatusPermanentRedirect, url)
+	}
+
+	c.Redirect(http.StatusPermanentRedirect, url)
+}
+
+// FacebookCallback godoc
+//
+//	@Summary		facebook login callback
+//	@Description	authentications set cookies and redirect
+//	@Tags			auth
+//	@Success		308
+//	@Failure		401	{object}	response.SwaggerResponse
+//	@Failure		500	{object}	response.SwaggerResponse
+//	@Router			/auth/facebook/callback [get]
+func (h *authHandler) FacebookCallback(c *gin.Context) {
+	socialUser, ok := c.MustGet("socialUser").(*SocialUser)
+	if !ok {
+		response.AbortWithUnauthorized(c)
+		return
+	}
+
+	result, tokens, url, err := h.authService.SocialLoginCallback(socialUser)
 	if err != nil {
 		helpers.HandleError(c, err, result)
 		return
@@ -488,13 +548,13 @@ func (h *authHandler) GoogleCallback(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/github/callback [get]
 func (h *authHandler) GithubCallback(c *gin.Context) {
-	githubUser, ok := c.MustGet("githubUser").(*GithubUser)
+	socialUser, ok := c.MustGet("socialUser").(*SocialUser)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
 	}
 
-	result, tokens, url, err := h.authService.GithubCallback(githubUser)
+	result, tokens, url, err := h.authService.SocialLoginCallback(socialUser)
 	if err != nil {
 		helpers.HandleError(c, err, result)
 		return
