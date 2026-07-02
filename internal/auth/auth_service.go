@@ -447,41 +447,11 @@ func (s *authService) SocialLoginCallback(socialUser *SocialUser) (*Tokens, stri
 			return nil, "", errs.NewInternalServerErrorWithMessage("Failed to create social account")
 		}
 
-		accessToken, err := helpers.NewJWT(
-			&UserAccessTokenClaims{
-				ID:           createUser.ID,
-				AuthVerified: true,
-				RegisteredClaims: jwt.RegisteredClaims{
-					ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 10)),
-					IssuedAt:  jwt.NewNumericDate(time.Now()),
-				},
-			},
-			viper.GetString("app.access_token_secret"),
-		)
+		tokens, err := s.CreateTokens(createUser.ID)
 		if err != nil {
-			logs.Error(err)
-			return nil, "", errs.NewUnexpectedErrorWithMessage("Failed to sign access token")
+			return nil, "", err
 		}
 
-		refreshToken, err := helpers.NewJWT(
-			&UserRefreshTokenClaims{
-				ID: createUser.ID,
-				RegisteredClaims: jwt.RegisteredClaims{
-					ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 72)),
-					IssuedAt:  jwt.NewNumericDate(time.Now()),
-				},
-			},
-			viper.GetString("app.refresh_token_secret"),
-		)
-		if err != nil {
-			logs.Error(err)
-			return nil, "", errs.NewUnexpectedErrorWithMessage("Failed to sign refresh token")
-		}
-
-		tokens := &Tokens{
-			AccessToken:  accessToken,
-			RefreshToken: refreshToken,
-		}
 		return tokens, authSuccessURL, nil
 	}
 
@@ -506,40 +476,10 @@ func (s *authService) SocialLoginCallback(socialUser *SocialUser) (*Tokens, stri
 		return nil, fmt.Sprintf("%s?message=%s&error_token=%s", authErrorURL, url.PathEscape(msg), socialAuthErrToken), nil
 	}
 
-	accessToken, err := helpers.NewJWT(
-		&UserAccessTokenClaims{
-			ID:           userExist.ID,
-			AuthVerified: true,
-			RegisteredClaims: jwt.RegisteredClaims{
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 10)),
-				IssuedAt:  jwt.NewNumericDate(time.Now()),
-			},
-		},
-		viper.GetString("app.access_token_secret"),
-	)
+	tokens, err := s.CreateTokens(userExist.ID)
 	if err != nil {
-		logs.Error(err)
-		return nil, "", errs.NewUnexpectedErrorWithMessage("Failed to sign access token")
+		return nil, "", err
 	}
 
-	refreshToken, err := helpers.NewJWT(
-		&UserRefreshTokenClaims{
-			ID: userExist.ID,
-			RegisteredClaims: jwt.RegisteredClaims{
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 72)),
-				IssuedAt:  jwt.NewNumericDate(time.Now()),
-			},
-		},
-		viper.GetString("app.refresh_token_secret"),
-	)
-	if err != nil {
-		logs.Error(err)
-		return nil, "", errs.NewUnexpectedErrorWithMessage("Failed to sign refresh token")
-	}
-
-	tokens := &Tokens{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-	}
 	return tokens, authSuccessURL, nil
 }
