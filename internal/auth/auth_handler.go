@@ -94,9 +94,9 @@ func (h *authHandler) SendEmailRegister(c *gin.Context) {
 		return
 	}
 
-	result, token, err := h.authService.SendEmailRegister(sendEmailRegisterRequest)
+	token, err := h.authService.SendEmailRegister(sendEmailRegisterRequest)
 	if err != nil {
-		helpers.HandleError(c, err, result)
+		helpers.HandleError(c, err)
 		return
 	}
 
@@ -106,7 +106,7 @@ func (h *authHandler) SendEmailRegister(c *gin.Context) {
 		MaxAge: time.Minute * 15,
 	})
 
-	response.Ok(c, result, nil)
+	response.Ok(c, "Send email successfully", nil)
 }
 
 // SendEmailForgotPassword godoc
@@ -129,9 +129,9 @@ func (h *authHandler) SendEmailForgotPassword(c *gin.Context) {
 		return
 	}
 
-	result, token, err := h.authService.SendEmailForgotPassword(sendEmailForgotPasswordRequest)
+	token, err := h.authService.SendEmailForgotPassword(sendEmailForgotPasswordRequest)
 	if err != nil {
-		helpers.HandleError(c, err, result)
+		helpers.HandleError(c, err)
 		return
 	}
 
@@ -141,7 +141,7 @@ func (h *authHandler) SendEmailForgotPassword(c *gin.Context) {
 		MaxAge: time.Minute * 15,
 	})
 
-	response.Ok(c, result, nil)
+	response.Ok(c, "Send email successfully", nil)
 }
 
 // ResendEmailRegister godoc
@@ -160,13 +160,13 @@ func (h *authHandler) ResendEmailRegister(c *gin.Context) {
 		return
 	}
 
-	result, err := h.emailService.SendEmail(email, "register")
+	err := h.emailService.SendEmail(email, "register")
 	if err != nil {
-		helpers.HandleError(c, err, result)
+		helpers.HandleError(c, err)
 		return
 	}
 
-	response.Ok(c, result, nil)
+	response.Ok(c, "Send email successfully", nil)
 }
 
 // ResendEmailForgotPassword godoc
@@ -185,13 +185,13 @@ func (h *authHandler) ResendEmailForgotPassword(c *gin.Context) {
 		return
 	}
 
-	result, err := h.emailService.SendEmail(email, "reset password")
+	err := h.emailService.SendEmail(email, "reset password")
 	if err != nil {
-		helpers.HandleError(c, err, result)
+		helpers.HandleError(c, err)
 		return
 	}
 
-	response.Ok(c, result, nil)
+	response.Ok(c, "Send email successfully", nil)
 }
 
 // VerifyOTPRegister godoc
@@ -220,14 +220,14 @@ func (h *authHandler) VerifyOTPRegister(c *gin.Context) {
 		return
 	}
 
-	result, err := h.authService.VerifyOTPRegister(email, verifyOTPRequest.OTP)
+	err = h.authService.VerifyOTPRegister(email, verifyOTPRequest.OTP)
 	if err != nil {
-		helpers.HandleError(c, err, result)
+		helpers.HandleError(c, err)
 		return
 	}
 
 	response.ClearCookie(c, "register_token")
-	response.Created(c, result, nil)
+	response.Created(c, "Register user successfully", nil)
 }
 
 // VerifyOTPForgotPassword godoc
@@ -256,9 +256,9 @@ func (h *authHandler) VerifyOTPForgotPassword(c *gin.Context) {
 		return
 	}
 
-	result, token, err := h.authService.VerifyOTPForgotPassword(email, verifyOTPRequest.OTP)
+	token, err := h.authService.VerifyOTPForgotPassword(email, verifyOTPRequest.OTP)
 	if err != nil {
-		helpers.HandleError(c, err, result)
+		helpers.HandleError(c, err)
 		return
 	}
 
@@ -267,7 +267,7 @@ func (h *authHandler) VerifyOTPForgotPassword(c *gin.Context) {
 		Value:  token,
 		MaxAge: time.Minute * 10,
 	})
-	response.Ok(c, result, nil)
+	response.Ok(c, "Verify otp successfully", nil)
 }
 
 // Login godoc
@@ -289,9 +289,9 @@ func (h *authHandler) Login(c *gin.Context) {
 		return
 	}
 
-	result, tokens, err := h.authService.Login(*userID)
+	tokens, err := h.authService.CreateTokens(*userID)
 	if err != nil {
-		helpers.HandleError(c, err, result)
+		helpers.HandleError(c, err)
 		return
 	}
 
@@ -305,7 +305,7 @@ func (h *authHandler) Login(c *gin.Context) {
 		Value:  tokens.RefreshToken,
 		MaxAge: time.Hour * 72,
 	})
-	response.Ok(c, result, nil)
+	response.Ok(c, "Login successfully", nil)
 }
 
 // Profile godoc
@@ -343,13 +343,13 @@ func (h *authHandler) Refresh(c *gin.Context) {
 		return
 	}
 
-	result, tokens, err := h.authService.Refresh(userID)
+	tokens, err := h.authService.CreateTokens(userID)
 	if err != nil {
-		helpers.HandleError(c, err, result)
+		helpers.HandleError(c, err)
 		return
 	}
 
-	response.Ok(c, result, tokens)
+	response.Ok(c, "Refresh token successfully", tokens)
 }
 
 // Logout godoc
@@ -393,15 +393,15 @@ func (h *authHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	result, err := h.userService.ResetPassword(email, resetPasswordRequest.ConfirmPassword)
+	err = h.userService.ResetPassword(email, resetPasswordRequest.ConfirmPassword)
 	if err != nil {
-		helpers.HandleError(c, err, result)
+		helpers.HandleError(c, err)
 		return
 	}
 
 	response.ClearCookie(c, "forgot_password_token")
 	response.ClearCookie(c, "reset_password_token")
-	response.Ok(c, result, nil)
+	response.Ok(c, "Reset password successfully", nil)
 }
 
 // GoogleLogin godoc
@@ -413,9 +413,9 @@ func (h *authHandler) ResetPassword(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/google [get]
 func (h *authHandler) GoogleLogin(c *gin.Context) {
-	result, url, err := h.authService.SocialLogin(user.ProviderTypeGoogle)
+	url, err := h.authService.SocialLogin(user.ProviderTypeGoogle)
 	if err != nil {
-		helpers.HandleError(c, err, result)
+		helpers.HandleError(c, err)
 		return
 	}
 
@@ -431,9 +431,9 @@ func (h *authHandler) GoogleLogin(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/facebook [get]
 func (h *authHandler) FacebookLogin(c *gin.Context) {
-	result, url, err := h.authService.SocialLogin(user.ProviderTypeFacebook)
+	url, err := h.authService.SocialLogin(user.ProviderTypeFacebook)
 	if err != nil {
-		helpers.HandleError(c, err, result)
+		helpers.HandleError(c, err)
 		return
 	}
 
@@ -449,9 +449,9 @@ func (h *authHandler) FacebookLogin(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/github [get]
 func (h *authHandler) GithubLogin(c *gin.Context) {
-	result, url, err := h.authService.SocialLogin(user.ProviderTypeGithub)
+	url, err := h.authService.SocialLogin(user.ProviderTypeGithub)
 	if err != nil {
-		helpers.HandleError(c, err, result)
+		helpers.HandleError(c, err)
 		return
 	}
 
@@ -474,9 +474,9 @@ func (h *authHandler) GoogleCallback(c *gin.Context) {
 		return
 	}
 
-	result, tokens, url, err := h.authService.SocialLoginCallback(socialUser)
+	tokens, url, err := h.authService.SocialLoginCallback(socialUser)
 	if err != nil {
-		helpers.HandleError(c, err, result)
+		helpers.HandleError(c, err)
 		return
 	}
 
@@ -514,9 +514,9 @@ func (h *authHandler) FacebookCallback(c *gin.Context) {
 		return
 	}
 
-	result, tokens, url, err := h.authService.SocialLoginCallback(socialUser)
+	tokens, url, err := h.authService.SocialLoginCallback(socialUser)
 	if err != nil {
-		helpers.HandleError(c, err, result)
+		helpers.HandleError(c, err)
 		return
 	}
 
@@ -554,9 +554,9 @@ func (h *authHandler) GithubCallback(c *gin.Context) {
 		return
 	}
 
-	result, tokens, url, err := h.authService.SocialLoginCallback(socialUser)
+	tokens, url, err := h.authService.SocialLoginCallback(socialUser)
 	if err != nil {
-		helpers.HandleError(c, err, result)
+		helpers.HandleError(c, err)
 		return
 	}
 

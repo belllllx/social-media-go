@@ -113,13 +113,13 @@ func GetErrorMessages(err validator.FieldError) string {
 	}
 }
 
-func HandleError(c *gin.Context, err error, msg string) {
+func HandleError(c *gin.Context, err error) {
 	switch e := err.(type) {
 	case *errs.AppError:
 		c.AbortWithStatusJSON(e.Status, gin.H{
 			"status":  e.Status,
 			"success": false,
-			"message": msg,
+			"message": e.Message,
 		})
 	case error:
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{

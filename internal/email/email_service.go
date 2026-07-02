@@ -11,7 +11,7 @@ import (
 )
 
 type EmailService interface {
-	SendEmail(email, sendEmailType string) (result string, err error)
+	SendEmail(email, sendEmailType string) error
 }
 
 type emailService struct {
@@ -29,30 +29,30 @@ func NewEmailService(
 	}
 }
 
-func (s *emailService) SendEmail(email, sendEmailType string) (string, error) {
+func (s *emailService) SendEmail(email, sendEmailType string) error {
 	isOTPExist, err := s.otpRepository.FindByEmail(email)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
-		return "Failed to send email", errs.NewInternalServerError()
+		return errs.NewInternalServerErrorWithMessage("Failed to send email")
 	}
 
 	// ลบ otp ของเก่าถ้าเจอ
 	if isOTPExist != nil {
 		if err := s.otpRepository.Delete(isOTPExist.Email); err != nil {
 			logs.Error(err)
-			return "Failed to delete otp", errs.NewInternalServerError()
+			return errs.NewInternalServerErrorWithMessage("Failed to delete otp")
 		}
 	}
 
 	otpString, err := helpers.NewOTP()
 	if err != nil {
 		logs.Error(err)
-		return "Failed to generate otp", errs.NewUnexpectedError()
+		return errs.NewUnexpectedErrorWithMessage("Failed to generate otp")
 	}
 	otpHash, err := helpers.HashSecret(otpString)
 	if err != nil {
 		logs.Error(err)
-		return "Failed to hash otp", errs.NewUnexpectedError()
+		return errs.NewUnexpectedErrorWithMessage("Failed to hash otp")
 	}
 
 	createOTP := otp.OTP{
@@ -63,10 +63,9 @@ func (s *emailService) SendEmail(email, sendEmailType string) (string, error) {
 	err = s.otpRepository.Create(&createOTP)
 	if err != nil {
 		logs.Error(err)
-		return "Failed to create otp", errs.NewInternalServerError()
+		return errs.NewInternalServerErrorWithMessage("Failed to create otp")
 	}
 
-	result := ""
 	err = s.emailRepository.Send(email, otpString, sendEmailType)
 	if err != nil {
 		logs.Error(err)
@@ -74,9 +73,8 @@ func (s *emailService) SendEmail(email, sendEmailType string) (string, error) {
 			logs.Error(err)
 		}
 
-		result = fmt.Sprintf("Cannot send email to %s", email)
-		return result, errs.NewInternalServerError()
+		return errs.NewInternalServerErrorWithMessage(fmt.Sprintf("Cannot send email to %s", email))
 	}
-	result = fmt.Sprintf("Send email to %s successfully", email)
-	return result, nil
+
+	return nil
 }

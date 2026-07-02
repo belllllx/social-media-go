@@ -26,7 +26,7 @@ type SecureUser struct {
 
 type UserService interface {
 	SecureFindWithID(ID uuid.UUID) (*SecureUser, error)
-	ResetPassword(email, password string) (result string, err error)
+	ResetPassword(email, password string) error
 }
 
 type userService struct {
@@ -66,18 +66,18 @@ func (s *userService) SecureFindWithID(ID uuid.UUID) (*SecureUser, error) {
 	return secureUser, nil
 }
 
-func (s *userService) ResetPassword(email, password string) (string, error) {
+func (s *userService) ResetPassword(email, password string) error {
 	passwordHash, err := helpers.HashSecret(password)
 	if err != nil {
 		logs.Error(err)
-		return "Failed to hash password", errs.NewUnexpectedError()
+		return errs.NewUnexpectedErrorWithMessage("Failed to hash password")
 	}
 
 	err = s.userRepository.UpdatePassword(email, passwordHash)
 	if err != nil {
 		logs.Error(err)
-		return "Failed to update user password", errs.NewInternalServerError()
+		return errs.NewInternalServerErrorWithMessage("Failed to update user password")
 	}
 
-	return "Reset password successfully", nil
+	return nil
 }

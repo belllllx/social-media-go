@@ -7,7 +7,7 @@ import (
 )
 
 type OTPService interface {
-	Verify(email, otp string) (result string, err error)
+	Verify(email, otp string) error
 	DeleteWithExpired() error
 }
 
@@ -19,29 +19,29 @@ func NewOTPService(otpRepository OTPRepository) OTPService {
 	return &otpService{otpRepository: otpRepository}
 }
 
-func (s *otpService) Verify(email, otp string) (string, error) {
+func (s *otpService) Verify(email, otp string) error {
 	isOTPExist, err := s.otpRepository.FindNotExpired(email)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
-		return "Failed to verify otp", errs.NewInternalServerError()
+		return errs.NewInternalServerErrorWithMessage("Failed to verify otp")
 	}
 
 	// กรณี otp หมดอายุ
 	if helpers.IsErrRecordNotFound(err) {
 		if err := s.otpRepository.Delete(email); err != nil {
 			logs.Error(err)
-			return "Failed to delete expired otp", errs.NewInternalServerError()
+			return errs.NewInternalServerErrorWithMessage("Failed to delete expired otp")
 		}
-		return "OTP has expired", errs.NewBadRequestError()
+		return errs.NewBadRequestErrorWithMessage("OTP has expired")
 	}
 
 	err = helpers.CompareSecret(isOTPExist.OTPHash, otp)
 	// กรณี otp ไม่ถูกต้อง
 	if err != nil {
-		return "Invalid otp", errs.NewBadRequestError()
+		return errs.NewBadRequestErrorWithMessage("Invalid otp")
 	}
 
-	return "Verify otp successfully", nil
+	return nil
 }
 
 func (s *otpService) DeleteWithExpired() error {

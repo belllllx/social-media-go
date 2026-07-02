@@ -18,6 +18,13 @@ func NewInternalServerError() *AppError {
 	}
 }
 
+func NewInternalServerErrorWithMessage(msg string) *AppError {
+	return &AppError{
+		Status:  http.StatusInternalServerError,
+		Message: msg,
+	}
+}
+
 func NewUnexpectedError() *AppError {
 	return &AppError{
 		Status:  http.StatusInternalServerError,
@@ -25,10 +32,24 @@ func NewUnexpectedError() *AppError {
 	}
 }
 
+func NewUnexpectedErrorWithMessage(msg string) *AppError {
+	return &AppError{
+		Status:  http.StatusInternalServerError,
+		Message: msg,
+	}
+}
+
 func NewBadRequestError() *AppError {
 	return &AppError{
 		Status:  http.StatusBadRequest,
 		Message: "Bad request error",
+	}
+}
+
+func NewBadRequestErrorWithMessage(msg string) *AppError {
+	return &AppError{
+		Status:  http.StatusBadRequest,
+		Message: msg,
 	}
 }
 
@@ -43,5 +64,12 @@ func NewNotFoundError() *AppError {
 	return &AppError{
 		Status:  http.StatusNotFound,
 		Message: "Not found",
+	}
+}
+
+func NewNotFoundErrorWithMessage(msg string) *AppError {
+	return &AppError{
+		Status:  http.StatusNotFound,
+		Message: msg,
 	}
 }

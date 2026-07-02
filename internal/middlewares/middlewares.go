@@ -103,7 +103,7 @@ func AuthLogin(authService auth.AuthService) gin.HandlerFunc {
 
 		userID, err := authService.ValidateUserLogin(loginRequest)
 		if err != nil {
-			helpers.HandleError(c, err, err.Error())
+			helpers.HandleError(c, err)
 			return
 		}
 
@@ -134,7 +134,7 @@ func RequireAuth(userService user.UserService) gin.HandlerFunc {
 
 		secureUser, err := userService.SecureFindWithID(claims.ID)
 		if err != nil {
-			helpers.HandleError(c, err, err.Error())
+			helpers.HandleError(c, err)
 			return
 		}
 
