@@ -67,6 +67,13 @@ definitions:
     required:
     - otp
     type: object
+  file.FilesURL:
+    properties:
+      filesUrl:
+        items:
+          type: string
+        type: array
+    type: object
   response.SwaggerBadRequestResponse:
     properties:
       errorFields:
@@ -557,4 +564,41 @@ paths:
             $ref: '#/definitions/response.SwaggerResponse'
       tags:
       - auth
+  /post/upload-files:
+    post:
+      consumes:
+      - multipart/form-data
+      description: authentication and upload files
+      parameters:
+      - description: Multiple image files
+        in: formData
+        name: files
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SwaggerResponseWithData'
+            - properties:
+                data:
+                  $ref: '#/definitions/file.FilesURL'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - post
 swagger: "2.0"

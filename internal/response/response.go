@@ -8,11 +8,11 @@ import (
 )
 
 type GlobalResponse struct {
-	Status      int               `json:"status"`
-	Success     bool              `json:"success"`
-	Message     string            `json:"message"`
-	Data        any               `json:"data,omitempty"`
-	ErrorFields map[string]string `json:"errorFields,omitempty"`
+	Status    int               `json:"status"`
+	Success   bool              `json:"success"`
+	Message   string            `json:"message"`
+	Data      any               `json:"data,omitempty"`
+	ErrFields map[string]string `json:"errorFields,omitempty"`
 }
 
 type SwaggerResponse struct {
@@ -76,10 +76,10 @@ func Created(c *gin.Context, msg string, result any) {
 
 func BadRequest(c *gin.Context, errorField map[string]string) {
 	c.JSON(http.StatusBadRequest, GlobalResponse{
-		Status:      http.StatusBadRequest,
-		Success:     false,
-		Message:     "Invalid input",
-		ErrorFields: errorField,
+		Status:    http.StatusBadRequest,
+		Success:   false,
+		Message:   "Invalid input",
+		ErrFields: errorField,
 	})
 }
 
@@ -127,12 +127,20 @@ func AbortWithBadRequest(c *gin.Context) {
 	})
 }
 
-func AbortWithBadRequestErrorField(c *gin.Context, errorField map[string]string) {
+func AbortWithBadRequestMessage(c *gin.Context, msg string) {
 	c.AbortWithStatusJSON(http.StatusBadRequest, GlobalResponse{
-		Status:      http.StatusBadRequest,
-		Success:     false,
-		Message:     "Invalid input",
-		ErrorFields: errorField,
+		Status:  http.StatusBadRequest,
+		Success: false,
+		Message: msg,
+	})
+}
+
+func AbortWithBadRequestErrorFields(c *gin.Context, errFields map[string]string) {
+	c.AbortWithStatusJSON(http.StatusBadRequest, GlobalResponse{
+		Status:    http.StatusBadRequest,
+		Success:   false,
+		Message:   "Invalid input",
+		ErrFields: errFields,
 	})
 }
 

@@ -4,9 +4,11 @@ import (
 	"github.com/belllllx/social-media-go/internal/auth"
 	"github.com/belllllx/social-media-go/internal/bootstrap"
 	"github.com/belllllx/social-media-go/internal/email"
+	"github.com/belllllx/social-media-go/internal/file"
 	"github.com/belllllx/social-media-go/internal/logs"
 	"github.com/belllllx/social-media-go/internal/middlewares"
 	"github.com/belllllx/social-media-go/internal/otp"
+	"github.com/belllllx/social-media-go/internal/post"
 	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
@@ -42,6 +44,7 @@ func main() {
 	userRepositoryDB := user.NewUserRepositoryDB(app.DB)
 	emailRepositoryImpl := email.NewEmailRepositoryImpl()
 	otpRepositoryDB := otp.NewOTPRepositoryDB(app.DB)
+	fileRepositoryDB := file.NewFileRepositoryDB(app.DB)
 
 	emailService := email.NewEmailService(emailRepositoryImpl, otpRepositoryDB)
 	otpService := otp.NewOTPService(otpRepositoryDB)
@@ -53,12 +56,14 @@ func main() {
 		otpService,
 	)
 	userService := user.NewUserService(userRepositoryDB)
+	fileService := file.NewFileService(fileRepositoryDB)
 
 	authHandler := auth.NewAuthHandler(
 		authService,
 		emailService,
 		userService,
 	)
+	postHandler := post.NewPostHandler(fileService)
 
 	app.Cron.AddFunc("*/30 * * * *", func() {
 		err := otpService.DeleteWithExpired()
@@ -68,6 +73,7 @@ func main() {
 	})
 	app.Cron.Start()
 
+	app.Router.MaxMultipartMemory = 10 << 20 // 10 MB
 	app.Router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{viper.GetString("app.client_url")},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE"},
@@ -119,6 +125,12 @@ func main() {
 		register.Use(middlewares.AuthRegister())
 		register.POST("/resend-email", authHandler.ResendEmailRegister)
 		register.POST("/verify-otp", authHandler.VerifyOTPRegister)
+	}
+
+	{
+		post := api.Group("/post")
+
+		post.POST("/upload-files", middlewares.RequireAuth(userService), postHandler.UploadFiles)
 	}
 
 	app.Run()

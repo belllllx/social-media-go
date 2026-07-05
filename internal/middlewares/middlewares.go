@@ -31,11 +31,11 @@ func GlobalErrorsHandler() gin.HandlerFunc {
 				var validateErrs validator.ValidationErrors
 
 				if errors.As(ginErr.Err, &validateErrs) {
-					errorField := map[string]string{}
+					errFields := map[string]string{}
 					for _, e := range validateErrs {
-						errorField[e.Field()] = helpers.GetErrorMessages(e)
+						errFields[e.Field()] = helpers.GetErrorMessages(e)
 					}
-					response.AbortWithBadRequestErrorField(c, errorField)
+					response.AbortWithBadRequestErrorFields(c, errFields)
 					return
 				}
 			}

@@ -7,6 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
@@ -131,5 +135,25 @@ func InitOIDCVerifier() *oidc.IDTokenVerifier {
 
 	return provider.Verifier(&oidc.Config{
 		ClientID: viper.GetString("app.google_client_id"),
+	})
+}
+
+func InitS3Client() *s3.Client {
+	cfg, err := config.LoadDefaultConfig(context.Background(),
+		config.WithRegion(viper.GetString("app.aws_bucket_region")),
+		config.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(
+				viper.GetString("app.aws_access_key"),
+				viper.GetString("app.aws_secret_access_key"),
+				"",
+			),
+		),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	return s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(viper.GetString("app.r2_endpoint"))
 	})
 }

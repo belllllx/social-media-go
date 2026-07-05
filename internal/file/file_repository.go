@@ -16,10 +16,10 @@ const (
 )
 
 type File struct {
-	ID        uuid.UUID  `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
-	Filename  string     `gorm:"unique"`
-	ContentID *uuid.UUID `gorm:"type:uuid;unique"`
-	FileType  FileType   `gorm:"type:file_type;unique"`
+	ID        int64
+	Filename  string     `gorm:"uniqueIndex:idx_file_unique"`
+	ContentID *uuid.UUID `gorm:"type:uuid;uniqueIndex:idx_file_unique"`
+	FileType  FileType   `gorm:"type:file_type;uniqueIndex:idx_file_unique"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
