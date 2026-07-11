@@ -5,15 +5,11 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/belllllx/social-media-go/internal/configs"
 	"github.com/belllllx/social-media-go/internal/logs"
 	"github.com/belllllx/social-media-go/pkg/errs"
 	"github.com/belllllx/social-media-go/pkg/helpers"
-	"github.com/spf13/viper"
 )
 
 const maxFileSize = 30 << 20 // 30 MB
@@ -57,10 +53,11 @@ type fileService struct {
 	presignClient  *s3.PresignClient
 }
 
-func NewFileService(fileRepository FileRepository) FileService {
-	s3Client := configs.InitS3Client()
-	presignClient := s3.NewPresignClient(s3Client)
-
+func NewFileService(
+	fileRepository FileRepository,
+	s3Client *s3.Client,
+	presignClient *s3.PresignClient,
+) FileService {
 	return &fileService{
 		fileRepository: fileRepository,
 		s3Client:       s3Client,
@@ -92,26 +89,22 @@ func (s *fileService) UploadFile(fileData FileData, fileType FileType) (*FileURL
 	}
 
 	ctx := context.Background()
-	_, err := s.s3Client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(viper.GetString("app.aws_bucket_name")),
-		Key:         aws.String(key),
-		Body:        fileData.Body,
-		ContentType: aws.String(fileData.ContentType),
-	})
+	_, err := helpers.PutObject(
+		s.s3Client,
+		ctx,
+		key,
+		fileData.Body,
+		fileData.ContentType,
+	)
 	if err != nil {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to upload file to bucket")
 	}
 
-	req, err := s.presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(viper.GetString("app.aws_bucket_name")),
-		Key:    aws.String(key),
-	}, func(opts *s3.PresignOptions) {
-		opts.Expires = time.Hour * 24
-	})
+	req, err := helpers.PresignGetObject(s.presignClient, ctx, key)
 	if err != nil {
 		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to presign object")
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to presign get file object")
 	}
 
 	createFile := &File{
@@ -122,10 +115,7 @@ func (s *fileService) UploadFile(fileData FileData, fileType FileType) (*FileURL
 	if err != nil {
 		logs.Error(err)
 
-		if _, err := s.s3Client.DeleteObject(ctx, &s3.DeleteObjectInput{
-			Bucket: aws.String(viper.GetString("app.aws_bucket_name")),
-			Key:    aws.String(key),
-		}); err != nil {
+		if _, err := helpers.DeleteObject(s.s3Client, ctx, key); err != nil {
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to create file and delete object")
 		}
@@ -168,26 +158,22 @@ func (s *fileService) UploadFiles(filesData []FileData, fileType FileType) (*Fil
 			key = fmt.Sprintf("%s/%s", "post-video", newFileName)
 		}
 
-		_, err := s.s3Client.PutObject(ctx, &s3.PutObjectInput{
-			Bucket:      aws.String(viper.GetString("app.aws_bucket_name")),
-			Key:         aws.String(key),
-			Body:        fileData.Body,
-			ContentType: aws.String(fileData.ContentType),
-		})
+		_, err := helpers.PutObject(
+			s.s3Client,
+			ctx,
+			key,
+			fileData.Body,
+			fileData.ContentType,
+		)
 		if err != nil {
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to upload files to bucket")
 		}
 
-		req, err := s.presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
-			Bucket: aws.String(viper.GetString("app.aws_bucket_name")),
-			Key:    aws.String(key),
-		}, func(opts *s3.PresignOptions) {
-			opts.Expires = time.Hour * 24
-		})
+		req, err := helpers.PresignGetObject(s.presignClient, ctx, key)
 		if err != nil {
 			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to presign object")
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to presign get file object")
 		}
 
 		keys = append(keys, key)
@@ -203,10 +189,7 @@ func (s *fileService) UploadFiles(filesData []FileData, fileType FileType) (*Fil
 		logs.Error(err)
 
 		for _, key := range keys {
-			if _, err := s.s3Client.DeleteObject(ctx, &s3.DeleteObjectInput{
-				Bucket: aws.String(viper.GetString("app.aws_bucket_name")),
-				Key:    aws.String(key),
-			}); err != nil {
+			if _, err := helpers.DeleteObject(s.s3Client, ctx, key); err != nil {
 				logs.Error(err)
 				return nil, errs.NewInternalServerErrorWithMessage("Failed to create files and delete object")
 			}

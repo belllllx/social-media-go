@@ -299,7 +299,7 @@ func (s *authService) VerifyOTPRegister(email, otp string) error {
 		return errs.NewInternalServerErrorWithMessage("Failed to delete otp")
 	}
 
-	err = helpers.RedisDel(s.redisClient, key)
+	err = helpers.RedisDelete(s.redisClient, key)
 	if err != nil {
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to delete key redis")

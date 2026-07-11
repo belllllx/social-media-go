@@ -1,8 +1,10 @@
 package user
 
 import (
+	"context"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/belllllx/social-media-go/internal/logs"
 	"github.com/belllllx/social-media-go/pkg/errs"
 	"github.com/belllllx/social-media-go/pkg/helpers"
@@ -27,14 +29,20 @@ type SecureUser struct {
 type UserService interface {
 	SecureFindWithID(ID uuid.UUID) (*SecureUser, error)
 	ResetPassword(email, password string) error
+	GetPostUserImage(post *Post) error
+	GetNotificationUserImage(notification *Notification) error
 }
 
 type userService struct {
+	presignClient  *s3.PresignClient
 	userRepository UserRepository
 }
 
-func NewUserService(userRepository UserRepository) UserService {
-	return &userService{userRepository: userRepository}
+func NewUserService(presignClient *s3.PresignClient, userRepository UserRepository) UserService {
+	return &userService{
+		presignClient:  presignClient,
+		userRepository: userRepository,
+	}
 }
 
 func (s *userService) SecureFindWithID(ID uuid.UUID) (*SecureUser, error) {
@@ -77,6 +85,42 @@ func (s *userService) ResetPassword(email, password string) error {
 	if err != nil {
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to update user password")
+	}
+
+	return nil
+}
+
+func (s *userService) GetPostUserImage(post *Post) error {
+	ctx := context.Background()
+
+	// ไม่ใช่ avater ของ social login
+	// อัพเดต profile url
+	if post.User.ProfileUrl != nil && !helpers.IsExternalURL(*post.User.ProfileUrl) {
+		req, err := helpers.PresignGetObject(s.presignClient, ctx, *post.User.ProfileUrl)
+		if err != nil {
+			logs.Error(err)
+			return errs.NewInternalServerErrorWithMessage("Failed to presign get post user profile url object")
+		}
+
+		post.User.ProfileUrl = &req.URL
+	}
+
+	return nil
+}
+
+func (s *userService) GetNotificationUserImage(notification *Notification) error {
+	ctx := context.Background()
+
+	// ไม่ใช่ avater ของ social login
+	// อัพเดต profile url
+	if notification.Sender.ProfileUrl != nil && !helpers.IsExternalURL(*notification.Sender.ProfileUrl) {
+		req, err := helpers.PresignGetObject(s.presignClient, ctx, *notification.Sender.ProfileUrl)
+		if err != nil {
+			logs.Error(err)
+			return errs.NewInternalServerErrorWithMessage("Failed to presign get notification sender profile url object")
+		}
+
+		notification.Sender.ProfileUrl = &req.URL
 	}
 
 	return nil

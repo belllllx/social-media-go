@@ -6,12 +6,16 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/belllllx/social-media-go/pkg/errs"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -92,7 +96,7 @@ func RedisGet(redisClient *redis.Client, key string) (string, error) {
 	return redisClient.Get(context.Background(), key).Result()
 }
 
-func RedisDel(redisClient *redis.Client, key string) error {
+func RedisDelete(redisClient *redis.Client, key string) error {
 	return redisClient.Del(context.Background(), key).Err()
 }
 
@@ -147,4 +151,72 @@ func GenerateFilename(filename string) string {
 	fileExt := filepath.Ext(filename)
 	newFilename := uuid.NewString() + fileExt
 	return newFilename
+}
+
+func IsExternalURL(url string) bool {
+	if strings.Contains(url, "https") {
+		return true
+	}
+	return false
+}
+
+func PutObject(
+	s3Client *s3.Client,
+	ctx context.Context,
+	key string,
+	body io.Reader,
+	contentType string,
+) (*s3.PutObjectOutput, error) {
+	return s3Client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(viper.GetString("app.aws_bucket_name")),
+		Key:         aws.String(key),
+		Body:        body,
+		ContentType: aws.String(contentType),
+	})
+}
+
+func PresignGetObject(
+	presignClient *s3.PresignClient,
+	ctx context.Context,
+	key string,
+) (*v4.PresignedHTTPRequest, error) {
+	return presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(viper.GetString("app.aws_bucket_name")),
+		Key:    aws.String(key),
+	}, func(opts *s3.PresignOptions) {
+		opts.Expires = time.Hour * 24
+	})
+}
+
+func DeleteObject(
+	s3Client *s3.Client,
+	ctx context.Context,
+	key string,
+) (*s3.DeleteObjectOutput, error) {
+	return s3Client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(viper.GetString("app.aws_bucket_name")),
+		Key:    aws.String(key),
+	})
+}
+
+func SplitFilename(filePath string) (fileDIR, filename string) {
+	fileSplit := strings.Split(filePath, "/")
+	return fileSplit[0], fileSplit[len(fileSplit)-1]
+}
+
+func OmitUserPasswordHash(db *gorm.DB) *gorm.DB {
+	return db.Select(
+		"id",
+		"fullname",
+		"username",
+		"email",
+		"date_of_birth",
+		"profile_url",
+		"profile_background_url",
+		"info",
+		"role",
+		"provider_type",
+		"created_at",
+		"updated_at",
+	)
 }

@@ -1,32 +1,34 @@
 package notification
 
 import (
-	"time"
-
+	"github.com/belllllx/social-media-go/internal/user"
+	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
-type NotificationType string
+type NotificationRepository interface {
+	CreateMany(notifications []user.Notification) error
+	PreloadsRelation(notificationsID []uuid.UUID) ([]user.Notification, error)
+}
 
-const (
-	NotificationTypePost    NotificationType = "POST"
-	NotificationTypeShare   NotificationType = "SHARE"
-	NotificationTypeComment NotificationType = "COMMENT"
-	NotificationTypeReply   NotificationType = "REPLY"
-	NotificationTypeTag     NotificationType = "TAG"
-	NotificationTypeLike    NotificationType = "LIKE"
-	NotificationTypeFollow  NotificationType = "FOLLOW"
-)
+type notificationRepositoryDB struct {
+	db *gorm.DB
+}
 
-type Notification struct {
-	ID         uuid.UUID        `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
-	Type       NotificationType `gorm:"type:notification_type"`
-	Message    string
-	IsRead     bool `gorm:"default:false"`
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
-	SenderID   uuid.UUID
-	ReceiverID uuid.UUID
-	PostID     *uuid.UUID
-	CommentID  *uuid.UUID
+func NewNotificationRepositoryDB(db *gorm.DB) NotificationRepository {
+	return &notificationRepositoryDB{db: db}
+}
+
+func (r *notificationRepositoryDB) CreateMany(notifications []user.Notification) error {
+	return r.db.Create(&notifications).Error
+}
+
+func (r *notificationRepositoryDB) PreloadsRelation(notificationsID []uuid.UUID) ([]user.Notification, error) {
+	notifications := &[]user.Notification{}
+	err := r.db.Where("id IN ?", notificationsID).Preload("Sender", helpers.OmitUserPasswordHash).Find(notifications).Error
+	if err != nil {
+		return nil, err
+	}
+	return *notifications, nil
 }

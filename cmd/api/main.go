@@ -1,14 +1,18 @@
 package main
 
 import (
+	"net/http"
+
 	"github.com/belllllx/social-media-go/internal/auth"
 	"github.com/belllllx/social-media-go/internal/bootstrap"
 	"github.com/belllllx/social-media-go/internal/email"
 	"github.com/belllllx/social-media-go/internal/file"
 	"github.com/belllllx/social-media-go/internal/logs"
 	"github.com/belllllx/social-media-go/internal/middlewares"
+	"github.com/belllllx/social-media-go/internal/notification"
 	"github.com/belllllx/social-media-go/internal/otp"
 	"github.com/belllllx/social-media-go/internal/post"
+	"github.com/belllllx/social-media-go/internal/socket"
 	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
@@ -39,12 +43,18 @@ import (
 // @externalDocs.url			https://swagger.io/resources/open-api/
 func main() {
 	app := bootstrap.NewApp()
+	go app.Socket.Serve()
 	defer app.Close()
 
 	userRepositoryDB := user.NewUserRepositoryDB(app.DB)
 	emailRepositoryImpl := email.NewEmailRepositoryImpl()
 	otpRepositoryDB := otp.NewOTPRepositoryDB(app.DB)
 	fileRepositoryDB := file.NewFileRepositoryDB(app.DB)
+	postRepositoryDB := post.NewPostRepositoryDB(app.DB)
+	notificationRepositoryDB := notification.NewNotificationRepositoryDB(app.DB)
+
+	notificationSocket := socket.NewNotificationSocket(app.Socket)
+	postSocket := socket.NewPostSocket(app.Socket)
 
 	emailService := email.NewEmailService(emailRepositoryImpl, otpRepositoryDB)
 	otpService := otp.NewOTPService(otpRepositoryDB)
@@ -55,15 +65,24 @@ func main() {
 		emailService,
 		otpService,
 	)
-	userService := user.NewUserService(userRepositoryDB)
-	fileService := file.NewFileService(fileRepositoryDB)
+	userService := user.NewUserService(app.PresignClient, userRepositoryDB)
+	fileService := file.NewFileService(fileRepositoryDB, app.S3Client, app.PresignClient)
+	notificationService := notification.NewNotificationService(userRepositoryDB, notificationRepositoryDB, userService)
+	postService := post.NewPostService(
+		postRepositoryDB,
+		userRepositoryDB,
+		userService,
+		notificationService,
+		notificationSocket,
+		postSocket,
+	)
 
 	authHandler := auth.NewAuthHandler(
 		authService,
 		emailService,
 		userService,
 	)
-	postHandler := post.NewPostHandler(fileService)
+	postHandler := post.NewPostHandler(fileService, postService)
 
 	app.Cron.AddFunc("*/30 * * * *", func() {
 		err := otpService.DeleteWithExpired()
@@ -85,10 +104,22 @@ func main() {
 	app.Router.Use(middlewares.ZapLogger())
 	app.Router.Use(middlewares.GlobalErrorsHandler())
 
-	app.Router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-	app.Router.GET("/swagger", func(c *gin.Context) {
-		c.Redirect(302, "/swagger/index.html")
-	})
+	{
+		socketIO := app.Router.Group("/socket.io")
+
+		socketIO.GET("/*any", gin.WrapH(app.Socket))
+		socketIO.POST("/*any", gin.WrapH(app.Socket))
+	}
+
+	{
+		swagger := app.Router.Group("/swagger")
+
+		swagger.GET("/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+		swagger.GET("", func(c *gin.Context) {
+			c.Redirect(http.StatusFound, "/swagger/index.html")
+		})
+	}
+
 	api := app.Router.Group("/api")
 
 	{
@@ -130,7 +161,9 @@ func main() {
 	{
 		post := api.Group("/post")
 
-		post.POST("/upload-files", middlewares.RequireAuth(userService), postHandler.UploadFiles)
+		post.Use(middlewares.RequireAuth(userService))
+		post.POST("/upload-files", postHandler.UploadFiles)
+		post.POST("/create/:userID", postHandler.CreatePost)
 	}
 
 	app.Run()

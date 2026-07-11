@@ -1,23 +1,39 @@
 package post
 
 import (
-	"time"
-
-	"github.com/belllllx/social-media-go/internal/comment"
-	"github.com/belllllx/social-media-go/internal/like"
-	"github.com/belllllx/social-media-go/internal/notification"
+	"github.com/belllllx/social-media-go/internal/user"
+	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
-type Post struct {
-	ID            uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
-	Message       *string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	UserID        uuid.UUID
-	ParentID      *uuid.UUID
-	SharePosts    []Post                      `gorm:"foreignkey:ParentID;constraint:OnDelete:CASCADE"`
-	Likes         []like.Like                 `gorm:"constraint:OnDelete:CASCADE"`
-	Comments      []comment.Comment           `gorm:"constraint:OnDelete:CASCADE"`
-	Notifications []notification.Notification `gorm:"constraint:OnDelete:CASCADE"`
+type PostRepository interface {
+	Create(post *user.Post) error
+	PreloadRelations(postID uuid.UUID) (*user.Post, error)
+}
+
+type postRepositoryDB struct {
+	db *gorm.DB
+}
+
+func NewPostRepositoryDB(db *gorm.DB) PostRepository {
+	return &postRepositoryDB{db: db}
+}
+
+func (r *postRepositoryDB) Create(post *user.Post) error {
+	return r.db.Create(post).Error
+}
+
+func (r *postRepositoryDB) PreloadRelations(postID uuid.UUID) (*user.Post, error) {
+	post := &user.Post{}
+	err := r.db.Where("id = ?", postID).
+		Preload("User", helpers.OmitUserPasswordHash).
+		Preload("Likes").
+		Preload("Comments").
+		Limit(1).
+		Find(post).Error
+	if err != nil {
+		return nil, err
+	}
+	return post, nil
 }

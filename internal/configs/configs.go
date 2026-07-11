@@ -21,7 +21,6 @@ import (
 	"golang.org/x/oauth2/google"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 func InitTimeZone() {
@@ -54,7 +53,7 @@ func InitDB() *gorm.DB {
 		viper.GetInt("db.port"),
 	)
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
+		// Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
 		panic(err)

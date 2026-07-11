@@ -3,10 +3,13 @@ package bootstrap
 import (
 	"fmt"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/belllllx/social-media-go/internal/configs"
 	"github.com/belllllx/social-media-go/internal/logs"
+	"github.com/belllllx/social-media-go/internal/socket"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
+	socketio "github.com/googollee/go-socket.io"
 	"github.com/redis/go-redis/v9"
 	"github.com/robfig/cron/v3"
 	"github.com/spf13/viper"
@@ -14,11 +17,14 @@ import (
 )
 
 type App struct {
-	DB          *gorm.DB
-	RedisClient *redis.Client
-	Router      *gin.Engine
-	Cron        *cron.Cron
-	Verifier    *oidc.IDTokenVerifier
+	DB            *gorm.DB
+	RedisClient   *redis.Client
+	Router        *gin.Engine
+	Cron          *cron.Cron
+	Verifier      *oidc.IDTokenVerifier
+	S3Client      *s3.Client
+	PresignClient *s3.PresignClient
+	Socket        *socketio.Server
 }
 
 func NewApp() *App {
@@ -29,16 +35,22 @@ func NewApp() *App {
 	db := configs.InitDB()
 	redisClient := configs.InitRedis()
 	verifier := configs.InitOIDCVerifier()
+	s3Client := configs.InitS3Client()
+	presignClient := s3.NewPresignClient(s3Client)
 
 	router := gin.New()
 	cron := cron.New()
+	socket := socket.NewSocketServer()
 
 	return &App{
-		DB:          db,
-		RedisClient: redisClient,
-		Router:      router,
-		Cron:        cron,
-		Verifier:    verifier,
+		DB:            db,
+		RedisClient:   redisClient,
+		Router:        router,
+		Cron:          cron,
+		Verifier:      verifier,
+		S3Client:      s3Client,
+		PresignClient: presignClient,
+		Socket:        socket,
 	}
 }
 
@@ -50,4 +62,5 @@ func (a *App) Run() {
 func (a *App) Close() {
 	a.RedisClient.Close()
 	logs.Sync()
+	a.Socket.Close()
 }

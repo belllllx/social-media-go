@@ -241,7 +241,7 @@ func AuthGoogleCallback(redisClient *redis.Client, verifier *oidc.IDTokenVerifie
 			return
 		}
 
-		err = helpers.RedisDel(redisClient, key)
+		err = helpers.RedisDelete(redisClient, key)
 		if err != nil {
 			response.AbortWithInternalServerError(c, err)
 			return
@@ -343,7 +343,7 @@ func AuthGithubCallback(redisClient *redis.Client) gin.HandlerFunc {
 			}
 		}
 
-		err = helpers.RedisDel(redisClient, key)
+		err = helpers.RedisDelete(redisClient, key)
 		if err != nil {
 			response.AbortWithInternalServerError(c, err)
 			return
@@ -415,7 +415,7 @@ func AuthFacebookCallback(redisClient *redis.Client) gin.HandlerFunc {
 			return
 		}
 
-		err = helpers.RedisDel(redisClient, key)
+		err = helpers.RedisDelete(redisClient, key)
 		if err != nil {
 			response.AbortWithInternalServerError(c, err)
 			return

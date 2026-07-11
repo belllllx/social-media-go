@@ -74,6 +74,46 @@ definitions:
           type: string
         type: array
     type: object
+  post.CreatePostRequest:
+    properties:
+      filesUrl:
+        items:
+          type: string
+        type: array
+      message:
+        type: string
+    type: object
+  post.CreatedPost:
+    properties:
+      comments:
+        items:
+          $ref: '#/definitions/socket.CommentDTO'
+        type: array
+      commentsCount:
+        type: integer
+      createdAt:
+        type: string
+      filesUrl:
+        items:
+          type: string
+        type: array
+      id:
+        type: string
+      likes:
+        items:
+          $ref: '#/definitions/socket.LikeDTO'
+        type: array
+      message:
+        type: string
+      parentId:
+        type: string
+      updatedAt:
+        type: string
+      user:
+        $ref: '#/definitions/user.SecureUser'
+      userId:
+        type: string
+    type: object
   response.SwaggerBadRequestResponse:
     properties:
       errorFields:
@@ -105,6 +145,42 @@ definitions:
         type: integer
       success:
         type: boolean
+    type: object
+  socket.CommentDTO:
+    properties:
+      createdAt:
+        type: string
+      id:
+        type: string
+      message:
+        type: string
+      parentId:
+        type: string
+      postId:
+        type: string
+      replyId:
+        type: string
+      replyToUserId:
+        type: string
+      updatedAt:
+        type: string
+      userId:
+        type: string
+    type: object
+  socket.LikeDTO:
+    properties:
+      commentId:
+        type: string
+      createdAt:
+        type: string
+      id:
+        type: integer
+      postId:
+        type: string
+      updatedAt:
+        type: string
+      userId:
+        type: string
     type: object
   user.ProviderType:
     enum:
@@ -564,6 +640,49 @@ paths:
             $ref: '#/definitions/response.SwaggerResponse'
       tags:
       - auth
+  /post/create/{userID}:
+    post:
+      consumes:
+      - application/json
+      description: authentication create post, notifications and socket broadcast
+        post, notification to client
+      parameters:
+      - description: uuid for user id
+        in: path
+        name: userID
+        required: true
+        type: string
+      - description: create post payload
+        in: body
+        name: payload
+        schema:
+          $ref: '#/definitions/post.CreatePostRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SwaggerResponseWithData'
+            - properties:
+                data:
+                  $ref: '#/definitions/post.CreatedPost'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - post
   /post/upload-files:
     post:
       consumes:
