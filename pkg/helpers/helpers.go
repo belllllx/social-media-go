@@ -9,6 +9,8 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"net/url"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -202,6 +204,17 @@ func DeleteObject(
 func SplitFilename(filePath string) (fileDIR, filename string) {
 	fileSplit := strings.Split(filePath, "/")
 	return fileSplit[0], fileSplit[len(fileSplit)-1]
+}
+
+func SplitPresignedURL(presignedURL string) (fileDIR, filename string, err error) {
+	u, err := url.Parse(presignedURL)
+	if err != nil {
+		return "", "", err
+	}
+
+	fDIR := path.Dir(u.Path)
+	fName := path.Base(u.Path)
+	return strings.TrimPrefix(fDIR, "/"), fName, nil
 }
 
 func OmitUserPasswordHash(db *gorm.DB) *gorm.DB {

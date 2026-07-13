@@ -45,6 +45,7 @@ type FileData struct {
 type FileService interface {
 	UploadFile(fileData FileData, fileType FileType) (*FileURL, error)
 	UploadFiles(filesData []FileData, fileType FileType) (*FilesURL, error)
+	PresignGetFile(filename string) (string, error)
 }
 
 type fileService struct {
@@ -202,4 +203,15 @@ func (s *fileService) UploadFiles(filesData []FileData, fileType FileType) (*Fil
 	}
 
 	return filesURLData, nil
+}
+
+func (s *fileService) PresignGetFile(filename string) (string, error) {
+	ctx := context.Background()
+	req, err := helpers.PresignGetObject(s.presignClient, ctx, filename)
+	if err != nil {
+		logs.Error(err)
+		return "", errs.NewInternalServerErrorWithMessage("Failed to presign get file object")
+	}
+
+	return req.URL, nil
 }

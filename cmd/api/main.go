@@ -43,7 +43,6 @@ import (
 // @externalDocs.url			https://swagger.io/resources/open-api/
 func main() {
 	app := bootstrap.NewApp()
-	go app.Socket.Serve()
 	defer app.Close()
 
 	userRepositoryDB := user.NewUserRepositoryDB(app.DB)
@@ -71,8 +70,10 @@ func main() {
 	postService := post.NewPostService(
 		postRepositoryDB,
 		userRepositoryDB,
+		fileRepositoryDB,
 		userService,
 		notificationService,
+		fileService,
 		notificationSocket,
 		postSocket,
 	)
@@ -107,8 +108,8 @@ func main() {
 	{
 		socketIO := app.Router.Group("/socket.io")
 
-		socketIO.GET("/*any", gin.WrapH(app.Socket))
-		socketIO.POST("/*any", gin.WrapH(app.Socket))
+		socketIO.GET("/*any", gin.WrapH(app.Socket.ServeHandler(nil)))
+		socketIO.POST("/*any", gin.WrapH(app.Socket.ServeHandler(nil)))
 	}
 
 	{

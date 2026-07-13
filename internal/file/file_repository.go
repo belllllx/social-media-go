@@ -27,6 +27,8 @@ type File struct {
 type FileRepository interface {
 	Create(file *File) error
 	CreateMany(files []File) error
+	UpdateContentID(ContentID uuid.UUID, Filename string, FileType FileType) error
+	FindsByContentID(ContentID uuid.UUID) ([]File, error)
 }
 
 type fileRepositoryDB struct {
@@ -44,4 +46,18 @@ func (r *fileRepositoryDB) Create(file *File) error {
 
 func (r *fileRepositoryDB) CreateMany(files []File) error {
 	return r.db.Create(&files).Error
+}
+
+func (r *fileRepositoryDB) UpdateContentID(ContentID uuid.UUID, Filename string, FileType FileType) error {
+	file := &File{}
+	return r.db.Model(file).Where("filename = ? AND file_type = ?", Filename, FileType).Update("content_id", ContentID).Error
+}
+
+func (r *fileRepositoryDB) FindsByContentID(ContentID uuid.UUID) ([]File, error) {
+	files := &[]File{}
+	err := r.db.Where("content_id = ?", ContentID).Find(files).Error
+	if err != nil {
+		return nil, err
+	}
+	return *files, nil
 }

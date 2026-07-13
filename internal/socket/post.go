@@ -5,7 +5,7 @@ import (
 
 	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/google/uuid"
-	socketio "github.com/googollee/go-socket.io"
+	server "github.com/zishang520/socket.io/servers/socket/v3"
 )
 
 type LikeDTO struct {
@@ -42,18 +42,37 @@ type BroadcastPostDTO struct {
 	UpdatedAt     time.Time       `json:"updatedAt"`
 }
 
+type BroadcastPostWithFilesDTO struct {
+	ID            uuid.UUID       `json:"id"`
+	Message       *string         `json:"message"`
+	UserID        uuid.UUID       `json:"userId"`
+	User          user.SecureUser `json:"user"`
+	ParentID      *uuid.UUID      `json:"parentId"`
+	Likes         []LikeDTO       `json:"likes"`
+	Comments      []CommentDTO    `json:"comments"`
+	FilesURL      []string        `json:"filesUrl"`
+	CommentsCount int             `json:"commentsCount"`
+	CreatedAt     time.Time       `json:"createdAt"`
+	UpdatedAt     time.Time       `json:"updatedAt"`
+}
+
 type PostSocket interface {
 	BroadcastPost(broadcastPostDTO *BroadcastPostDTO)
+	BroadcastPostWithFiles(broadcastPostWithFilesDTO *BroadcastPostWithFilesDTO)
 }
 
 type postSocket struct {
-	socket *socketio.Server
+	socket *server.Server
 }
 
-func NewPostSocket(socket *socketio.Server) PostSocket {
+func NewPostSocket(socket *server.Server) PostSocket {
 	return &postSocket{socket: socket}
 }
 
 func (s *postSocket) BroadcastPost(broadcastPostDTO *BroadcastPostDTO) {
-	s.socket.BroadcastToNamespace("/", "newPost", broadcastPostDTO)
+	s.socket.Emit("newPost", broadcastPostDTO)
+}
+
+func (s *postSocket) BroadcastPostWithFiles(broadcastPostWithFilesDTO *BroadcastPostWithFilesDTO) {
+	s.socket.Emit("newPost", broadcastPostWithFilesDTO)
 }

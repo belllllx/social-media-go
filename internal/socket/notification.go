@@ -6,7 +6,7 @@ import (
 
 	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/google/uuid"
-	socketio "github.com/googollee/go-socket.io"
+	server "github.com/zishang520/socket.io/servers/socket/v3"
 )
 
 type BroadcastNotificationsDTO struct {
@@ -27,16 +27,16 @@ type NotificationSocket interface {
 }
 
 type notificationSocket struct {
-	socket *socketio.Server
+	socket *server.Server
 }
 
-func NewNotificationSocket(socket *socketio.Server) NotificationSocket {
+func NewNotificationSocket(socket *server.Server) NotificationSocket {
 	return &notificationSocket{socket: socket}
 }
 
 func (s *notificationSocket) BroadcastNotifications(broadcastNotificationsDTO []BroadcastNotificationsDTO) {
 	for _, broadcastNotificationDTO := range broadcastNotificationsDTO {
 		event := fmt.Sprintf("notification:%v", broadcastNotificationDTO.ReceiverID)
-		s.socket.BroadcastToNamespace("/", event, broadcastNotificationDTO)
+		s.socket.Emit(event, broadcastNotificationDTO)
 	}
 }

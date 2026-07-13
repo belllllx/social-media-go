@@ -9,10 +9,10 @@ import (
 	"github.com/belllllx/social-media-go/internal/socket"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
-	socketio "github.com/googollee/go-socket.io"
 	"github.com/redis/go-redis/v9"
 	"github.com/robfig/cron/v3"
 	"github.com/spf13/viper"
+	server "github.com/zishang520/socket.io/servers/socket/v3"
 	"gorm.io/gorm"
 )
 
@@ -24,7 +24,7 @@ type App struct {
 	Verifier      *oidc.IDTokenVerifier
 	S3Client      *s3.Client
 	PresignClient *s3.PresignClient
-	Socket        *socketio.Server
+	Socket        *server.Server
 }
 
 func NewApp() *App {
@@ -62,5 +62,5 @@ func (a *App) Run() {
 func (a *App) Close() {
 	a.RedisClient.Close()
 	logs.Sync()
-	a.Socket.Close()
+	a.Socket.Close(func(err error) {})
 }
