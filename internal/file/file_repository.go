@@ -29,6 +29,8 @@ type FileRepository interface {
 	CreateMany(files []File) error
 	UpdateContentID(ContentID uuid.UUID, Filename string, FileType FileType) error
 	FindsByContentID(ContentID uuid.UUID) ([]File, error)
+	FindByFilenameType(filename string, fileType FileType) (*File, error)
+	Delete(id int64, filename string, fileType FileType) error
 }
 
 type fileRepositoryDB struct {
@@ -60,4 +62,18 @@ func (r *fileRepositoryDB) FindsByContentID(ContentID uuid.UUID) ([]File, error)
 		return nil, err
 	}
 	return *files, nil
+}
+
+func (r *fileRepositoryDB) FindByFilenameType(filename string, fileType FileType) (*File, error) {
+	file := &File{}
+	err := r.db.Where("filename = ? AND file_type = ?", filename, fileType).Take(file).Error
+	if err != nil {
+		return nil, err
+	}
+	return file, nil
+}
+
+func (r *fileRepositoryDB) Delete(id int64, filename string, fileType FileType) error {
+	file := &File{}
+	return r.db.Where("id = ? AND filename = ? AND file_type = ?", id, filename, fileType).Delete(file).Error
 }

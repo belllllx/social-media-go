@@ -641,7 +641,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/post/create/{userID}": {
+        "/post/create": {
             "post": {
                 "description": "authentication create post, notifications and socket broadcast post, notification to client",
                 "consumes": [
@@ -654,13 +654,6 @@ const docTemplate = `{
                     "post"
                 ],
                 "parameters": [
-                    {
-                        "type": "string",
-                        "description": "uuid for user id",
-                        "name": "userID",
-                        "in": "path",
-                        "required": true
-                    },
                     {
                         "description": "create post payload",
                         "name": "payload",
@@ -697,6 +690,69 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/post/delete/file": {
+            "delete": {
+                "description": "authentication and delete file",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "post"
+                ],
+                "parameters": [
+                    {
+                        "description": "delete file payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/file.DeleteFileRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/response.SwaggerResponse"
                         }
@@ -865,6 +921,17 @@ const docTemplate = `{
             ],
             "properties": {
                 "otp": {
+                    "type": "string"
+                }
+            }
+        },
+        "file.DeleteFileRequest": {
+            "type": "object",
+            "required": [
+                "fileUrl"
+            ],
+            "properties": {
+                "fileUrl": {
                     "type": "string"
                 }
             }

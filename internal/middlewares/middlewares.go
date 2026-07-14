@@ -19,6 +19,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
+	server "github.com/zishang520/socket.io/servers/socket/v3"
 	"go.uber.org/zap"
 )
 
@@ -141,6 +142,48 @@ func RequireAuth(userService user.UserService) gin.HandlerFunc {
 		c.Set("user", secureUser)
 		c.Next()
 	}
+}
+
+func SocketRequireAuth(socket *server.Socket, next func(*server.ExtendedError)) {
+	headers := socket.Handshake().Headers
+	req := &http.Request{
+		Header: headers.Header(),
+	}
+	accessToken, err := req.Cookie("access_token")
+	if err != nil {
+		next(&server.ExtendedError{
+			Message: "Unauthorized",
+			Data: map[string]int{
+				"status": http.StatusUnauthorized,
+			},
+		})
+		return
+	}
+
+	token, err := helpers.VerifyJWT(accessToken.Value, &auth.UserAccessTokenClaims{}, viper.GetString("app.access_token_secret"))
+	if err != nil {
+		next(&server.ExtendedError{
+			Message: "Unauthorized",
+			Data: map[string]int{
+				"status": http.StatusUnauthorized,
+			},
+		})
+		return
+	}
+
+	claims, ok := token.Claims.(*auth.UserAccessTokenClaims)
+	if !ok {
+		next(&server.ExtendedError{
+			Message: "Unauthorized",
+			Data: map[string]int{
+				"status": http.StatusUnauthorized,
+			},
+		})
+		return
+	}
+
+	socket.SetData(claims.ID)
+	next(nil)
 }
 
 func AuthRefresh() gin.HandlerFunc {

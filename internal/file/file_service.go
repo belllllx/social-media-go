@@ -12,6 +12,15 @@ import (
 	"github.com/belllllx/social-media-go/pkg/helpers"
 )
 
+type DeleteFileRequest struct {
+	FileURL string `json:"fileUrl" binding:"required,presignedurl"`
+}
+
+type DeleteFileDTO struct {
+	FileURL  string
+	FileType FileType
+}
+
 const maxFileSize = 30 << 20 // 30 MB
 
 var allowedContentTypesCreateFile = map[string]bool{
@@ -45,6 +54,7 @@ type FileData struct {
 type FileService interface {
 	UploadFile(fileData FileData, fileType FileType) (*FileURL, error)
 	UploadFiles(filesData []FileData, fileType FileType) (*FilesURL, error)
+	DeleteFile(deleteFileDTO *DeleteFileDTO) error
 	PresignGetFile(filename string) (string, error)
 }
 
@@ -203,6 +213,39 @@ func (s *fileService) UploadFiles(filesData []FileData, fileType FileType) (*Fil
 	}
 
 	return filesURLData, nil
+}
+
+func (s *fileService) DeleteFile(deleteFileDTO *DeleteFileDTO) error {
+	fileDIR, filename, err := helpers.SplitPresignedURL(deleteFileDTO.FileURL)
+	if err != nil {
+		logs.Error(err)
+		return errs.NewUnexpectedErrorWithMessage("Failed to split presigned url")
+	}
+	filePath := fmt.Sprintf("%s/%s", fileDIR, filename)
+	file, err := s.fileRepository.FindByFilenameType(filePath, deleteFileDTO.FileType)
+	if err != nil && !helpers.IsErrRecordNotFound(err) {
+		logs.Error(err)
+		return errs.NewInternalServerErrorWithMessage("Failed to find file")
+	}
+
+	if helpers.IsErrRecordNotFound(err) {
+		logs.Warn(err)
+		return errs.NewNotFoundErrorWithMessage(fmt.Sprintf("File %s is not found", deleteFileDTO.FileURL))
+	}
+
+	_, err = helpers.DeleteObject(s.s3Client, context.Background(), file.Filename)
+	if err != nil {
+		logs.Error(err)
+		return errs.NewInternalServerErrorWithMessage("Failed to delete file object")
+	}
+
+	err = s.fileRepository.Delete(file.ID, file.Filename, file.FileType)
+	if err != nil {
+		logs.Error(err)
+		return errs.NewInternalServerErrorWithMessage("Failed to delete file")
+	}
+
+	return nil
 }
 
 func (s *fileService) PresignGetFile(filename string) (string, error) {

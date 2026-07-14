@@ -67,6 +67,13 @@ definitions:
     required:
     - otp
     type: object
+  file.DeleteFileRequest:
+    properties:
+      fileUrl:
+        type: string
+    required:
+    - fileUrl
+    type: object
   file.FilesURL:
     properties:
       filesUrl:
@@ -640,18 +647,13 @@ paths:
             $ref: '#/definitions/response.SwaggerResponse'
       tags:
       - auth
-  /post/create/{userID}:
+  /post/create:
     post:
       consumes:
       - application/json
       description: authentication create post, notifications and socket broadcast
         post, notification to client
       parameters:
-      - description: uuid for user id
-        in: path
-        name: userID
-        required: true
-        type: string
       - description: create post payload
         in: body
         name: payload
@@ -675,6 +677,47 @@ paths:
             $ref: '#/definitions/response.SwaggerBadRequestResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - post
+  /post/delete/file:
+    delete:
+      consumes:
+      - application/json
+      description: authentication and delete file
+      parameters:
+      - description: delete file payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/file.DeleteFileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "404":
+          description: Not Found
           schema:
             $ref: '#/definitions/response.SwaggerResponse'
         "500":

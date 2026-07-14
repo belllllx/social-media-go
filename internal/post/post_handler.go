@@ -3,17 +3,19 @@ package post
 import (
 	"github.com/belllllx/social-media-go/internal/file"
 	"github.com/belllllx/social-media-go/internal/response"
+	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/gin-gonic/gin"
 )
 
 type CreatePostRequest struct {
 	Message  string   `json:"message"`
-	FilesURL []string `json:"filesUrl"`
+	FilesURL []string `json:"filesUrl" binding:"dive,presignedurl"`
 }
 
 type PostHandler interface {
 	UploadFiles(c *gin.Context)
+	DeleteFile(c *gin.Context)
 	CreatePost(c *gin.Context)
 }
 
@@ -85,20 +87,60 @@ func (h *postHandler) UploadFiles(c *gin.Context) {
 	response.Created(c, "Upload files successfully", filesURL)
 }
 
+// DeleteFile godoc
+//
+//	@Description	authentication and delete file
+//	@Tags			post
+//	@Accept			json
+//	@Produce		json
+//	@Param			payload	body		file.DeleteFileRequest	true	"delete file payload"
+//	@Success		200		{object}	response.SwaggerResponse
+//	@Failure		400		{object}	response.SwaggerBadRequestResponse
+//	@Failure		401		{object}	response.SwaggerResponse
+//	@Failure		404		{object}	response.SwaggerResponse
+//	@Failure		500		{object}	response.SwaggerResponse
+//	@Router			/post/delete/file [delete]
+func (h *postHandler) DeleteFile(c *gin.Context) {
+	deleteFileRequest := &file.DeleteFileRequest{}
+	err := c.ShouldBind(deleteFileRequest)
+	if err != nil {
+		response.AbortWithError(c, err)
+		return
+	}
+
+	deleteFileDTO := &file.DeleteFileDTO{
+		FileURL:  deleteFileRequest.FileURL,
+		FileType: file.FileTypePost,
+	}
+	err = h.fileService.DeleteFile(deleteFileDTO)
+	if err != nil {
+		helpers.HandleError(c, err)
+		return
+	}
+
+	response.Ok(c, "Delete file successfully", nil)
+}
+
 // CreatePost godoc
 //
 //	@Description	authentication create post, notifications and socket broadcast post, notification to client
 //	@Tags			post
 //	@Accept			json
 //	@Produce		json
-//	@Param			userID	path		string				true	"uuid for user id"
 //	@Param			payload	body		CreatePostRequest	false	"create post payload"
 //	@Success		201		{object}	response.SwaggerResponseWithData{data=post.CreatedPost}
 //	@Failure		400		{object}	response.SwaggerBadRequestResponse
 //	@Failure		401		{object}	response.SwaggerResponse
+//	@Failure		404		{object}	response.SwaggerResponse
 //	@Failure		500		{object}	response.SwaggerResponse
-//	@Router			/post/create/{userID} [post]
+//	@Router			/post/create [post]
 func (h *postHandler) CreatePost(c *gin.Context) {
+	user, ok := c.MustGet("user").(*user.SecureUser)
+	if !ok {
+		response.AbortWithUnauthorized(c)
+		return
+	}
+
 	createPostRequest := &CreatePostRequest{}
 	err := c.ShouldBind(createPostRequest)
 	if err != nil {
@@ -106,11 +148,10 @@ func (h *postHandler) CreatePost(c *gin.Context) {
 		return
 	}
 
-	userID := c.Param("userID")
 	createPostDTO := &CreatePostDTO{
 		Message:  createPostRequest.Message,
 		FilesURL: createPostRequest.FilesURL,
-		UserID:   userID,
+		UserID:   user.ID,
 	}
 	createdPost, err := h.postService.CreatePost(createPostDTO)
 	if err != nil {

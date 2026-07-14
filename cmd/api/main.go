@@ -164,7 +164,8 @@ func main() {
 
 		post.Use(middlewares.RequireAuth(userService))
 		post.POST("/upload-files", postHandler.UploadFiles)
-		post.POST("/create/:userID", postHandler.CreatePost)
+		post.DELETE("/delete/file", postHandler.DeleteFile)
+		post.POST("/create", postHandler.CreatePost)
 	}
 
 	app.Run()

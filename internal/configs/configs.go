@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
@@ -81,6 +82,8 @@ func InitValidator() {
 		}
 		return name
 	})
+
+	v.RegisterValidation("presignedurl", helpers.ValidatePresignedURL)
 }
 
 func InitOAuth2GoogleConfig() *oauth2.Config {

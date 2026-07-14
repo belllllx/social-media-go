@@ -17,7 +17,7 @@ import (
 type CreatePostDTO struct {
 	Message  string
 	FilesURL []string
-	UserID   string
+	UserID   uuid.UUID
 }
 
 type CreatedPost struct {
@@ -76,13 +76,7 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		return nil, errs.NewBadRequestErrorWithMessage("Create post must contains with message or files")
 	}
 
-	err := uuid.Validate(createPostDTO.UserID)
-	if err != nil {
-		return nil, errs.NewBadRequestErrorWithMessage("Invalid uuid for user id")
-	}
-
-	userID := uuid.MustParse(createPostDTO.UserID)
-	userByID, err := s.userRepository.FindByID(userID)
+	userByID, err := s.userRepository.FindByID(createPostDTO.UserID)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find user by id")
@@ -90,12 +84,12 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 
 	if helpers.IsErrRecordNotFound(err) {
 		logs.Warn(err)
-		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("User id %v is not found", userID))
+		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("User id %v is not found", createPostDTO.UserID))
 	}
 
 	createPost := &user.Post{
 		Message: &createPostDTO.Message,
-		UserID:  userID,
+		UserID:  userByID.ID,
 	}
 	err = s.postRepository.Create(createPost)
 	if err != nil {

@@ -116,6 +116,8 @@ func GetErrorMessages(err validator.FieldError) string {
 		return fmt.Sprintf("This field length is %s", err.Param())
 	case "eqfield":
 		return fmt.Sprintf("This field does not match the %s field", strings.ToLower(err.Param()))
+	case "presignedurl":
+		return "This field invalid presigned url"
 	default:
 		return "Invalid value"
 	}
@@ -232,4 +234,40 @@ func OmitUserPasswordHash(db *gorm.DB) *gorm.DB {
 		"created_at",
 		"updated_at",
 	)
+}
+
+func ValidatePresignedURL(fl validator.FieldLevel) bool {
+	u, err := url.Parse(fl.Field().String())
+	if err != nil {
+		return false
+	}
+
+	if u.Host != viper.GetString("app.bucket_host") {
+		return false
+	}
+
+	if !strings.HasPrefix(u.Path, "/post-image/") &&
+		!strings.HasPrefix(u.Path, "/post-video/") &&
+		!strings.HasPrefix(u.Path, "/comment-image/") &&
+		!strings.HasPrefix(u.Path, "/reply-image/") {
+		return false
+	}
+
+	q := u.Query()
+
+	required := []string{
+		"X-Amz-Algorithm",
+		"X-Amz-Credential",
+		"X-Amz-Date",
+		"X-Amz-Expires",
+		"X-Amz-Signature",
+	}
+
+	for _, k := range required {
+		if q.Get(k) == "" {
+			return false
+		}
+	}
+
+	return true
 }
