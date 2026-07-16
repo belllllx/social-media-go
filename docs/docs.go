@@ -643,7 +643,7 @@ const docTemplate = `{
         },
         "/post/create": {
             "post": {
-                "description": "authentication create post, notifications and socket broadcast post, notification to client",
+                "description": "authentication create post, notifications and socket broadcast post, notifications to client",
                 "consumes": [
                     "application/json"
                 ],
@@ -737,6 +737,81 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/post/share/create/{parentID}": {
+            "post": {
+                "description": "authentication create share post, notification and socket broadcast share post, notification to client",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "post"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "uuid for parent post id",
+                        "name": "parentID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "create share post payload",
+                        "name": "payload",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/post.CreateSharePostRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SwaggerResponseWithData"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/post.CreatedSharePost"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -961,6 +1036,14 @@ const docTemplate = `{
                 }
             }
         },
+        "post.CreateSharePostRequest": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
         "post.CreatedPost": {
             "type": "object",
             "properties": {
@@ -993,6 +1076,50 @@ const docTemplate = `{
                 },
                 "message": {
                     "type": "string"
+                },
+                "parentId": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/user.SecureUser"
+                },
+                "userId": {
+                    "type": "string"
+                }
+            }
+        },
+        "post.CreatedSharePost": {
+            "type": "object",
+            "properties": {
+                "comments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/socket.CommentDTO"
+                    }
+                },
+                "commentsCount": {
+                    "type": "integer"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "likes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/socket.LikeDTO"
+                    }
+                },
+                "message": {
+                    "type": "string"
+                },
+                "parent": {
+                    "$ref": "#/definitions/socket.PostParentDTO"
                 },
                 "parentId": {
                     "type": "string"
@@ -1106,6 +1233,38 @@ const docTemplate = `{
                 },
                 "updatedAt": {
                     "type": "string"
+                },
+                "userId": {
+                    "type": "string"
+                }
+            }
+        },
+        "socket.PostParentDTO": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "filesUrl": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "parentId": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/user.SecureUser"
                 },
                 "userId": {
                     "type": "string"

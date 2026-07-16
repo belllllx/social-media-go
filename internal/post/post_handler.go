@@ -8,6 +8,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type CreateSharePostRequest struct {
+	Message string `json:"message"`
+}
+
 type CreatePostRequest struct {
 	Message  string   `json:"message"`
 	FilesURL []string `json:"filesUrl" binding:"dive,presignedurl"`
@@ -17,6 +21,7 @@ type PostHandler interface {
 	UploadFiles(c *gin.Context)
 	DeleteFile(c *gin.Context)
 	CreatePost(c *gin.Context)
+	CreateSharePost(c *gin.Context)
 }
 
 type postHandler struct {
@@ -123,7 +128,7 @@ func (h *postHandler) DeleteFile(c *gin.Context) {
 
 // CreatePost godoc
 //
-//	@Description	authentication create post, notifications and socket broadcast post, notification to client
+//	@Description	authentication create post, notifications and socket broadcast post, notifications to client
 //	@Tags			post
 //	@Accept			json
 //	@Produce		json
@@ -160,4 +165,47 @@ func (h *postHandler) CreatePost(c *gin.Context) {
 	}
 
 	response.Created(c, "Post create successfully", createdPost)
+}
+
+// CreateSharePost godoc
+//
+//	@Description	authentication create share post, notification and socket broadcast share post, notification to client
+//	@Tags			post
+//	@Accept			json
+//	@Produce		json
+//	@Param			parentID	path		string					true	"uuid for parent post id"
+//	@Param			payload		body		CreateSharePostRequest	false	"create share post payload"
+//	@Success		201			{object}	response.SwaggerResponseWithData{data=post.CreatedSharePost}
+//	@Failure		400			{object}	response.SwaggerBadRequestResponse
+//	@Failure		401			{object}	response.SwaggerResponse
+//	@Failure		404			{object}	response.SwaggerResponse
+//	@Failure		500			{object}	response.SwaggerResponse
+//	@Router			/post/share/create/{parentID} [post]
+func (h *postHandler) CreateSharePost(c *gin.Context) {
+	user, ok := c.MustGet("user").(*user.SecureUser)
+	if !ok {
+		response.AbortWithUnauthorized(c)
+		return
+	}
+
+	createSharePostRequest := &CreateSharePostRequest{}
+	err := c.ShouldBind(createSharePostRequest)
+	if err != nil {
+		response.AbortWithError(c, err)
+		return
+	}
+
+	parentID := c.Param("parentID")
+	createSharePostDTO := &CreateSharePostDTO{
+		Message:  createSharePostRequest.Message,
+		UserID:   user.ID,
+		ParentID: parentID,
+	}
+	createdSharePost, err := h.postService.CreateSharePost(createSharePostDTO)
+	if err != nil {
+		helpers.HandleError(c, err)
+		return
+	}
+
+	response.Created(c, "Share post create successfully", createdSharePost)
 }

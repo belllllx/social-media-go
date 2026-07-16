@@ -7,68 +7,57 @@ import (
 	"github.com/google/uuid"
 )
 
-type CreateNotificationsDTO struct {
-	Type      user.NotificationType
-	Message   string
-	SenderID  uuid.UUID
-	PostID    *uuid.UUID
-	CommentID *uuid.UUID
-}
-
 type NotificationService interface {
-	CreateNotifications(createNotificationsDTO *CreateNotificationsDTO) ([]user.Notification, error)
+	CreateNotification(createNotificationDTO *user.Notification) (*user.Notification, error)
+	CreateNotifications(createNotificationsDTO []user.Notification) ([]user.Notification, error)
 }
 
 type notificationService struct {
-	userRepository         user.UserRepository
 	notificationRepository NotificationRepository
 	userService            user.UserService
 }
 
 func NewNotificationService(
-	userRepository user.UserRepository,
 	notificationRepository NotificationRepository,
 	userService user.UserService,
 ) NotificationService {
 	return &notificationService{
-		userRepository:         userRepository,
 		notificationRepository: notificationRepository,
 		userService:            userService,
 	}
 }
 
-func (s *notificationService) CreateNotifications(createNotificationsDTO *CreateNotificationsDTO) ([]user.Notification, error) {
-	usersExcept, err := s.userRepository.FindByIDExcept(createNotificationsDTO.SenderID)
+func (s *notificationService) CreateNotification(createNotificationDTO *user.Notification) (*user.Notification, error) {
+	err := s.notificationRepository.Create(createNotificationDTO)
 	if err != nil {
 		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find user by id except")
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to create notification")
 	}
 
-	// ถ้าไม่มี users ก็ไม่ต้องสร้าง notifications
-	if len(usersExcept) == 0 {
-		return nil, nil
+	notification, err := s.notificationRepository.PreloadRelation(createNotificationDTO.ID)
+	if err != nil {
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification with relation")
 	}
 
-	createNotifications := []user.Notification{}
-	for _, userExcept := range usersExcept {
-		createNotifications = append(createNotifications, user.Notification{
-			Type:       createNotificationsDTO.Type,
-			Message:    createNotificationsDTO.Message,
-			SenderID:   createNotificationsDTO.SenderID,
-			ReceiverID: userExcept.ID,
-			PostID:     createNotificationsDTO.PostID,
-			CommentID:  createNotificationsDTO.CommentID,
-		})
+	err = s.userService.GetNotificationUserImage(notification)
+	if err != nil {
+		return nil, err
 	}
-	err = s.notificationRepository.CreateMany(createNotifications)
+
+	return notification, nil
+}
+
+func (s *notificationService) CreateNotifications(createNotificationsDTO []user.Notification) ([]user.Notification, error) {
+	err := s.notificationRepository.CreateMany(createNotificationsDTO)
 	if err != nil {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to create notificaions")
 	}
 
 	notificationsID := []uuid.UUID{}
-	for _, createNotification := range createNotifications {
-		notificationsID = append(notificationsID, createNotification.ID)
+	for _, createNotificationDTO := range createNotificationsDTO {
+		notificationsID = append(notificationsID, createNotificationDTO.ID)
 	}
 	notifications, err := s.notificationRepository.PreloadsRelation(notificationsID)
 	if err != nil {

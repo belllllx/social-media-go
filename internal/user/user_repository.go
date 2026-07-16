@@ -132,8 +132,8 @@ type UserRepository interface {
 	Create(user *User) error
 	FindByUsername(username string) (*User, error)
 	FindByEmail(email string) (*User, error)
-	FindByID(ID uuid.UUID) (*User, error)
-	FindByIDExcept(ID uuid.UUID) ([]User, error)
+	FindByID(userID uuid.UUID) (*User, error)
+	FindsByIDExcept(userID uuid.UUID) ([]User, error)
 	UpdatePassword(email, passwordHash string) error
 }
 
@@ -175,18 +175,18 @@ func (r *userRepositoryDB) FindByEmail(email string) (*User, error) {
 	return user, nil
 }
 
-func (r *userRepositoryDB) FindByID(ID uuid.UUID) (*User, error) {
+func (r *userRepositoryDB) FindByID(userID uuid.UUID) (*User, error) {
 	user := &User{}
-	err := r.db.Where("id = ?", ID).Take(user).Error
+	err := r.db.Where("id = ?", userID).Take(user).Error
 	if err != nil {
 		return nil, err
 	}
 	return user, nil
 }
 
-func (r *userRepositoryDB) FindByIDExcept(ID uuid.UUID) ([]User, error) {
+func (r *userRepositoryDB) FindsByIDExcept(userID uuid.UUID) ([]User, error) {
 	users := &[]User{}
-	err := r.db.Where("id <> ?", ID).Select(
+	err := r.db.Where("id <> ?", userID).Select(
 		"id",
 		"fullname",
 		"username",

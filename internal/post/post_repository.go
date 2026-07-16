@@ -10,6 +10,7 @@ import (
 type PostRepository interface {
 	Create(post *user.Post) error
 	PreloadRelations(postID uuid.UUID) (*user.Post, error)
+	FindByIDPreloadRelation(postID uuid.UUID) (*user.Post, error)
 }
 
 type postRepositoryDB struct {
@@ -32,6 +33,15 @@ func (r *postRepositoryDB) PreloadRelations(postID uuid.UUID) (*user.Post, error
 		Preload("Comments").
 		Limit(1).
 		Find(post).Error
+	if err != nil {
+		return nil, err
+	}
+	return post, nil
+}
+
+func (r *postRepositoryDB) FindByIDPreloadRelation(postID uuid.UUID) (*user.Post, error) {
+	post := &user.Post{}
+	err := r.db.Where("id = ?", postID).Preload("User", helpers.OmitUserPasswordHash).Take(post).Error
 	if err != nil {
 		return nil, err
 	}

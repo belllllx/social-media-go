@@ -90,6 +90,11 @@ definitions:
       message:
         type: string
     type: object
+  post.CreateSharePostRequest:
+    properties:
+      message:
+        type: string
+    type: object
   post.CreatedPost:
     properties:
       comments:
@@ -112,6 +117,35 @@ definitions:
         type: array
       message:
         type: string
+      parentId:
+        type: string
+      updatedAt:
+        type: string
+      user:
+        $ref: '#/definitions/user.SecureUser'
+      userId:
+        type: string
+    type: object
+  post.CreatedSharePost:
+    properties:
+      comments:
+        items:
+          $ref: '#/definitions/socket.CommentDTO'
+        type: array
+      commentsCount:
+        type: integer
+      createdAt:
+        type: string
+      id:
+        type: string
+      likes:
+        items:
+          $ref: '#/definitions/socket.LikeDTO'
+        type: array
+      message:
+        type: string
+      parent:
+        $ref: '#/definitions/socket.PostParentDTO'
       parentId:
         type: string
       updatedAt:
@@ -186,6 +220,27 @@ definitions:
         type: string
       updatedAt:
         type: string
+      userId:
+        type: string
+    type: object
+  socket.PostParentDTO:
+    properties:
+      createdAt:
+        type: string
+      filesUrl:
+        items:
+          type: string
+        type: array
+      id:
+        type: string
+      message:
+        type: string
+      parentId:
+        type: string
+      updatedAt:
+        type: string
+      user:
+        $ref: '#/definitions/user.SecureUser'
       userId:
         type: string
     type: object
@@ -652,7 +707,7 @@ paths:
       consumes:
       - application/json
       description: authentication create post, notifications and socket broadcast
-        post, notification to client
+        post, notifications to client
       parameters:
       - description: create post payload
         in: body
@@ -708,6 +763,53 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/response.SwaggerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - post
+  /post/share/create/{parentID}:
+    post:
+      consumes:
+      - application/json
+      description: authentication create share post, notification and socket broadcast
+        share post, notification to client
+      parameters:
+      - description: uuid for parent post id
+        in: path
+        name: parentID
+        required: true
+        type: string
+      - description: create share post payload
+        in: body
+        name: payload
+        schema:
+          $ref: '#/definitions/post.CreateSharePostRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SwaggerResponseWithData'
+            - properties:
+                data:
+                  $ref: '#/definitions/post.CreatedSharePost'
+              type: object
         "400":
           description: Bad Request
           schema:

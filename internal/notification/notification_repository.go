@@ -8,7 +8,9 @@ import (
 )
 
 type NotificationRepository interface {
+	Create(notification *user.Notification) error
 	CreateMany(notifications []user.Notification) error
+	PreloadRelation(notificationID uuid.UUID) (*user.Notification, error)
 	PreloadsRelation(notificationsID []uuid.UUID) ([]user.Notification, error)
 }
 
@@ -20,8 +22,21 @@ func NewNotificationRepositoryDB(db *gorm.DB) NotificationRepository {
 	return &notificationRepositoryDB{db: db}
 }
 
+func (r *notificationRepositoryDB) Create(notification *user.Notification) error {
+	return r.db.Create(notification).Error
+}
+
 func (r *notificationRepositoryDB) CreateMany(notifications []user.Notification) error {
 	return r.db.Create(&notifications).Error
+}
+
+func (r *notificationRepositoryDB) PreloadRelation(notificationID uuid.UUID) (*user.Notification, error) {
+	notification := &user.Notification{}
+	err := r.db.Where("id = ?", notificationID).Preload("Sender", helpers.OmitUserPasswordHash).Limit(1).Find(notification).Error
+	if err != nil {
+		return nil, err
+	}
+	return notification, nil
 }
 
 func (r *notificationRepositoryDB) PreloadsRelation(notificationsID []uuid.UUID) ([]user.Notification, error) {

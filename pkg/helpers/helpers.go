@@ -271,3 +271,17 @@ func ValidatePresignedURL(fl validator.FieldLevel) bool {
 
 	return true
 }
+
+func ParseUUID(s string) (*uuid.UUID, error) {
+	err := uuid.Validate(s)
+	if err != nil {
+		return nil, errs.NewBadRequestErrorWithMessage(fmt.Sprintf("Invalid uuid for %s", s))
+	}
+
+	uuid, err := uuid.Parse(s)
+	if err != nil {
+		return nil, errs.NewUnexpectedErrorWithMessage("Failed to parse uuid")
+	}
+
+	return &uuid, nil
+}

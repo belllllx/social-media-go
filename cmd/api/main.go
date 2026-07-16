@@ -66,7 +66,7 @@ func main() {
 	)
 	userService := user.NewUserService(app.PresignClient, userRepositoryDB)
 	fileService := file.NewFileService(fileRepositoryDB, app.S3Client, app.PresignClient)
-	notificationService := notification.NewNotificationService(userRepositoryDB, notificationRepositoryDB, userService)
+	notificationService := notification.NewNotificationService(notificationRepositoryDB, userService)
 	postService := post.NewPostService(
 		postRepositoryDB,
 		userRepositoryDB,
@@ -166,6 +166,7 @@ func main() {
 		post.POST("/upload-files", postHandler.UploadFiles)
 		post.DELETE("/delete/file", postHandler.DeleteFile)
 		post.POST("/create", postHandler.CreatePost)
+		post.POST("/share/create/:parentID", postHandler.CreateSharePost)
 	}
 
 	app.Run()

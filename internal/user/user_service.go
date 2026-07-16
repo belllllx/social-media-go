@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -54,7 +55,7 @@ func (s *userService) SecureFindWithID(ID uuid.UUID) (*SecureUser, error) {
 
 	if helpers.IsErrRecordNotFound(err) {
 		logs.Warn(err)
-		return nil, errs.NewNotFoundError()
+		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("User id %v is not found", ID))
 	}
 
 	secureUser := &SecureUser{

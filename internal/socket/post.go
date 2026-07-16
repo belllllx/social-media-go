@@ -8,6 +8,17 @@ import (
 	server "github.com/zishang520/socket.io/servers/socket/v3"
 )
 
+type PostParentDTO struct {
+	ID        uuid.UUID        `json:"id"`
+	Message   *string          `json:"message"`
+	UserID    uuid.UUID        `json:"userId"`
+	User      *user.SecureUser `json:"user"`
+	ParentID  *uuid.UUID       `json:"parentId"`
+	FilesURL  []string         `json:"filesUrl"`
+	CreatedAt time.Time        `json:"createdAt"`
+	UpdatedAt time.Time        `json:"updatedAt"`
+}
+
 type LikeDTO struct {
 	ID        int64      `json:"id"`
 	UserID    uuid.UUID  `json:"userId"`
@@ -29,36 +40,51 @@ type CommentDTO struct {
 	UpdatedAt     time.Time  `json:"updatedAt"`
 }
 
+type BroadcastSharePostDTO struct {
+	ID            uuid.UUID        `json:"id"`
+	Message       *string          `json:"message"`
+	UserID        uuid.UUID        `json:"userId"`
+	User          *user.SecureUser `json:"user"`
+	ParentID      *uuid.UUID       `json:"parentId"`
+	Parent        *PostParentDTO   `json:"parent"`
+	Likes         []LikeDTO        `json:"likes"`
+	Comments      []CommentDTO     `json:"comments"`
+	CommentsCount int              `json:"commentsCount"`
+	CreatedAt     time.Time        `json:"createdAt"`
+	UpdatedAt     time.Time        `json:"updatedAt"`
+}
+
 type BroadcastPostDTO struct {
-	ID            uuid.UUID       `json:"id"`
-	Message       *string         `json:"message"`
-	UserID        uuid.UUID       `json:"userId"`
-	User          user.SecureUser `json:"user"`
-	ParentID      *uuid.UUID      `json:"parentId"`
-	Likes         []LikeDTO       `json:"likes"`
-	Comments      []CommentDTO    `json:"comments"`
-	CommentsCount int             `json:"commentsCount"`
-	CreatedAt     time.Time       `json:"createdAt"`
-	UpdatedAt     time.Time       `json:"updatedAt"`
+	ID            uuid.UUID        `json:"id"`
+	Message       *string          `json:"message"`
+	UserID        uuid.UUID        `json:"userId"`
+	User          *user.SecureUser `json:"user"`
+	ParentID      *uuid.UUID       `json:"parentId"`
+	Likes         []LikeDTO        `json:"likes"`
+	Comments      []CommentDTO     `json:"comments"`
+	CommentsCount int              `json:"commentsCount"`
+	CreatedAt     time.Time        `json:"createdAt"`
+	UpdatedAt     time.Time        `json:"updatedAt"`
 }
 
 type BroadcastPostWithFilesDTO struct {
-	ID            uuid.UUID       `json:"id"`
-	Message       *string         `json:"message"`
-	UserID        uuid.UUID       `json:"userId"`
-	User          user.SecureUser `json:"user"`
-	ParentID      *uuid.UUID      `json:"parentId"`
-	Likes         []LikeDTO       `json:"likes"`
-	Comments      []CommentDTO    `json:"comments"`
-	FilesURL      []string        `json:"filesUrl"`
-	CommentsCount int             `json:"commentsCount"`
-	CreatedAt     time.Time       `json:"createdAt"`
-	UpdatedAt     time.Time       `json:"updatedAt"`
+	ID            uuid.UUID        `json:"id"`
+	Message       *string          `json:"message"`
+	UserID        uuid.UUID        `json:"userId"`
+	User          *user.SecureUser `json:"user"`
+	ParentID      *uuid.UUID       `json:"parentId"`
+	Likes         []LikeDTO        `json:"likes"`
+	Comments      []CommentDTO     `json:"comments"`
+	FilesURL      []string         `json:"filesUrl"`
+	CommentsCount int              `json:"commentsCount"`
+	CreatedAt     time.Time        `json:"createdAt"`
+	UpdatedAt     time.Time        `json:"updatedAt"`
 }
 
 type PostSocket interface {
 	BroadcastPost(broadcastPostDTO *BroadcastPostDTO)
 	BroadcastPostWithFiles(broadcastPostWithFilesDTO *BroadcastPostWithFilesDTO)
+	BroadcastSharePost(broadcastSharePostDTO *BroadcastSharePostDTO)
 }
 
 type postSocket struct {
@@ -75,4 +101,8 @@ func (s *postSocket) BroadcastPost(broadcastPostDTO *BroadcastPostDTO) {
 
 func (s *postSocket) BroadcastPostWithFiles(broadcastPostWithFilesDTO *BroadcastPostWithFilesDTO) {
 	s.socket.Emit("newPost", broadcastPostWithFilesDTO)
+}
+
+func (s *postSocket) BroadcastSharePost(broadcastSharePostDTO *BroadcastSharePostDTO) {
+	s.socket.Emit("newPost", broadcastSharePostDTO)
 }
