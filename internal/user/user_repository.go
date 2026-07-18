@@ -30,16 +30,16 @@ const (
 )
 
 type Notification struct {
-	ID         uuid.UUID        `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+	ID         uuid.UUID        `gorm:"type:uuid;default:gen_random_uuid();primaryKey;index:idx_notifications_receiver_cursor,sort:desc"`
 	Type       NotificationType `gorm:"type:notification_type"`
 	Message    string
-	IsRead     bool `gorm:"default:false"`
-	CreatedAt  time.Time
+	IsRead     bool      `gorm:"default:false"`
+	CreatedAt  time.Time `gorm:"index:idx_notifications_receiver_cursor,sort:desc"`
 	UpdatedAt  time.Time
 	SenderID   uuid.UUID
-	Sender     User `gorm:"foreignkey:SenderID;constraint:OnDelete:CASCADE"`
-	ReceiverID uuid.UUID
-	Receiver   User `gorm:"foreignkey:ReceiverID;constraint:OnDelete:CASCADE"`
+	Sender     User      `gorm:"foreignkey:SenderID;constraint:OnDelete:CASCADE"`
+	ReceiverID uuid.UUID `gorm:"index:idx_notifications_receiver_cursor"`
+	Receiver   User      `gorm:"foreignkey:ReceiverID;constraint:OnDelete:CASCADE"`
 	PostID     *uuid.UUID
 	Post       *Post `gorm:"constraint:OnDelete:CASCADE"`
 	CommentID  *uuid.UUID
@@ -47,12 +47,12 @@ type Notification struct {
 }
 
 type Post struct {
-	ID            uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+	ID            uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey;index:idx_posts_cursor,sort:desc"`
 	Message       *string
-	CreatedAt     time.Time
+	CreatedAt     time.Time `gorm:"index:idx_posts_cursor,sort:desc"`
 	UpdatedAt     time.Time
-	UserID        uuid.UUID
-	User          User `gorm:"constraint:OnDelete:CASCADE"`
+	UserID        uuid.UUID `gorm:"index"`
+	User          User      `gorm:"constraint:OnDelete:CASCADE"`
 	ParentID      *uuid.UUID
 	Parent        *Post          `gorm:"foreignkey:ParentID;constraint:OnDelete:CASCADE"`
 	SharePosts    []Post         `gorm:"foreignkey:ParentID;constraint:OnDelete:CASCADE"`
@@ -62,12 +62,12 @@ type Post struct {
 }
 
 type Comment struct {
-	ID            uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+	ID            uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey;index:idx_comments_post_cursor,sort:desc"`
 	Message       *string
-	CreatedAt     time.Time
+	CreatedAt     time.Time `gorm:"index:idx_comments_post_cursor,sort:desc"`
 	UpdatedAt     time.Time
-	PostID        uuid.UUID
-	Post          Post `gorm:"constraint:OnDelete:CASCADE"`
+	PostID        uuid.UUID `gorm:"index:idx_comments_post_cursor"`
+	Post          Post      `gorm:"constraint:OnDelete:CASCADE"`
 	UserID        uuid.UUID
 	User          User `gorm:"constraint:OnDelete:CASCADE"`
 	ParentID      *uuid.UUID
@@ -98,17 +98,17 @@ type Follower struct {
 	ID          int64
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
-	FollowerID  uuid.UUID `gorm:"uniqueIndex:idx_follower_unique"`
+	FollowerID  uuid.UUID `gorm:"uniqueIndex:idx_followers_unique"`
 	Follower    User      `gorm:"foreignKey:FollowerID;constraint:OnDelete:CASCADE"`
-	FollowingID uuid.UUID `gorm:"uniqueIndex:idx_follower_unique"`
+	FollowingID uuid.UUID `gorm:"uniqueIndex:idx_followers_unique"`
 	Following   User      `gorm:"foreignKey:FollowingID;constraint:OnDelete:CASCADE"`
 }
 
 type User struct {
-	ID                    uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
-	Fullname              string    `gorm:"type:varchar(30)"`
-	Username              *string   `gorm:"type:varchar(15);unique"`
-	Email                 string    `gorm:"type:varchar(30);unique"`
+	ID                    uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey;index:idx_users_cursor,sort:desc;index:idx_users_fullname_cursor,sort:desc"`
+	Fullname              string    `gorm:"type:varchar(30);index:idx_users_fullname_cursor"`
+	Username              *string   `gorm:"type:varchar(15);uniqueIndex"`
+	Email                 string    `gorm:"type:varchar(30);uniqueIndex"`
 	PasswordHash          *string
 	DateOfBirth           *time.Time
 	ProfileUrl            *string
@@ -116,7 +116,7 @@ type User struct {
 	Info                  *string      `gorm:"type:varchar(30)"`
 	Role                  Role         `gorm:"type:user_role;default:'USER'"`
 	ProviderType          ProviderType `gorm:"type:provider_type;default:'LOCAL'"`
-	CreatedAt             time.Time
+	CreatedAt             time.Time    `gorm:"index:idx_users_cursor,sort:desc;index:idx_users_fullname_cursor,sort:desc"`
 	UpdatedAt             time.Time
 	Posts                 []Post         `gorm:"constraint:OnDelete:CASCADE"`
 	Likes                 []Like         `gorm:"constraint:OnDelete:CASCADE"`

@@ -26,37 +26,84 @@ type CreatePostDTO struct {
 	UserID   uuid.UUID
 }
 
+type Like struct {
+	ID        int64      `json:"id"`
+	UserID    uuid.UUID  `json:"userId"`
+	PostID    *uuid.UUID `json:"postId"`
+	CommentID *uuid.UUID `json:"commentId"`
+	CreatedAt time.Time  `json:"createdAt"`
+	UpdatedAt time.Time  `json:"updatedAt"`
+}
+
+type Comment struct {
+	ID            uuid.UUID  `json:"id"`
+	Message       *string    `json:"message"`
+	UserID        uuid.UUID  `json:"userId"`
+	PostID        uuid.UUID  `json:"postId"`
+	ParentID      *uuid.UUID `json:"parentId"`
+	ReplyID       *uuid.UUID `json:"replyId"`
+	ReplyToUserID *uuid.UUID `json:"replyToUserId"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	UpdatedAt     time.Time  `json:"updatedAt"`
+}
+
+type PostParent struct {
+	ID        uuid.UUID        `json:"id"`
+	Message   *string          `json:"message"`
+	UserID    uuid.UUID        `json:"userId"`
+	User      *user.SecureUser `json:"user"`
+	ParentID  *uuid.UUID       `json:"parentId"`
+	FilesURL  []string         `json:"filesUrl"`
+	CreatedAt time.Time        `json:"createdAt"`
+	UpdatedAt time.Time        `json:"updatedAt"`
+}
+
+type Post struct {
+	ID            uuid.UUID        `json:"id"`
+	Message       *string          `json:"message"`
+	UserID        uuid.UUID        `json:"userId"`
+	User          *user.SecureUser `json:"user"`
+	ParentID      *uuid.UUID       `json:"parentId"`
+	Parent        *PostParent      `json:"parent"`
+	Likes         []Like           `json:"likes"`
+	FilesURL      []string         `json:"filesUrl,omitempty"`
+	CommentsCount int              `json:"commentsCount"`
+	CreatedAt     time.Time        `json:"createdAt"`
+	UpdatedAt     time.Time        `json:"updatedAt"`
+}
+
 type CreatedSharePost struct {
-	ID            uuid.UUID             `json:"id"`
-	Message       *string               `json:"message"`
-	UserID        uuid.UUID             `json:"userId"`
-	User          *user.SecureUser      `json:"user"`
-	ParentID      *uuid.UUID            `json:"parentId"`
-	Parent        *socket.PostParentDTO `json:"parent"`
-	Likes         []socket.LikeDTO      `json:"likes"`
-	Comments      []socket.CommentDTO   `json:"comments"`
-	CommentsCount int                   `json:"commentsCount"`
-	CreatedAt     time.Time             `json:"createdAt"`
-	UpdatedAt     time.Time             `json:"updatedAt"`
+	ID            uuid.UUID        `json:"id"`
+	Message       *string          `json:"message"`
+	UserID        uuid.UUID        `json:"userId"`
+	User          *user.SecureUser `json:"user"`
+	ParentID      *uuid.UUID       `json:"parentId"`
+	Parent        *PostParent      `json:"parent"`
+	Likes         []Like           `json:"likes"`
+	Comments      []Comment        `json:"comments"`
+	CommentsCount int              `json:"commentsCount"`
+	CreatedAt     time.Time        `json:"createdAt"`
+	UpdatedAt     time.Time        `json:"updatedAt"`
 }
 
 type CreatedPost struct {
-	ID            uuid.UUID           `json:"id"`
-	Message       *string             `json:"message"`
-	UserID        uuid.UUID           `json:"userId"`
-	User          *user.SecureUser    `json:"user"`
-	ParentID      *uuid.UUID          `json:"parentId"`
-	Likes         []socket.LikeDTO    `json:"likes"`
-	Comments      []socket.CommentDTO `json:"comments"`
-	FilesURL      []string            `json:"filesUrl,omitempty"`
-	CommentsCount int                 `json:"commentsCount"`
-	CreatedAt     time.Time           `json:"createdAt"`
-	UpdatedAt     time.Time           `json:"updatedAt"`
+	ID            uuid.UUID        `json:"id"`
+	Message       *string          `json:"message"`
+	UserID        uuid.UUID        `json:"userId"`
+	User          *user.SecureUser `json:"user"`
+	ParentID      *uuid.UUID       `json:"parentId"`
+	Likes         []Like           `json:"likes"`
+	Comments      []Comment        `json:"comments"`
+	FilesURL      []string         `json:"filesUrl,omitempty"`
+	CommentsCount int              `json:"commentsCount"`
+	CreatedAt     time.Time        `json:"createdAt"`
+	UpdatedAt     time.Time        `json:"updatedAt"`
 }
 
 type PostService interface {
 	CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, error)
 	CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*CreatedSharePost, error)
+	FindsCursorPagination(cursor *uuid.UUID, limit int) ([]Post, error)
 }
 
 type postService struct {
@@ -177,31 +224,6 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		CreatedAt:            post.User.CreatedAt,
 		UpdatedAt:            post.User.UpdatedAt,
 	}
-	likesDTO := []socket.LikeDTO{}
-	for _, like := range post.Likes {
-		likesDTO = append(likesDTO, socket.LikeDTO{
-			ID:        like.ID,
-			UserID:    like.UserID,
-			PostID:    like.PostID,
-			CommentID: like.CommentID,
-			CreatedAt: like.CreatedAt,
-			UpdatedAt: like.UpdatedAt,
-		})
-	}
-	commentsDTO := []socket.CommentDTO{}
-	for _, comment := range post.Comments {
-		commentsDTO = append(commentsDTO, socket.CommentDTO{
-			ID:            comment.ID,
-			Message:       comment.Message,
-			UserID:        comment.UserID,
-			PostID:        comment.PostID,
-			ParentID:      comment.ParentID,
-			ReplyID:       comment.ReplyID,
-			ReplyToUserID: comment.ReplyToUserID,
-			CreatedAt:     comment.CreatedAt,
-			UpdatedAt:     comment.UpdatedAt,
-		})
-	}
 
 	// มี user ถึงสร้างและ ส่ง notification กับ post
 	if len(usersExcept) > 0 {
@@ -254,6 +276,32 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		}
 		go s.notificationSocket.BroadcastNotifications(broadcastNotificationsDTO)
 
+		likesDTO := []socket.LikeDTO{}
+		for _, like := range post.Likes {
+			likesDTO = append(likesDTO, socket.LikeDTO{
+				ID:        like.ID,
+				UserID:    like.UserID,
+				PostID:    like.PostID,
+				CommentID: like.CommentID,
+				CreatedAt: like.CreatedAt,
+				UpdatedAt: like.UpdatedAt,
+			})
+		}
+		commentsDTO := []socket.CommentDTO{}
+		for _, comment := range post.Comments {
+			commentsDTO = append(commentsDTO, socket.CommentDTO{
+				ID:            comment.ID,
+				Message:       comment.Message,
+				UserID:        comment.UserID,
+				PostID:        comment.PostID,
+				ParentID:      comment.ParentID,
+				ReplyID:       comment.ReplyID,
+				ReplyToUserID: comment.ReplyToUserID,
+				CreatedAt:     comment.CreatedAt,
+				UpdatedAt:     comment.UpdatedAt,
+			})
+		}
+
 		// กรณีไม่มี files
 		if len(createPostDTO.FilesURL) == 0 {
 			broadcastPostDTO := &socket.BroadcastPostDTO{
@@ -287,6 +335,32 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		}
 	}
 
+	likes := []Like{}
+	for _, like := range post.Likes {
+		likes = append(likes, Like{
+			ID:        like.ID,
+			UserID:    like.UserID,
+			PostID:    like.PostID,
+			CommentID: like.CommentID,
+			CreatedAt: like.CreatedAt,
+			UpdatedAt: like.UpdatedAt,
+		})
+	}
+	comments := []Comment{}
+	for _, comment := range post.Comments {
+		comments = append(comments, Comment{
+			ID:            comment.ID,
+			Message:       comment.Message,
+			UserID:        comment.UserID,
+			PostID:        comment.PostID,
+			ParentID:      comment.ParentID,
+			ReplyID:       comment.ReplyID,
+			ReplyToUserID: comment.ReplyToUserID,
+			CreatedAt:     comment.CreatedAt,
+			UpdatedAt:     comment.UpdatedAt,
+		})
+	}
+
 	// กรณีไม่มี files
 	if len(createPostDTO.FilesURL) == 0 {
 		respPost := &CreatedPost{
@@ -295,8 +369,8 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 			UserID:        post.UserID,
 			User:          secureUser,
 			ParentID:      post.ParentID,
-			Likes:         likesDTO,
-			Comments:      commentsDTO,
+			Likes:         likes,
+			Comments:      comments,
 			CommentsCount: len(post.Comments),
 			CreatedAt:     post.CreatedAt,
 			UpdatedAt:     post.UpdatedAt,
@@ -310,8 +384,8 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		UserID:        post.UserID,
 		User:          secureUser,
 		ParentID:      post.ParentID,
-		Likes:         likesDTO,
-		Comments:      commentsDTO,
+		Likes:         likes,
+		Comments:      comments,
 		FilesURL:      filesURL,
 		CommentsCount: len(post.Comments),
 		CreatedAt:     post.CreatedAt,
@@ -510,18 +584,58 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 	}
 	go s.postSocket.BroadcastSharePost(broadcastSharePostDTO)
 
+	postParent := &PostParent{
+		ID:        post.ID,
+		Message:   post.Message,
+		UserID:    post.UserID,
+		User:      postParentSecureUser,
+		ParentID:  post.ParentID,
+		FilesURL:  filesURL,
+		CreatedAt: post.CreatedAt,
+		UpdatedAt: post.UpdatedAt,
+	}
+	likes := []Like{}
+	for _, like := range sharePost.Likes {
+		likes = append(likes, Like{
+			ID:        like.ID,
+			UserID:    like.UserID,
+			PostID:    like.PostID,
+			CommentID: like.CommentID,
+			CreatedAt: like.CreatedAt,
+			UpdatedAt: like.UpdatedAt,
+		})
+	}
+	comments := []Comment{}
+	for _, comment := range sharePost.Comments {
+		comments = append(comments, Comment{
+			ID:            comment.ID,
+			Message:       comment.Message,
+			UserID:        comment.UserID,
+			PostID:        comment.PostID,
+			ParentID:      comment.ParentID,
+			ReplyID:       comment.ReplyID,
+			ReplyToUserID: comment.ReplyToUserID,
+			CreatedAt:     comment.CreatedAt,
+			UpdatedAt:     comment.UpdatedAt,
+		})
+	}
+
 	createdSharePost := &CreatedSharePost{
 		ID:            sharePost.ID,
 		Message:       sharePost.Message,
 		UserID:        sharePost.UserID,
 		User:          secureUser,
 		ParentID:      sharePost.ParentID,
-		Parent:        postParentDTO,
-		Likes:         likesDTO,
-		Comments:      commentsDTO,
+		Parent:        postParent,
+		Likes:         likes,
+		Comments:      comments,
 		CommentsCount: len(sharePost.Comments),
 		CreatedAt:     sharePost.CreatedAt,
 		UpdatedAt:     sharePost.UpdatedAt,
 	}
 	return createdSharePost, nil
+}
+
+func (s *postService) FindsCursorPagination(cursor *uuid.UUID, limit int) ([]Post, error) {
+	return nil, nil
 }

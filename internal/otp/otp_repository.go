@@ -8,7 +8,7 @@ import (
 
 type OTP struct {
 	ID        int64
-	Email     string `gorm:"type:varchar(30);unique"`
+	Email     string `gorm:"type:varchar(30);uniqueIndex"`
 	OTPHash   string
 	ExpiredAt time.Time
 	CreatedAt time.Time
