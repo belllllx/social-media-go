@@ -766,6 +766,76 @@ const docTemplate = `{
                 }
             }
         },
+        "/post/finds": {
+            "get": {
+                "description": "authentication and find posts cursor pagination",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "post"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "cursor uuid for post id",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "limit for posts cursor pagination",
+                        "name": "limit",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SwaggerResponseWithData"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/post.PostCursorPagination"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/post/share/create/{parentID}": {
             "post": {
                 "description": "authentication create share post, notification and socket broadcast share post, notification to client",
@@ -1022,6 +1092,38 @@ const docTemplate = `{
                 }
             }
         },
+        "post.Comment": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "parentId": {
+                    "type": "string"
+                },
+                "postId": {
+                    "type": "string"
+                },
+                "replyId": {
+                    "type": "string"
+                },
+                "replyToUserId": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "userId": {
+                    "type": "string"
+                }
+            }
+        },
         "post.CreatePostRequest": {
             "type": "object",
             "properties": {
@@ -1050,7 +1152,7 @@ const docTemplate = `{
                 "comments": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/socket.CommentDTO"
+                        "$ref": "#/definitions/post.Comment"
                     }
                 },
                 "commentsCount": {
@@ -1071,7 +1173,7 @@ const docTemplate = `{
                 "likes": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/socket.LikeDTO"
+                        "$ref": "#/definitions/post.Like"
                     }
                 },
                 "message": {
@@ -1097,7 +1199,7 @@ const docTemplate = `{
                 "comments": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/socket.CommentDTO"
+                        "$ref": "#/definitions/post.Comment"
                     }
                 },
                 "commentsCount": {
@@ -1112,14 +1214,130 @@ const docTemplate = `{
                 "likes": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/socket.LikeDTO"
+                        "$ref": "#/definitions/post.Like"
                     }
                 },
                 "message": {
                     "type": "string"
                 },
                 "parent": {
-                    "$ref": "#/definitions/socket.PostParentDTO"
+                    "$ref": "#/definitions/post.PostParent"
+                },
+                "parentId": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/user.SecureUser"
+                },
+                "userId": {
+                    "type": "string"
+                }
+            }
+        },
+        "post.Like": {
+            "type": "object",
+            "properties": {
+                "commentId": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "postId": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/user.SecureUser"
+                },
+                "userId": {
+                    "type": "string"
+                }
+            }
+        },
+        "post.Post": {
+            "type": "object",
+            "properties": {
+                "commentsCount": {
+                    "type": "integer"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "filesUrl": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "likes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/post.Like"
+                    }
+                },
+                "message": {
+                    "type": "string"
+                },
+                "parent": {
+                    "$ref": "#/definitions/post.PostParent"
+                },
+                "parentId": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/user.SecureUser"
+                },
+                "userId": {
+                    "type": "string"
+                }
+            }
+        },
+        "post.PostCursorPagination": {
+            "type": "object",
+            "properties": {
+                "nextCursor": {
+                    "type": "string"
+                },
+                "posts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/post.Post"
+                    }
+                }
+            }
+        },
+        "post.PostParent": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "filesUrl": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
                 },
                 "parentId": {
                     "type": "string"
@@ -1181,93 +1399,6 @@ const docTemplate = `{
                 },
                 "success": {
                     "type": "boolean"
-                }
-            }
-        },
-        "socket.CommentDTO": {
-            "type": "object",
-            "properties": {
-                "createdAt": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "message": {
-                    "type": "string"
-                },
-                "parentId": {
-                    "type": "string"
-                },
-                "postId": {
-                    "type": "string"
-                },
-                "replyId": {
-                    "type": "string"
-                },
-                "replyToUserId": {
-                    "type": "string"
-                },
-                "updatedAt": {
-                    "type": "string"
-                },
-                "userId": {
-                    "type": "string"
-                }
-            }
-        },
-        "socket.LikeDTO": {
-            "type": "object",
-            "properties": {
-                "commentId": {
-                    "type": "string"
-                },
-                "createdAt": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "postId": {
-                    "type": "string"
-                },
-                "updatedAt": {
-                    "type": "string"
-                },
-                "userId": {
-                    "type": "string"
-                }
-            }
-        },
-        "socket.PostParentDTO": {
-            "type": "object",
-            "properties": {
-                "createdAt": {
-                    "type": "string"
-                },
-                "filesUrl": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "id": {
-                    "type": "string"
-                },
-                "message": {
-                    "type": "string"
-                },
-                "parentId": {
-                    "type": "string"
-                },
-                "updatedAt": {
-                    "type": "string"
-                },
-                "user": {
-                    "$ref": "#/definitions/user.SecureUser"
-                },
-                "userId": {
-                    "type": "string"
                 }
             }
         },

@@ -2,6 +2,7 @@ package post
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/belllllx/social-media-go/internal/file"
@@ -12,6 +13,7 @@ import (
 	"github.com/belllllx/social-media-go/pkg/errs"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 )
 
 type CreateSharePostDTO struct {
@@ -27,12 +29,13 @@ type CreatePostDTO struct {
 }
 
 type Like struct {
-	ID        int64      `json:"id"`
-	UserID    uuid.UUID  `json:"userId"`
-	PostID    *uuid.UUID `json:"postId"`
-	CommentID *uuid.UUID `json:"commentId"`
-	CreatedAt time.Time  `json:"createdAt"`
-	UpdatedAt time.Time  `json:"updatedAt"`
+	ID        int64            `json:"id"`
+	UserID    uuid.UUID        `json:"userId"`
+	User      *user.SecureUser `json:"user,omitempty"`
+	PostID    *uuid.UUID       `json:"postId"`
+	CommentID *uuid.UUID       `json:"commentId"`
+	CreatedAt time.Time        `json:"createdAt"`
+	UpdatedAt time.Time        `json:"updatedAt"`
 }
 
 type Comment struct {
@@ -72,6 +75,11 @@ type Post struct {
 	UpdatedAt     time.Time        `json:"updatedAt"`
 }
 
+type PostCursorPagination struct {
+	Posts      []Post     `json:"posts"`
+	NextCursor *uuid.UUID `json:"nextCursor"`
+}
+
 type CreatedSharePost struct {
 	ID            uuid.UUID        `json:"id"`
 	Message       *string          `json:"message"`
@@ -103,10 +111,11 @@ type CreatedPost struct {
 type PostService interface {
 	CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, error)
 	CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*CreatedSharePost, error)
-	FindsCursorPagination(cursor *uuid.UUID, limit int) ([]Post, error)
+	FindsCursorPagination(cursor, limit string) (*PostCursorPagination, error)
 }
 
 type postService struct {
+	redisClient         *redis.Client
 	postRepository      PostRepository
 	userRepository      user.UserRepository
 	fileRepository      file.FileRepository
@@ -118,6 +127,7 @@ type postService struct {
 }
 
 func NewPostService(
+	redisClient *redis.Client,
 	postRepository PostRepository,
 	userRepository user.UserRepository,
 	fileRepository file.FileRepository,
@@ -128,6 +138,7 @@ func NewPostService(
 	postSocket socket.PostSocket,
 ) PostService {
 	return &postService{
+		redisClient:         redisClient,
 		postRepository:      postRepository,
 		userRepository:      userRepository,
 		fileRepository:      fileRepository,
@@ -400,9 +411,15 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 		return nil, err
 	}
 
-	parentID, err := helpers.ParseUUID(createSharePostDTO.ParentID)
+	err = helpers.ValidateUUID(createSharePostDTO.ParentID)
 	if err != nil {
 		logs.Warn(err)
+		return nil, err
+	}
+
+	parentID, err := helpers.ParseUUID(createSharePostDTO.ParentID)
+	if err != nil {
+		logs.Error(err)
 		return nil, err
 	}
 
@@ -636,6 +653,223 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 	return createdSharePost, nil
 }
 
-func (s *postService) FindsCursorPagination(cursor *uuid.UUID, limit int) ([]Post, error) {
-	return nil, nil
+func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPagination, error) {
+	var nextCursor *uuid.UUID
+	var cursorID *uuid.UUID
+
+	if cursor != "" {
+		err := helpers.ValidateUUID(cursor)
+		if err != nil {
+			logs.Warn(err)
+			return nil, err
+		}
+
+		cursorID, err = helpers.ParseUUID(cursor)
+		if err != nil {
+			logs.Error(err)
+			return nil, err
+		}
+	}
+
+	limitInt, err := strconv.Atoi(limit)
+	if err != nil {
+		return nil, errs.NewBadRequestErrorWithMessage("Invalid limit must be string integer")
+	}
+
+	if limitInt <= 0 {
+		return nil, errs.NewBadRequestErrorWithMessage("Invalid limit must be greater than 0")
+	}
+
+	posts := []user.Post{}
+	postsCursorPagination := []Post{}
+	if cursor == "" {
+		posts, err = s.postRepository.FindsCursorPagination(nil, limitInt)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts cursor pagination")
+		}
+	} else {
+		postCursor, err := s.postRepository.FindByIDCursor(*cursorID)
+		if err != nil && !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find post cursor by post id")
+		}
+
+		if helpers.IsErrRecordNotFound(err) {
+			logs.Warn(err)
+			return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Cursor by post id %v is not found", *cursorID))
+		}
+
+		posts, err = s.postRepository.FindsCursorPagination(postCursor, limitInt)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts cursor pagination")
+		}
+	}
+
+	if len(posts) > 0 {
+		for _, post := range posts {
+			err = s.userService.GetPostUserImage(&post)
+			if err != nil {
+				return nil, err
+			}
+
+			comments := []user.Comment{}
+			for _, comment := range post.Comments {
+				if comment.ParentID == nil {
+					comments = append(comments, comment)
+				}
+			}
+			commentsCount := len(comments)
+
+			files, err := s.fileRepository.FindsByContentID(post.ID)
+			if err != nil {
+				logs.Error(err)
+				return nil, errs.NewInternalServerErrorWithMessage("Failed to find files of post")
+			}
+
+			filesURL := []string{}
+			if len(files) > 0 {
+				for _, file := range files {
+					fileURL, err := s.fileService.PresignGetFile(file.Filename)
+					if err != nil {
+						return nil, err
+					}
+
+					filesURL = append(filesURL, fileURL)
+				}
+			}
+
+			updateLikes := []Like{}
+			for _, like := range post.Likes {
+				err = s.userService.GetPostLikeUserImage(&like)
+				if err != nil {
+					return nil, err
+				}
+
+				secureUser := &user.SecureUser{
+					ID:                   like.UserID,
+					Fullname:             like.User.Fullname,
+					Username:             like.User.Username,
+					Email:                like.User.Email,
+					DateOfBirth:          like.User.DateOfBirth,
+					ProfileUrl:           like.User.ProfileUrl,
+					ProfileBackgroundUrl: like.User.ProfileBackgroundUrl,
+					Info:                 like.User.Info,
+					Role:                 like.User.Role,
+					ProviderType:         like.User.ProviderType,
+					CreatedAt:            like.User.CreatedAt,
+					UpdatedAt:            like.User.UpdatedAt,
+				}
+				updateLikes = append(updateLikes, Like{
+					ID:        like.ID,
+					UserID:    like.UserID,
+					User:      secureUser,
+					PostID:    like.PostID,
+					CommentID: like.CommentID,
+					CreatedAt: like.CreatedAt,
+					UpdatedAt: like.UpdatedAt,
+				})
+			}
+
+			secureUser := &user.SecureUser{
+				ID:                   post.UserID,
+				Fullname:             post.User.Fullname,
+				Username:             post.User.Username,
+				Email:                post.User.Email,
+				DateOfBirth:          post.User.DateOfBirth,
+				ProfileUrl:           post.User.ProfileUrl,
+				ProfileBackgroundUrl: post.User.ProfileBackgroundUrl,
+				Info:                 post.User.Info,
+				Role:                 post.User.Role,
+				ProviderType:         post.User.ProviderType,
+				CreatedAt:            post.User.CreatedAt,
+				UpdatedAt:            post.User.UpdatedAt,
+			}
+			if post.ParentID == nil {
+				postsCursorPagination = append(postsCursorPagination, Post{
+					ID:            post.ID,
+					Message:       post.Message,
+					UserID:        post.UserID,
+					User:          secureUser,
+					ParentID:      nil,
+					Parent:        nil,
+					Likes:         updateLikes,
+					FilesURL:      filesURL,
+					CommentsCount: commentsCount,
+					CreatedAt:     post.CreatedAt,
+					UpdatedAt:     post.UpdatedAt,
+				})
+			} else {
+				err = s.userService.GetPostUserImage(post.Parent)
+				if err != nil {
+					return nil, err
+				}
+
+				files, err = s.fileRepository.FindsByContentID(*post.ParentID)
+				if err != nil {
+					logs.Error(err)
+					return nil, errs.NewInternalServerErrorWithMessage("Failed to find files of post parent")
+				}
+
+				if len(files) > 0 {
+					for _, file := range files {
+						fileURL, err := s.fileService.PresignGetFile(file.Filename)
+						if err != nil {
+							return nil, err
+						}
+
+						filesURL = append(filesURL, fileURL)
+					}
+				}
+
+				postParentSecureUser := &user.SecureUser{
+					ID:                   post.Parent.UserID,
+					Fullname:             post.Parent.User.Fullname,
+					Username:             post.Parent.User.Username,
+					Email:                post.Parent.User.Email,
+					DateOfBirth:          post.Parent.User.DateOfBirth,
+					ProfileUrl:           post.Parent.User.ProfileUrl,
+					ProfileBackgroundUrl: post.Parent.User.ProfileBackgroundUrl,
+					Info:                 post.Parent.User.Info,
+					Role:                 post.Parent.User.Role,
+					ProviderType:         post.Parent.User.ProviderType,
+					CreatedAt:            post.Parent.User.CreatedAt,
+					UpdatedAt:            post.Parent.User.UpdatedAt,
+				}
+				postParent := &PostParent{
+					ID:        *post.ParentID,
+					Message:   post.Parent.Message,
+					UserID:    post.Parent.UserID,
+					User:      postParentSecureUser,
+					ParentID:  post.ParentID,
+					FilesURL:  filesURL,
+					CreatedAt: post.Parent.CreatedAt,
+					UpdatedAt: post.Parent.UpdatedAt,
+				}
+				postsCursorPagination = append(postsCursorPagination, Post{
+					ID:            post.ID,
+					Message:       post.Message,
+					UserID:        post.UserID,
+					User:          secureUser,
+					ParentID:      post.ParentID,
+					Parent:        postParent,
+					Likes:         updateLikes,
+					FilesURL:      filesURL,
+					CommentsCount: commentsCount,
+					CreatedAt:     post.CreatedAt,
+					UpdatedAt:     post.UpdatedAt,
+				})
+			}
+		}
+	}
+
+	if len(postsCursorPagination) > 0 {
+		nextCursor = &postsCursorPagination[len(postsCursorPagination)-1].ID
+	}
+	postCursorPagination := &PostCursorPagination{
+		Posts:      postsCursorPagination,
+		NextCursor: nextCursor,
+	}
+	return postCursorPagination, nil
 }

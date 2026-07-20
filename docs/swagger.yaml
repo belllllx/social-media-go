@@ -81,6 +81,27 @@ definitions:
           type: string
         type: array
     type: object
+  post.Comment:
+    properties:
+      createdAt:
+        type: string
+      id:
+        type: string
+      message:
+        type: string
+      parentId:
+        type: string
+      postId:
+        type: string
+      replyId:
+        type: string
+      replyToUserId:
+        type: string
+      updatedAt:
+        type: string
+      userId:
+        type: string
+    type: object
   post.CreatePostRequest:
     properties:
       filesUrl:
@@ -99,7 +120,7 @@ definitions:
     properties:
       comments:
         items:
-          $ref: '#/definitions/socket.CommentDTO'
+          $ref: '#/definitions/post.Comment'
         type: array
       commentsCount:
         type: integer
@@ -113,7 +134,7 @@ definitions:
         type: string
       likes:
         items:
-          $ref: '#/definitions/socket.LikeDTO'
+          $ref: '#/definitions/post.Like'
         type: array
       message:
         type: string
@@ -130,7 +151,7 @@ definitions:
     properties:
       comments:
         items:
-          $ref: '#/definitions/socket.CommentDTO'
+          $ref: '#/definitions/post.Comment'
         type: array
       commentsCount:
         type: integer
@@ -140,12 +161,88 @@ definitions:
         type: string
       likes:
         items:
-          $ref: '#/definitions/socket.LikeDTO'
+          $ref: '#/definitions/post.Like'
         type: array
       message:
         type: string
       parent:
-        $ref: '#/definitions/socket.PostParentDTO'
+        $ref: '#/definitions/post.PostParent'
+      parentId:
+        type: string
+      updatedAt:
+        type: string
+      user:
+        $ref: '#/definitions/user.SecureUser'
+      userId:
+        type: string
+    type: object
+  post.Like:
+    properties:
+      commentId:
+        type: string
+      createdAt:
+        type: string
+      id:
+        type: integer
+      postId:
+        type: string
+      updatedAt:
+        type: string
+      user:
+        $ref: '#/definitions/user.SecureUser'
+      userId:
+        type: string
+    type: object
+  post.Post:
+    properties:
+      commentsCount:
+        type: integer
+      createdAt:
+        type: string
+      filesUrl:
+        items:
+          type: string
+        type: array
+      id:
+        type: string
+      likes:
+        items:
+          $ref: '#/definitions/post.Like'
+        type: array
+      message:
+        type: string
+      parent:
+        $ref: '#/definitions/post.PostParent'
+      parentId:
+        type: string
+      updatedAt:
+        type: string
+      user:
+        $ref: '#/definitions/user.SecureUser'
+      userId:
+        type: string
+    type: object
+  post.PostCursorPagination:
+    properties:
+      nextCursor:
+        type: string
+      posts:
+        items:
+          $ref: '#/definitions/post.Post'
+        type: array
+    type: object
+  post.PostParent:
+    properties:
+      createdAt:
+        type: string
+      filesUrl:
+        items:
+          type: string
+        type: array
+      id:
+        type: string
+      message:
+        type: string
       parentId:
         type: string
       updatedAt:
@@ -186,63 +283,6 @@ definitions:
         type: integer
       success:
         type: boolean
-    type: object
-  socket.CommentDTO:
-    properties:
-      createdAt:
-        type: string
-      id:
-        type: string
-      message:
-        type: string
-      parentId:
-        type: string
-      postId:
-        type: string
-      replyId:
-        type: string
-      replyToUserId:
-        type: string
-      updatedAt:
-        type: string
-      userId:
-        type: string
-    type: object
-  socket.LikeDTO:
-    properties:
-      commentId:
-        type: string
-      createdAt:
-        type: string
-      id:
-        type: integer
-      postId:
-        type: string
-      updatedAt:
-        type: string
-      userId:
-        type: string
-    type: object
-  socket.PostParentDTO:
-    properties:
-      createdAt:
-        type: string
-      filesUrl:
-        items:
-          type: string
-        type: array
-      id:
-        type: string
-      message:
-        type: string
-      parentId:
-        type: string
-      updatedAt:
-        type: string
-      user:
-        $ref: '#/definitions/user.SecureUser'
-      userId:
-        type: string
     type: object
   user.ProviderType:
     enum:
@@ -763,6 +803,49 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/response.SwaggerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - post
+  /post/finds:
+    get:
+      description: authentication and find posts cursor pagination
+      parameters:
+      - description: cursor uuid for post id
+        in: query
+        name: cursor
+        type: string
+      - description: limit for posts cursor pagination
+        in: query
+        name: limit
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SwaggerResponseWithData'
+            - properties:
+                data:
+                  $ref: '#/definitions/post.PostCursorPagination'
+              type: object
         "400":
           description: Bad Request
           schema:

@@ -31,6 +31,7 @@ type UserService interface {
 	SecureFindWithID(ID uuid.UUID) (*SecureUser, error)
 	ResetPassword(email, password string) error
 	GetPostUserImage(post *Post) error
+	GetPostLikeUserImage(like *Like) error
 	GetNotificationUserImage(notification *Notification) error
 }
 
@@ -104,6 +105,24 @@ func (s *userService) GetPostUserImage(post *Post) error {
 		}
 
 		post.User.ProfileUrl = &req.URL
+	}
+
+	return nil
+}
+
+func (s *userService) GetPostLikeUserImage(like *Like) error {
+	ctx := context.Background()
+
+	// ไม่ใช่ avater ของ social login
+	// อัพเดต profile url
+	if like.User.ProfileUrl != nil && !helpers.IsExternalURL(*like.User.ProfileUrl) {
+		req, err := helpers.PresignGetObject(s.presignClient, ctx, *like.User.ProfileUrl)
+		if err != nil {
+			logs.Error(err)
+			return errs.NewInternalServerErrorWithMessage("Failed to presign get post like user profile url object")
+		}
+
+		like.User.ProfileUrl = &req.URL
 	}
 
 	return nil

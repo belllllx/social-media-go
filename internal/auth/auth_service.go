@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -96,10 +97,10 @@ type SendEmailTokenClaims struct {
 }
 
 type RegisterPayload struct {
-	Fullname     string
-	Username     string
-	Email        string
-	PasswordHash string
+	Fullname     string `json:"fullname"`
+	Username     string `json:"username"`
+	Email        string `json:"email"`
+	PasswordHash string `json:"passwordHash"`
 }
 
 type AuthService interface {
@@ -207,7 +208,7 @@ func (s *authService) SendEmailRegister(sendEmailRegisterRequest *SendEmailRegis
 		logs.Error(err)
 		return "", errs.NewUnexpectedErrorWithMessage("Failed to marshal json")
 	}
-	err = helpers.RedisSet(s.redisClient, key, data, time.Minute*15)
+	err = helpers.RedisSet(s.redisClient, context.Background(), key, data, time.Minute*15)
 	if err != nil {
 		logs.Error(err)
 		return "", errs.NewInternalServerErrorWithMessage("Failed to set redis")
@@ -265,8 +266,9 @@ func (s *authService) VerifyOTPRegister(email, otp string) error {
 		return err
 	}
 
+	ctx := context.Background()
 	key := fmt.Sprintf("email:register-pending:%s", email)
-	value, err := helpers.RedisGet(s.redisClient, key)
+	value, err := helpers.RedisGet(s.redisClient, ctx, key)
 	if err == redis.Nil {
 		logs.Warn(err)
 		return errs.NewUnexpectedErrorWithMessage("Failed to get does not exist key redis")
@@ -299,7 +301,7 @@ func (s *authService) VerifyOTPRegister(email, otp string) error {
 		return errs.NewInternalServerErrorWithMessage("Failed to delete otp")
 	}
 
-	err = helpers.RedisDelete(s.redisClient, key)
+	err = helpers.RedisDelete(s.redisClient, ctx, key)
 	if err != nil {
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to delete key redis")
@@ -405,7 +407,7 @@ func (s *authService) SocialLogin(providerType user.ProviderType) (string, error
 	}
 
 	key := fmt.Sprintf("auth:oauth2-state:%s", state)
-	err = helpers.RedisSet(s.redisClient, key, []byte(state), time.Minute*5)
+	err = helpers.RedisSet(s.redisClient, context.Background(), key, []byte(state), time.Minute*5)
 	if err != nil {
 		logs.Error(err)
 		return "", errs.NewInternalServerErrorWithMessage("Failed to set redis")

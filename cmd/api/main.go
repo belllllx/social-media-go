@@ -68,6 +68,7 @@ func main() {
 	fileService := file.NewFileService(fileRepositoryDB, app.S3Client, app.PresignClient)
 	notificationService := notification.NewNotificationService(notificationRepositoryDB, userService)
 	postService := post.NewPostService(
+		app.RedisClient,
 		postRepositoryDB,
 		userRepositoryDB,
 		fileRepositoryDB,
@@ -167,6 +168,7 @@ func main() {
 		post.DELETE("/delete/file", postHandler.DeleteFile)
 		post.POST("/create", postHandler.CreatePost)
 		post.POST("/share/create/:parentID", postHandler.CreateSharePost)
+		post.GET("/finds", postHandler.FindsCursorPagination)
 	}
 
 	app.Run()

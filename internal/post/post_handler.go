@@ -22,6 +22,7 @@ type PostHandler interface {
 	DeleteFile(c *gin.Context)
 	CreatePost(c *gin.Context)
 	CreateSharePost(c *gin.Context)
+	FindsCursorPagination(c *gin.Context)
 }
 
 type postHandler struct {
@@ -208,4 +209,29 @@ func (h *postHandler) CreateSharePost(c *gin.Context) {
 	}
 
 	response.Created(c, "Share post create successfully", createdSharePost)
+}
+
+// FindsCursorPagination godoc
+//
+//	@Description	authentication and find posts cursor pagination
+//	@Tags			post
+//	@Produce		json
+//	@Param			cursor	query		string	false	"cursor uuid for post id"
+//	@Param			limit	query		int		true	"limit for posts cursor pagination"
+//	@Success		200		{object}	response.SwaggerResponseWithData{data=post.PostCursorPagination}
+//	@Failure		400		{object}	response.SwaggerBadRequestResponse
+//	@Failure		401		{object}	response.SwaggerResponse
+//	@Failure		404		{object}	response.SwaggerResponse
+//	@Failure		500		{object}	response.SwaggerResponse
+//	@Router			/post/finds [get]
+func (h *postHandler) FindsCursorPagination(c *gin.Context) {
+	cursor := c.Query("cursor")
+	limit := c.Query("limit")
+	postCursorPagination, err := h.postService.FindsCursorPagination(cursor, limit)
+	if err != nil {
+		helpers.HandleError(c, err)
+		return
+	}
+
+	response.Ok(c, "Posts retrive successfully", postCursorPagination)
 }

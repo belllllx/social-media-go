@@ -241,8 +241,9 @@ func AuthGoogleCallback(redisClient *redis.Client, verifier *oidc.IDTokenVerifie
 		state := c.Query("state")
 		code := c.Query("code")
 
+		ctx := context.Background()
 		key := fmt.Sprintf("auth:oauth2-state:%s", state)
-		oauth2State, err := helpers.RedisGet(redisClient, key)
+		oauth2State, err := helpers.RedisGet(redisClient, ctx, key)
 		if err == redis.Nil {
 			response.AbortWithUnauthorized(c)
 			return
@@ -257,8 +258,6 @@ func AuthGoogleCallback(redisClient *redis.Client, verifier *oidc.IDTokenVerifie
 		}
 
 		googleConfig := configs.InitOAuth2GoogleConfig()
-		ctx := context.Background()
-
 		token, err := googleConfig.Exchange(ctx, code)
 		if err != nil {
 			response.AbortWithUnauthorized(c)
@@ -284,7 +283,7 @@ func AuthGoogleCallback(redisClient *redis.Client, verifier *oidc.IDTokenVerifie
 			return
 		}
 
-		err = helpers.RedisDelete(redisClient, key)
+		err = helpers.RedisDelete(redisClient, ctx, key)
 		if err != nil {
 			response.AbortWithInternalServerError(c, err)
 			return
@@ -307,8 +306,9 @@ func AuthGithubCallback(redisClient *redis.Client) gin.HandlerFunc {
 		state := c.Query("state")
 		code := c.Query("code")
 
+		ctx := context.Background()
 		key := fmt.Sprintf("auth:oauth2-state:%s", state)
-		oauth2State, err := helpers.RedisGet(redisClient, key)
+		oauth2State, err := helpers.RedisGet(redisClient, ctx, key)
 		if err == redis.Nil {
 			response.AbortWithUnauthorized(c)
 			return
@@ -323,8 +323,6 @@ func AuthGithubCallback(redisClient *redis.Client) gin.HandlerFunc {
 		}
 
 		githubConfig := configs.InitOAuth2GithubConfig()
-		ctx := context.Background()
-
 		token, err := githubConfig.Exchange(ctx, code)
 		if err != nil {
 			response.AbortWithUnauthorized(c)
@@ -386,7 +384,7 @@ func AuthGithubCallback(redisClient *redis.Client) gin.HandlerFunc {
 			}
 		}
 
-		err = helpers.RedisDelete(redisClient, key)
+		err = helpers.RedisDelete(redisClient, ctx, key)
 		if err != nil {
 			response.AbortWithInternalServerError(c, err)
 			return
@@ -409,8 +407,9 @@ func AuthFacebookCallback(redisClient *redis.Client) gin.HandlerFunc {
 		state := c.Query("state")
 		code := c.Query("code")
 
+		ctx := context.Background()
 		key := fmt.Sprintf("auth:oauth2-state:%s", state)
-		oauth2State, err := helpers.RedisGet(redisClient, key)
+		oauth2State, err := helpers.RedisGet(redisClient, ctx, key)
 		if err == redis.Nil {
 			response.AbortWithUnauthorized(c)
 			return
@@ -425,8 +424,6 @@ func AuthFacebookCallback(redisClient *redis.Client) gin.HandlerFunc {
 		}
 
 		facebookConfig := configs.InitOAuth2FacebookConfig()
-		ctx := context.Background()
-
 		token, err := facebookConfig.Exchange(ctx, code)
 		if err != nil {
 			response.AbortWithUnauthorized(c)
@@ -458,7 +455,7 @@ func AuthFacebookCallback(redisClient *redis.Client) gin.HandlerFunc {
 			return
 		}
 
-		err = helpers.RedisDelete(redisClient, key)
+		err = helpers.RedisDelete(redisClient, ctx, key)
 		if err != nil {
 			response.AbortWithInternalServerError(c, err)
 			return

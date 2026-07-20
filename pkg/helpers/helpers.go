@@ -90,16 +90,30 @@ func VerifyJWT(token string, claims jwt.Claims, secret string) (*jwt.Token, erro
 	)
 }
 
-func RedisSet(redisClient *redis.Client, key string, value []byte, expiration time.Duration) error {
-	return redisClient.Set(context.Background(), key, string(value), expiration).Err()
+func RedisSet(
+	redisClient *redis.Client,
+	ctx context.Context,
+	key string,
+	value []byte,
+	expiration time.Duration,
+) error {
+	return redisClient.Set(ctx, key, string(value), expiration).Err()
 }
 
-func RedisGet(redisClient *redis.Client, key string) (string, error) {
-	return redisClient.Get(context.Background(), key).Result()
+func RedisGet(
+	redisClient *redis.Client,
+	ctx context.Context,
+	key string,
+) (string, error) {
+	return redisClient.Get(ctx, key).Result()
 }
 
-func RedisDelete(redisClient *redis.Client, key string) error {
-	return redisClient.Del(context.Background(), key).Err()
+func RedisDelete(
+	redisClient *redis.Client,
+	ctx context.Context,
+	key string,
+) error {
+	return redisClient.Del(ctx, key).Err()
 }
 
 func GetErrorMessages(err validator.FieldError) string {
@@ -272,12 +286,16 @@ func ValidatePresignedURL(fl validator.FieldLevel) bool {
 	return true
 }
 
-func ParseUUID(s string) (*uuid.UUID, error) {
+func ValidateUUID(s string) error {
 	err := uuid.Validate(s)
 	if err != nil {
-		return nil, errs.NewBadRequestErrorWithMessage(fmt.Sprintf("Invalid uuid for %s", s))
+		return errs.NewBadRequestErrorWithMessage(fmt.Sprintf("Invalid uuid for %s", s))
 	}
 
+	return nil
+}
+
+func ParseUUID(s string) (*uuid.UUID, error) {
 	uuid, err := uuid.Parse(s)
 	if err != nil {
 		return nil, errs.NewUnexpectedErrorWithMessage("Failed to parse uuid")
