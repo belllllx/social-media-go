@@ -23,6 +23,7 @@ type PostHandler interface {
 	CreatePost(c *gin.Context)
 	CreateSharePost(c *gin.Context)
 	FindsCursorPagination(c *gin.Context)
+	FindWithID(c *gin.Context)
 }
 
 type postHandler struct {
@@ -234,4 +235,27 @@ func (h *postHandler) FindsCursorPagination(c *gin.Context) {
 	}
 
 	response.Ok(c, "Posts retrive successfully", postCursorPagination)
+}
+
+// FindWithID godoc
+//
+//	@Description	authentication and find post with id
+//	@Tags			post
+//	@Produce		json
+//	@Param			postID	path		string	true	"uuid for post id"
+//	@Success		200		{object}	response.SwaggerResponseWithData{data=post.Post}
+//	@Failure		400		{object}	response.SwaggerBadRequestResponse
+//	@Failure		401		{object}	response.SwaggerResponse
+//	@Failure		404		{object}	response.SwaggerResponse
+//	@Failure		500		{object}	response.SwaggerResponse
+//	@Router			/post/find/{postID} [get]
+func (h *postHandler) FindWithID(c *gin.Context) {
+	postID := c.Param("postID")
+	post, err := h.postService.FindWithID(postID)
+	if err != nil {
+		helpers.HandleError(c, err)
+		return
+	}
+
+	response.Ok(c, "Post retrive successfully", post)
 }

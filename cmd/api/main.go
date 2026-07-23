@@ -177,6 +177,7 @@ func main() {
 		post.POST("/create", postHandler.CreatePost)
 		post.POST("/share/create/:parentID", postHandler.CreateSharePost)
 		post.GET("/finds", postHandler.FindsCursorPagination)
+		post.GET("/find/:postID", postHandler.FindWithID)
 	}
 
 	app.Run()

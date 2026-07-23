@@ -1,6 +1,8 @@
 package post
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -113,6 +115,7 @@ type PostService interface {
 	CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, error)
 	CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*CreatedSharePost, error)
 	FindsCursorPagination(cursor, limit string) (*PostCursorPagination, error)
+	FindWithID(postID string) (*Post, error)
 }
 
 type postService struct {
@@ -400,24 +403,7 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		})
 	}
 
-	// กรณีไม่มี files
-	if len(createPostDTO.FilesURL) == 0 {
-		respPost := &CreatedPost{
-			ID:            post.ID,
-			Message:       post.Message,
-			UserID:        post.UserID,
-			User:          secureUser,
-			ParentID:      post.ParentID,
-			Likes:         likes,
-			Comments:      comments,
-			CommentsCount: len(post.Comments),
-			CreatedAt:     post.CreatedAt,
-			UpdatedAt:     post.UpdatedAt,
-		}
-		return respPost, nil
-	}
-
-	respPostWithFiles := &CreatedPost{
+	respPost := &CreatedPost{
 		ID:            post.ID,
 		Message:       post.Message,
 		UserID:        post.UserID,
@@ -425,12 +411,16 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		ParentID:      post.ParentID,
 		Likes:         likes,
 		Comments:      comments,
-		FilesURL:      filesURL,
 		CommentsCount: len(post.Comments),
 		CreatedAt:     post.CreatedAt,
 		UpdatedAt:     post.UpdatedAt,
 	}
-	return respPostWithFiles, nil
+
+	if len(createPostDTO.FilesURL) > 0 {
+		respPost.FilesURL = filesURL
+	}
+
+	return respPost, nil
 }
 
 func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*CreatedSharePost, error) {
@@ -813,21 +803,19 @@ func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPa
 				CreatedAt:            post.User.CreatedAt,
 				UpdatedAt:            post.User.UpdatedAt,
 			}
-			if post.ParentID == nil {
-				postsCursorPagination = append(postsCursorPagination, Post{
-					ID:            post.ID,
-					Message:       post.Message,
-					UserID:        post.UserID,
-					User:          secureUser,
-					ParentID:      nil,
-					Parent:        nil,
-					Likes:         updateLikes,
-					FilesURL:      filesURL,
-					CommentsCount: commentsCount,
-					CreatedAt:     post.CreatedAt,
-					UpdatedAt:     post.UpdatedAt,
-				})
-			} else {
+			postCursorPagination := Post{
+				ID:            post.ID,
+				Message:       post.Message,
+				UserID:        post.UserID,
+				User:          secureUser,
+				Likes:         updateLikes,
+				FilesURL:      filesURL,
+				CommentsCount: commentsCount,
+				CreatedAt:     post.CreatedAt,
+				UpdatedAt:     post.UpdatedAt,
+			}
+
+			if post.ParentID != nil {
 				err = s.userService.GetPostUserImage(post.Parent)
 				if err != nil {
 					return nil, err
@@ -862,20 +850,11 @@ func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPa
 					CreatedAt: post.Parent.CreatedAt,
 					UpdatedAt: post.Parent.UpdatedAt,
 				}
-				postsCursorPagination = append(postsCursorPagination, Post{
-					ID:            post.ID,
-					Message:       post.Message,
-					UserID:        post.UserID,
-					User:          secureUser,
-					ParentID:      post.ParentID,
-					Parent:        postParent,
-					Likes:         updateLikes,
-					FilesURL:      filesURL,
-					CommentsCount: commentsCount,
-					CreatedAt:     post.CreatedAt,
-					UpdatedAt:     post.UpdatedAt,
-				})
+				postCursorPagination.ParentID = post.ParentID
+				postCursorPagination.Parent = postParent
 			}
+
+			postsCursorPagination = append(postsCursorPagination, postCursorPagination)
 		}
 	}
 
@@ -887,4 +866,177 @@ func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPa
 		NextCursor: nextCursor,
 	}
 	return postCursorPagination, nil
+}
+
+func (s *postService) FindWithID(postID string) (*Post, error) {
+	err := helpers.ValidateUUID(postID)
+	if err != nil {
+		logs.Warn(err)
+		return nil, err
+	}
+
+	postIDParse, err := helpers.ParseUUID(postID)
+	if err != nil {
+		logs.Error(err)
+		return nil, err
+	}
+
+	ctx := context.Background()
+	key := fmt.Sprintf("post:find:%v", *postIDParse)
+	value, err := helpers.RedisGet(s.redisClient, ctx, key)
+	if err != nil && err != redis.Nil {
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to get post from redis")
+	}
+
+	if err == nil {
+		post := &Post{}
+		err = json.Unmarshal([]byte(value), post)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to unmarshal json post")
+		}
+
+		return post, nil
+	}
+
+	post, err := s.postRepository.FindByIDPreloadRelations(s.db, *postIDParse)
+	if err != nil && !helpers.IsErrRecordNotFound(err) {
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post with relations")
+	}
+
+	if helpers.IsErrRecordNotFound(err) {
+		logs.Warn(err)
+		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", *postIDParse))
+	}
+
+	err = s.userService.GetPostUserImage(post)
+	if err != nil {
+		return nil, err
+	}
+
+	comments := []user.Comment{}
+	for _, comment := range post.Comments {
+		if comment.ParentID == nil {
+			comments = append(comments, comment)
+		}
+	}
+	commentsCount := len(comments)
+
+	filesURL, err := s.fileService.PresignGetFiles(post.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	updateLikes := []Like{}
+	for _, like := range post.Likes {
+		err = s.userService.GetPostLikeUserImage(&like)
+		if err != nil {
+			return nil, err
+		}
+
+		secureUser := &user.SecureUser{
+			ID:                   like.UserID,
+			Fullname:             like.User.Fullname,
+			Username:             like.User.Username,
+			Email:                like.User.Email,
+			DateOfBirth:          like.User.DateOfBirth,
+			ProfileUrl:           like.User.ProfileUrl,
+			ProfileBackgroundUrl: like.User.ProfileBackgroundUrl,
+			Info:                 like.User.Info,
+			Role:                 like.User.Role,
+			ProviderType:         like.User.ProviderType,
+			CreatedAt:            like.User.CreatedAt,
+			UpdatedAt:            like.User.UpdatedAt,
+		}
+		updateLikes = append(updateLikes, Like{
+			ID:        like.ID,
+			UserID:    like.UserID,
+			User:      secureUser,
+			PostID:    like.PostID,
+			CommentID: like.CommentID,
+			CreatedAt: like.CreatedAt,
+			UpdatedAt: like.UpdatedAt,
+		})
+	}
+
+	secureUser := &user.SecureUser{
+		ID:                   post.UserID,
+		Fullname:             post.User.Fullname,
+		Username:             post.User.Username,
+		Email:                post.User.Email,
+		DateOfBirth:          post.User.DateOfBirth,
+		ProfileUrl:           post.User.ProfileUrl,
+		ProfileBackgroundUrl: post.User.ProfileBackgroundUrl,
+		Info:                 post.User.Info,
+		Role:                 post.User.Role,
+		ProviderType:         post.User.ProviderType,
+		CreatedAt:            post.User.CreatedAt,
+		UpdatedAt:            post.User.UpdatedAt,
+	}
+	postResp := &Post{
+		ID:            post.ID,
+		Message:       post.Message,
+		UserID:        post.UserID,
+		User:          secureUser,
+		Likes:         updateLikes,
+		FilesURL:      filesURL,
+		CommentsCount: commentsCount,
+		CreatedAt:     post.CreatedAt,
+		UpdatedAt:     post.UpdatedAt,
+	}
+
+	if post.ParentID != nil {
+		err = s.userService.GetPostUserImage(post.Parent)
+		if err != nil {
+			return nil, err
+		}
+
+		filesURL, err = s.fileService.PresignGetFiles(*post.ParentID)
+		if err != nil {
+			return nil, err
+		}
+
+		postParentSecureUser := &user.SecureUser{
+			ID:                   post.Parent.UserID,
+			Fullname:             post.Parent.User.Fullname,
+			Username:             post.Parent.User.Username,
+			Email:                post.Parent.User.Email,
+			DateOfBirth:          post.Parent.User.DateOfBirth,
+			ProfileUrl:           post.Parent.User.ProfileUrl,
+			ProfileBackgroundUrl: post.Parent.User.ProfileBackgroundUrl,
+			Info:                 post.Parent.User.Info,
+			Role:                 post.Parent.User.Role,
+			ProviderType:         post.Parent.User.ProviderType,
+			CreatedAt:            post.Parent.User.CreatedAt,
+			UpdatedAt:            post.Parent.User.UpdatedAt,
+		}
+		postParent := &PostParent{
+			ID:        *post.ParentID,
+			Message:   post.Parent.Message,
+			UserID:    post.Parent.UserID,
+			User:      postParentSecureUser,
+			ParentID:  post.ParentID,
+			FilesURL:  filesURL,
+			CreatedAt: post.Parent.CreatedAt,
+			UpdatedAt: post.Parent.UpdatedAt,
+		}
+		postResp.ParentID = post.ParentID
+		postResp.Parent = postParent
+	}
+
+	data, err := json.Marshal(postResp)
+	if err != nil {
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to marshal json post")
+	}
+
+	err = helpers.RedisSet(s.redisClient, ctx, key, data, time.Minute*10)
+	if err != nil {
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to set post from redis")
+	}
+
+	return postResp, nil
 }

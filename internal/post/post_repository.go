@@ -18,6 +18,7 @@ type PostRepository interface {
 	Create(db *gorm.DB, post *user.Post) error
 	PreloadRelations(db *gorm.DB, postID uuid.UUID) (*user.Post, error)
 	FindByIDPreloadRelation(db *gorm.DB, postID uuid.UUID) (*user.Post, error)
+	FindByIDPreloadRelations(db *gorm.DB, postID uuid.UUID) (*user.Post, error)
 	FindByIDCursor(db *gorm.DB, postID uuid.UUID) (*Cursor, error)
 	FindsCursorPagination(db *gorm.DB, cursor *Cursor, limit int) ([]user.Post, error)
 }
@@ -50,6 +51,24 @@ func (r *postRepositoryDB) PreloadRelations(db *gorm.DB, postID uuid.UUID) (*use
 func (r *postRepositoryDB) FindByIDPreloadRelation(db *gorm.DB, postID uuid.UUID) (*user.Post, error) {
 	post := &user.Post{}
 	err := db.Where("id = ?", postID).Preload("User", helpers.OmitUserPasswordHash).Take(post).Error
+	if err != nil {
+		return nil, err
+	}
+	return post, nil
+}
+
+func (r *postRepositoryDB) FindByIDPreloadRelations(db *gorm.DB, postID uuid.UUID) (*user.Post, error) {
+	post := &user.Post{}
+	err := db.
+		Where("id = ?", postID).
+		Preload("User", helpers.OmitUserPasswordHash).
+		Preload("Parent.User", helpers.OmitUserPasswordHash).
+		Preload("Likes", func(db *gorm.DB) *gorm.DB {
+			return db.Order("likes.created_at DESC")
+		}).
+		Preload("Likes.User", helpers.OmitUserPasswordHash).
+		Preload("Comments").
+		Take(post).Error
 	if err != nil {
 		return nil, err
 	}
