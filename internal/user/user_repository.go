@@ -129,16 +129,15 @@ type User struct {
 }
 
 type UserRepository interface {
-	Create(user *User) error
-	FindByUsername(username string) (*User, error)
-	FindByEmail(email string) (*User, error)
-	FindByID(userID uuid.UUID) (*User, error)
-	FindsByIDExcept(userID uuid.UUID) ([]User, error)
-	UpdatePassword(email, passwordHash string) error
+	Create(db *gorm.DB, user *User) error
+	FindByUsername(db *gorm.DB, username string) (*User, error)
+	FindByEmail(db *gorm.DB, email string) (*User, error)
+	FindByID(db *gorm.DB, userID uuid.UUID) (*User, error)
+	FindsByIDExcept(db *gorm.DB, userID uuid.UUID) ([]User, error)
+	UpdatePassword(db *gorm.DB, email, passwordHash string) error
 }
 
 type userRepositoryDB struct {
-	db *gorm.DB
 }
 
 func NewUserRepositoryDB(db *gorm.DB) UserRepository {
@@ -150,43 +149,43 @@ func NewUserRepositoryDB(db *gorm.DB) UserRepository {
 		&Post{},
 		&Notification{},
 	)
-	return &userRepositoryDB{db: db}
+	return &userRepositoryDB{}
 }
 
-func (r *userRepositoryDB) Create(user *User) error {
-	return r.db.Create(user).Error
+func (r *userRepositoryDB) Create(db *gorm.DB, user *User) error {
+	return db.Create(user).Error
 }
 
-func (r *userRepositoryDB) FindByUsername(username string) (*User, error) {
+func (r *userRepositoryDB) FindByUsername(db *gorm.DB, username string) (*User, error) {
 	user := &User{}
-	err := r.db.Where("username = ?", username).Take(user).Error
+	err := db.Where("username = ?", username).Take(user).Error
 	if err != nil {
 		return nil, err
 	}
 	return user, nil
 }
 
-func (r *userRepositoryDB) FindByEmail(email string) (*User, error) {
+func (r *userRepositoryDB) FindByEmail(db *gorm.DB, email string) (*User, error) {
 	user := &User{}
-	err := r.db.Where("email = ?", email).Take(user).Error
+	err := db.Where("email = ?", email).Take(user).Error
 	if err != nil {
 		return nil, err
 	}
 	return user, nil
 }
 
-func (r *userRepositoryDB) FindByID(userID uuid.UUID) (*User, error) {
+func (r *userRepositoryDB) FindByID(db *gorm.DB, userID uuid.UUID) (*User, error) {
 	user := &User{}
-	err := r.db.Where("id = ?", userID).Take(user).Error
+	err := db.Where("id = ?", userID).Take(user).Error
 	if err != nil {
 		return nil, err
 	}
 	return user, nil
 }
 
-func (r *userRepositoryDB) FindsByIDExcept(userID uuid.UUID) ([]User, error) {
+func (r *userRepositoryDB) FindsByIDExcept(db *gorm.DB, userID uuid.UUID) ([]User, error) {
 	users := &[]User{}
-	err := r.db.Where("id <> ?", userID).Select(
+	err := db.Where("id <> ?", userID).Select(
 		"id",
 		"fullname",
 		"username",
@@ -206,7 +205,7 @@ func (r *userRepositoryDB) FindsByIDExcept(userID uuid.UUID) ([]User, error) {
 	return *users, nil
 }
 
-func (r *userRepositoryDB) UpdatePassword(email, passwordHash string) error {
+func (r *userRepositoryDB) UpdatePassword(db *gorm.DB, email, passwordHash string) error {
 	user := &User{}
-	return r.db.Model(user).Where("email = ?", email).Update("password_hash", passwordHash).Error
+	return db.Model(user).Where("email = ?", email).Update("password_hash", passwordHash).Error
 }

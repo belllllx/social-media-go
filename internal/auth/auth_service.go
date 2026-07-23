@@ -20,6 +20,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
 	"golang.org/x/oauth2"
+	"gorm.io/gorm"
 )
 
 type Tokens struct {
@@ -106,6 +107,7 @@ type RegisterPayload struct {
 type AuthService interface {
 	SendEmailRegister(sendEmailRegisterRequest *SendEmailRegisterRequest) (token string, err error)
 	SendEmailForgotPassword(sendEmailForgotPasswordRequest *SendEmailForgotPasswordRequest) (token string, err error)
+	ResendEmail(email, sendEmailType string) error
 	VerifyOTPRegister(email, otp string) error
 	VerifyOTPForgotPassword(email, otp string) (token string, err error)
 	ValidateUserLogin(loginRequest *LoginRequest) (userID *uuid.UUID, err error)
@@ -115,6 +117,7 @@ type AuthService interface {
 }
 
 type authService struct {
+	db             *gorm.DB
 	redisClient    *redis.Client
 	otpRepository  otp.OTPRepository
 	userRepository user.UserRepository
@@ -126,6 +129,7 @@ type authService struct {
 }
 
 func NewAuthService(
+	db *gorm.DB,
 	redisClient *redis.Client,
 	otpRepository otp.OTPRepository,
 	userRepository user.UserRepository,
@@ -137,6 +141,7 @@ func NewAuthService(
 	facebookConfig := configs.InitOAuth2FacebookConfig()
 
 	return &authService{
+		db:             db,
 		redisClient:    redisClient,
 		otpRepository:  otpRepository,
 		userRepository: userRepository,
@@ -149,7 +154,7 @@ func NewAuthService(
 }
 
 func (s *authService) SendEmailRegister(sendEmailRegisterRequest *SendEmailRegisterRequest) (string, error) {
-	userExist, err := s.userRepository.FindByUsername(sendEmailRegisterRequest.Username)
+	userExist, err := s.userRepository.FindByUsername(s.db, sendEmailRegisterRequest.Username)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return "", errs.NewInternalServerErrorWithMessage("Failed to find user")
@@ -159,7 +164,7 @@ func (s *authService) SendEmailRegister(sendEmailRegisterRequest *SendEmailRegis
 		return "", errs.NewBadRequestErrorWithMessage("Username is already exist")
 	}
 
-	userExist, err = s.userRepository.FindByEmail(sendEmailRegisterRequest.Email)
+	userExist, err = s.userRepository.FindByEmail(s.db, sendEmailRegisterRequest.Email)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return "", errs.NewInternalServerErrorWithMessage("Failed to find user")
@@ -169,7 +174,7 @@ func (s *authService) SendEmailRegister(sendEmailRegisterRequest *SendEmailRegis
 		return "", errs.NewBadRequestErrorWithMessage("Email is already exist")
 	}
 
-	err = s.emailService.SendEmail(sendEmailRegisterRequest.Email, "register")
+	err = s.emailService.SendEmail(s.db, sendEmailRegisterRequest.Email, "register")
 	if err != nil {
 		return "", err
 	}
@@ -218,7 +223,7 @@ func (s *authService) SendEmailRegister(sendEmailRegisterRequest *SendEmailRegis
 }
 
 func (s *authService) SendEmailForgotPassword(sendEmailForgotPasswordRequest *SendEmailForgotPasswordRequest) (string, error) {
-	userExist, err := s.userRepository.FindByEmail(sendEmailForgotPasswordRequest.Email)
+	userExist, err := s.userRepository.FindByEmail(s.db, sendEmailForgotPasswordRequest.Email)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return "", errs.NewInternalServerErrorWithMessage("Failed to find user by email")
@@ -236,7 +241,7 @@ func (s *authService) SendEmailForgotPassword(sendEmailForgotPasswordRequest *Se
 		return "", errs.NewBadRequestErrorWithMessage("Cannot reset password for social media account")
 	}
 
-	err = s.emailService.SendEmail(sendEmailForgotPasswordRequest.Email, "reset password")
+	err = s.emailService.SendEmail(s.db, sendEmailForgotPasswordRequest.Email, "reset password")
 	if err != nil {
 		return "", err
 	}
@@ -260,8 +265,12 @@ func (s *authService) SendEmailForgotPassword(sendEmailForgotPasswordRequest *Se
 	return token, nil
 }
 
+func (s *authService) ResendEmail(email, sendEmailType string) error {
+	return s.emailService.SendEmail(s.db, email, sendEmailType)
+}
+
 func (s *authService) VerifyOTPRegister(email, otp string) error {
-	err := s.otpService.Verify(email, otp)
+	err := s.otpService.Verify(s.db, email, otp)
 	if err != nil {
 		return err
 	}
@@ -289,16 +298,28 @@ func (s *authService) VerifyOTPRegister(email, otp string) error {
 		Email:        registerPayload.Email,
 		PasswordHash: &registerPayload.PasswordHash,
 	}
-	err = s.userRepository.Create(user)
-	if err != nil {
-		logs.Error(err)
-		return errs.NewInternalServerErrorWithMessage("Failed to create user")
-	}
 
-	err = s.otpRepository.Delete(email)
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		err = s.userRepository.Create(tx, user)
+		if err != nil {
+			logs.Error(err)
+			return errs.NewInternalServerErrorWithMessage("Failed to create user")
+		}
+
+		err = s.otpRepository.Delete(tx, email)
+		if err != nil {
+			logs.Error(err)
+			return errs.NewInternalServerErrorWithMessage("Failed to delete otp")
+		}
+
+		return nil
+	})
 	if err != nil {
-		logs.Error(err)
-		return errs.NewInternalServerErrorWithMessage("Failed to delete otp")
+		_, ok := err.(*errs.AppError)
+		if !ok {
+			logs.Error(err)
+		}
+		return err
 	}
 
 	err = helpers.RedisDelete(s.redisClient, ctx, key)
@@ -311,7 +332,7 @@ func (s *authService) VerifyOTPRegister(email, otp string) error {
 }
 
 func (s *authService) VerifyOTPForgotPassword(email, otp string) (string, error) {
-	err := s.otpService.Verify(email, otp)
+	err := s.otpService.Verify(s.db, email, otp)
 	if err != nil {
 		return "", err
 	}
@@ -332,7 +353,7 @@ func (s *authService) VerifyOTPForgotPassword(email, otp string) (string, error)
 		return "", errs.NewUnexpectedErrorWithMessage("Failed to sign reset password token")
 	}
 
-	err = s.otpRepository.Delete(email)
+	err = s.otpRepository.Delete(s.db, email)
 	if err != nil {
 		logs.Error(err)
 		return "", errs.NewInternalServerErrorWithMessage("Failed to delete otp")
@@ -342,7 +363,7 @@ func (s *authService) VerifyOTPForgotPassword(email, otp string) (string, error)
 }
 
 func (s *authService) ValidateUserLogin(loginRequest *LoginRequest) (*uuid.UUID, error) {
-	userExist, err := s.userRepository.FindByUsername(loginRequest.Username)
+	userExist, err := s.userRepository.FindByUsername(s.db, loginRequest.Username)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return nil, errs.NewInternalServerError()
@@ -426,7 +447,7 @@ func (s *authService) SocialLogin(providerType user.ProviderType) (string, error
 }
 
 func (s *authService) SocialLoginCallback(socialUser *SocialUser) (*Tokens, string, error) {
-	userExist, err := s.userRepository.FindByEmail(socialUser.Email)
+	userExist, err := s.userRepository.FindByEmail(s.db, socialUser.Email)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return nil, "", errs.NewInternalServerErrorWithMessage("Failed to find user")
@@ -443,7 +464,7 @@ func (s *authService) SocialLoginCallback(socialUser *SocialUser) (*Tokens, stri
 			ProviderType: socialUser.ProviderType,
 			ProfileUrl:   &socialUser.AvatarURL,
 		}
-		err = s.userRepository.Create(createUser)
+		err = s.userRepository.Create(s.db, createUser)
 		if err != nil {
 			logs.Error(err)
 			return nil, "", errs.NewInternalServerErrorWithMessage("Failed to create social account")

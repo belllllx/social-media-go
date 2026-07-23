@@ -10,6 +10,7 @@ import (
 	"github.com/belllllx/social-media-go/pkg/errs"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type SecureUser struct {
@@ -36,19 +37,25 @@ type UserService interface {
 }
 
 type userService struct {
+	db             *gorm.DB
 	presignClient  *s3.PresignClient
 	userRepository UserRepository
 }
 
-func NewUserService(presignClient *s3.PresignClient, userRepository UserRepository) UserService {
+func NewUserService(
+	db *gorm.DB,
+	presignClient *s3.PresignClient,
+	userRepository UserRepository,
+) UserService {
 	return &userService{
+		db:             db,
 		presignClient:  presignClient,
 		userRepository: userRepository,
 	}
 }
 
 func (s *userService) SecureFindWithID(ID uuid.UUID) (*SecureUser, error) {
-	user, err := s.userRepository.FindByID(ID)
+	user, err := s.userRepository.FindByID(s.db, ID)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return nil, errs.NewInternalServerError()
@@ -83,7 +90,7 @@ func (s *userService) ResetPassword(email, password string) error {
 		return errs.NewUnexpectedErrorWithMessage("Failed to hash password")
 	}
 
-	err = s.userRepository.UpdatePassword(email, passwordHash)
+	err = s.userRepository.UpdatePassword(s.db, email, passwordHash)
 	if err != nil {
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to update user password")

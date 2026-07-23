@@ -7,7 +7,6 @@ import (
 
 func NewSocketServer() *server.Server {
 	io := server.NewServer(nil, nil)
-
 	io.Use(middlewares.SocketRequireAuth)
 
 	// io.On("connection", func(args ...any) {

@@ -10,6 +10,8 @@ import (
 	"github.com/belllllx/social-media-go/internal/logs"
 	"github.com/belllllx/social-media-go/pkg/errs"
 	"github.com/belllllx/social-media-go/pkg/helpers"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type DeleteFileRequest struct {
@@ -55,21 +57,25 @@ type FileService interface {
 	UploadFile(fileData FileData, fileType FileType) (*FileURL, error)
 	UploadFiles(filesData []FileData, fileType FileType) (*FilesURL, error)
 	DeleteFile(deleteFileDTO *DeleteFileDTO) error
-	PresignGetFile(filename string) (string, error)
+	PresignGetFile(contentID uuid.UUID) (string, error)
+	PresignGetFiles(contentID uuid.UUID) ([]string, error)
 }
 
 type fileService struct {
+	db             *gorm.DB
 	fileRepository FileRepository
 	s3Client       *s3.Client
 	presignClient  *s3.PresignClient
 }
 
 func NewFileService(
+	db *gorm.DB,
 	fileRepository FileRepository,
 	s3Client *s3.Client,
 	presignClient *s3.PresignClient,
 ) FileService {
 	return &fileService{
+		db:             db,
 		fileRepository: fileRepository,
 		s3Client:       s3Client,
 		presignClient:  presignClient,
@@ -122,7 +128,7 @@ func (s *fileService) UploadFile(fileData FileData, fileType FileType) (*FileURL
 		Filename: key,
 		FileType: fileType,
 	}
-	err = s.fileRepository.Create(createFile)
+	err = s.fileRepository.Create(s.db, createFile)
 	if err != nil {
 		logs.Error(err)
 
@@ -195,7 +201,7 @@ func (s *fileService) UploadFiles(filesData []FileData, fileType FileType) (*Fil
 		})
 	}
 
-	err := s.fileRepository.CreateMany(createFiles)
+	err := s.fileRepository.CreateMany(s.db, createFiles)
 	if err != nil {
 		logs.Error(err)
 
@@ -222,7 +228,7 @@ func (s *fileService) DeleteFile(deleteFileDTO *DeleteFileDTO) error {
 		return errs.NewUnexpectedErrorWithMessage("Failed to split presigned url")
 	}
 	filePath := fmt.Sprintf("%s/%s", fileDIR, filename)
-	file, err := s.fileRepository.FindByFilenameType(filePath, deleteFileDTO.FileType)
+	file, err := s.fileRepository.FindByFilenameType(s.db, filePath, deleteFileDTO.FileType)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to find file")
@@ -239,7 +245,12 @@ func (s *fileService) DeleteFile(deleteFileDTO *DeleteFileDTO) error {
 		return errs.NewInternalServerErrorWithMessage("Failed to delete file object")
 	}
 
-	err = s.fileRepository.Delete(file.ID, file.Filename, file.FileType)
+	err = s.fileRepository.Delete(
+		s.db,
+		file.ID,
+		file.Filename,
+		file.FileType,
+	)
 	if err != nil {
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to delete file")
@@ -248,13 +259,47 @@ func (s *fileService) DeleteFile(deleteFileDTO *DeleteFileDTO) error {
 	return nil
 }
 
-func (s *fileService) PresignGetFile(filename string) (string, error) {
+func (s *fileService) PresignGetFile(contentID uuid.UUID) (string, error) {
+	file, err := s.fileRepository.FindByContentID(s.db, contentID)
+	if err != nil && !helpers.IsErrRecordNotFound(err) {
+		logs.Error(err)
+		return "", errs.NewInternalServerErrorWithMessage("Failed to find file")
+	}
+
+	if helpers.IsErrRecordNotFound(err) {
+		logs.Warn(err)
+		return "", errs.NewNotFoundErrorWithMessage(fmt.Sprintf("File by content id %v not found", contentID))
+	}
+
 	ctx := context.Background()
-	req, err := helpers.PresignGetObject(s.presignClient, ctx, filename)
+	req, err := helpers.PresignGetObject(s.presignClient, ctx, file.Filename)
 	if err != nil {
 		logs.Error(err)
 		return "", errs.NewInternalServerErrorWithMessage("Failed to presign get file object")
 	}
 
 	return req.URL, nil
+}
+
+func (s *fileService) PresignGetFiles(contentID uuid.UUID) ([]string, error) {
+	files, err := s.fileRepository.FindsByContentID(s.db, contentID)
+	if err != nil {
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find files")
+	}
+
+	filesURL := []string{}
+	ctx := context.Background()
+	if len(files) > 0 {
+		for _, file := range files {
+			req, err := helpers.PresignGetObject(s.presignClient, ctx, file.Filename)
+			if err != nil {
+				logs.Error(err)
+				return nil, errs.NewInternalServerErrorWithMessage("Failed to presign get file object")
+			}
+			filesURL = append(filesURL, req.URL)
+		}
+	}
+
+	return filesURL, nil
 }

@@ -49,8 +49,8 @@ func main() {
 	emailRepositoryImpl := email.NewEmailRepositoryImpl()
 	otpRepositoryDB := otp.NewOTPRepositoryDB(app.DB)
 	fileRepositoryDB := file.NewFileRepositoryDB(app.DB)
-	postRepositoryDB := post.NewPostRepositoryDB(app.DB)
-	notificationRepositoryDB := notification.NewNotificationRepositoryDB(app.DB)
+	postRepositoryDB := post.NewPostRepositoryDB()
+	notificationRepositoryDB := notification.NewNotificationRepositoryDB()
 
 	notificationSocket := socket.NewNotificationSocket(app.Socket)
 	postSocket := socket.NewPostSocket(app.Socket)
@@ -58,20 +58,28 @@ func main() {
 	emailService := email.NewEmailService(emailRepositoryImpl, otpRepositoryDB)
 	otpService := otp.NewOTPService(otpRepositoryDB)
 	authService := auth.NewAuthService(
+		app.DB,
 		app.RedisClient,
 		otpRepositoryDB,
 		userRepositoryDB,
 		emailService,
 		otpService,
 	)
-	userService := user.NewUserService(app.PresignClient, userRepositoryDB)
-	fileService := file.NewFileService(fileRepositoryDB, app.S3Client, app.PresignClient)
+	userService := user.NewUserService(app.DB, app.PresignClient, userRepositoryDB)
+	fileService := file.NewFileService(
+		app.DB,
+		fileRepositoryDB,
+		app.S3Client,
+		app.PresignClient,
+	)
 	notificationService := notification.NewNotificationService(notificationRepositoryDB, userService)
 	postService := post.NewPostService(
+		app.DB,
 		app.RedisClient,
 		postRepositoryDB,
 		userRepositoryDB,
 		fileRepositoryDB,
+		notificationRepositoryDB,
 		userService,
 		notificationService,
 		fileService,
@@ -87,7 +95,7 @@ func main() {
 	postHandler := post.NewPostHandler(fileService, postService)
 
 	app.Cron.AddFunc("*/30 * * * *", func() {
-		err := otpService.DeleteWithExpired()
+		err := otpService.DeleteWithExpired(app.DB)
 		if err == nil {
 			logs.Info("Delete otp expired by cron successfully")
 		}

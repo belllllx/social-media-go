@@ -62,5 +62,5 @@ func (a *App) Run() {
 func (a *App) Close() {
 	a.RedisClient.Close()
 	logs.Sync()
-	a.Socket.Close(func(err error) {})
+	a.Socket.Close(func(error) {})
 }

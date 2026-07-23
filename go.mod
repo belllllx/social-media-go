@@ -13,13 +13,13 @@ require (
 	github.com/go-playground/validator/v10 v10.30.3
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
-	github.com/googollee/go-socket.io v1.7.0
 	github.com/redis/go-redis/v9 v9.20.1
 	github.com/robfig/cron/v3 v3.0.0
 	github.com/spf13/viper v1.21.0
 	github.com/swaggo/files v1.0.1
 	github.com/swaggo/gin-swagger v1.6.1
 	github.com/swaggo/swag v1.16.4
+	github.com/zishang520/socket.io/servers/socket/v3 v3.0.4
 	go.uber.org/zap v1.28.0
 	golang.org/x/crypto v0.53.0
 	golang.org/x/oauth2 v0.36.0
@@ -67,8 +67,6 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
-	github.com/gofrs/uuid v4.0.0+incompatible // indirect
-	github.com/gomodule/redigo v1.8.4 // indirect
 	github.com/gookit/color v1.6.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
@@ -104,7 +102,6 @@ require (
 	github.com/zishang520/socket.io/parsers/engine/v3 v3.0.4 // indirect
 	github.com/zishang520/socket.io/parsers/socket/v3 v3.0.4 // indirect
 	github.com/zishang520/socket.io/servers/engine/v3 v3.0.4 // indirect
-	github.com/zishang520/socket.io/servers/socket/v3 v3.0.4 // indirect
 	github.com/zishang520/socket.io/v3 v3.0.4 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect

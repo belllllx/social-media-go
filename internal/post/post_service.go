@@ -14,6 +14,7 @@ import (
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	"gorm.io/gorm"
 )
 
 type CreateSharePostDTO struct {
@@ -115,22 +116,26 @@ type PostService interface {
 }
 
 type postService struct {
-	redisClient         *redis.Client
-	postRepository      PostRepository
-	userRepository      user.UserRepository
-	fileRepository      file.FileRepository
-	userService         user.UserService
-	notificationService notification.NotificationService
-	fileService         file.FileService
-	notificationSocket  socket.NotificationSocket
-	postSocket          socket.PostSocket
+	db                     *gorm.DB
+	redisClient            *redis.Client
+	postRepository         PostRepository
+	userRepository         user.UserRepository
+	fileRepository         file.FileRepository
+	notificationRepository notification.NotificationRepository
+	userService            user.UserService
+	notificationService    notification.NotificationService
+	fileService            file.FileService
+	notificationSocket     socket.NotificationSocket
+	postSocket             socket.PostSocket
 }
 
 func NewPostService(
+	db *gorm.DB,
 	redisClient *redis.Client,
 	postRepository PostRepository,
 	userRepository user.UserRepository,
 	fileRepository file.FileRepository,
+	notificationRepository notification.NotificationRepository,
 	userService user.UserService,
 	notificationService notification.NotificationService,
 	fileService file.FileService,
@@ -138,15 +143,17 @@ func NewPostService(
 	postSocket socket.PostSocket,
 ) PostService {
 	return &postService{
-		redisClient:         redisClient,
-		postRepository:      postRepository,
-		userRepository:      userRepository,
-		fileRepository:      fileRepository,
-		userService:         userService,
-		notificationService: notificationService,
-		fileService:         fileService,
-		notificationSocket:  notificationSocket,
-		postSocket:          postSocket,
+		db:                     db,
+		redisClient:            redisClient,
+		postRepository:         postRepository,
+		userRepository:         userRepository,
+		fileRepository:         fileRepository,
+		notificationRepository: notificationRepository,
+		userService:            userService,
+		notificationService:    notificationService,
+		fileService:            fileService,
+		notificationSocket:     notificationSocket,
+		postSocket:             postSocket,
 	}
 }
 
@@ -155,22 +162,72 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		return nil, errs.NewBadRequestErrorWithMessage("Create post must contains with message or files")
 	}
 
-	userByID, err := s.userService.SecureFindWithID(createPostDTO.UserID)
+	createPost := &user.Post{
+		Message: &createPostDTO.Message,
+		UserID:  createPostDTO.UserID,
+	}
+
+	usersExcept, err := s.userRepository.FindsByIDExcept(s.db, createPostDTO.UserID)
 	if err != nil {
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find users by id except")
+	}
+
+	createNotificationsDTO := []user.Notification{}
+
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		err := s.postRepository.Create(tx, createPost)
+		if err != nil {
+			logs.Error(err)
+			return errs.NewInternalServerErrorWithMessage("Failed to create post")
+		}
+
+		// กรณีมี files ผูกเข้ากับโพสต์
+		if len(createPostDTO.FilesURL) > 0 {
+			for _, fileURL := range createPostDTO.FilesURL {
+				fileDIR, filename, err := helpers.SplitPresignedURL(fileURL)
+				if err != nil {
+					logs.Error(err)
+					return errs.NewUnexpectedErrorWithMessage("Failed to split presigned url")
+				}
+				filePath := fmt.Sprintf("%s/%s", fileDIR, filename)
+				err = s.fileRepository.UpdateContentID(tx, createPost.ID, filePath, file.FileTypePost)
+				if err != nil {
+					logs.Error(err)
+					return errs.NewInternalServerErrorWithMessage("Failed to update file of post")
+				}
+			}
+		}
+
+		// มี users ถึงสร้าง notifications
+		if len(usersExcept) > 0 {
+			for _, userExcept := range usersExcept {
+				createNotificationsDTO = append(createNotificationsDTO, user.Notification{
+					Type:       user.NotificationTypePost,
+					Message:    "Create a new post",
+					SenderID:   createPostDTO.UserID,
+					ReceiverID: userExcept.ID,
+					PostID:     &createPost.ID,
+				})
+			}
+
+			err = s.notificationService.CreateNotifications(tx, createNotificationsDTO)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		_, ok := err.(*errs.AppError)
+		if !ok {
+			logs.Error(err)
+		}
 		return nil, err
 	}
 
-	createPost := &user.Post{
-		Message: &createPostDTO.Message,
-		UserID:  userByID.ID,
-	}
-	err = s.postRepository.Create(createPost)
-	if err != nil {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to create post")
-	}
-
-	post, err := s.postRepository.PreloadRelations(createPost.ID)
+	post, err := s.postRepository.PreloadRelations(s.db, createPost.ID)
 	if err != nil {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post with relations")
@@ -181,43 +238,13 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		return nil, err
 	}
 
-	usersExcept, err := s.userRepository.FindsByIDExcept(userByID.ID)
-	if err != nil {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find users by id except")
-	}
-
 	filesURL := []string{}
 
 	// กรณีมี files
 	if len(createPostDTO.FilesURL) > 0 {
-		for _, fileURL := range createPostDTO.FilesURL {
-			fileDIR, filename, err := helpers.SplitPresignedURL(fileURL)
-			if err != nil {
-				logs.Error(err)
-				return nil, errs.NewUnexpectedErrorWithMessage("Failed to split presigned url")
-			}
-			filePath := fmt.Sprintf("%s/%s", fileDIR, filename)
-			err = s.fileRepository.UpdateContentID(createPost.ID, filePath, file.FileTypePost)
-			if err != nil {
-				logs.Error(err)
-				return nil, errs.NewInternalServerErrorWithMessage("Failed to update file of post")
-			}
-		}
-
-		files, err := s.fileRepository.FindsByContentID(createPost.ID)
+		filesURL, err = s.fileService.PresignGetFiles(createPost.ID)
 		if err != nil {
-			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find files of post")
-		}
-
-		for _, file := range files {
-			fileURL, err := s.fileService.PresignGetFile(file.Filename)
-			if err != nil {
-				return nil, err
-			}
-
-			filesURL = append(filesURL, fileURL)
+			return nil, err
 		}
 	}
 
@@ -236,22 +263,23 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		UpdatedAt:            post.User.UpdatedAt,
 	}
 
-	// มี user ถึงสร้างและ ส่ง notification กับ post
+	// มี user ถึง broadcast notifications กับ post
 	if len(usersExcept) > 0 {
-		createNotificationsDTO := []user.Notification{}
-		for _, userExcept := range usersExcept {
-			createNotificationsDTO = append(createNotificationsDTO, user.Notification{
-				Type:       user.NotificationTypePost,
-				Message:    "Create a new post",
-				SenderID:   userByID.ID,
-				ReceiverID: userExcept.ID,
-				PostID:     &createPost.ID,
-			})
+		notificationsID := []uuid.UUID{}
+		for _, createNotificationDTO := range createNotificationsDTO {
+			notificationsID = append(notificationsID, createNotificationDTO.ID)
+		}
+		notifications, err := s.notificationRepository.PreloadsRelation(s.db, notificationsID)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notifications with relation")
 		}
 
-		notifications, err := s.notificationService.CreateNotifications(createNotificationsDTO)
-		if err != nil {
-			return nil, err
+		for i := range notifications {
+			err = s.userService.GetNotificationUserImage(&notifications[i])
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		broadcastNotificationsDTO := []socket.BroadcastNotificationDTO{}
@@ -406,12 +434,7 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 }
 
 func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*CreatedSharePost, error) {
-	userByID, err := s.userService.SecureFindWithID(createSharePostDTO.UserID)
-	if err != nil {
-		return nil, err
-	}
-
-	err = helpers.ValidateUUID(createSharePostDTO.ParentID)
+	err := helpers.ValidateUUID(createSharePostDTO.ParentID)
 	if err != nil {
 		logs.Warn(err)
 		return nil, err
@@ -423,7 +446,7 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 		return nil, err
 	}
 
-	post, err := s.postRepository.FindByIDPreloadRelation(*parentID)
+	post, err := s.postRepository.FindByIDPreloadRelation(s.db, *parentID)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id")
@@ -436,16 +459,47 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 
 	createSharePost := &user.Post{
 		Message:  &createSharePostDTO.Message,
-		UserID:   userByID.ID,
+		UserID:   createSharePostDTO.UserID,
 		ParentID: &post.ID,
 	}
-	err = s.postRepository.Create(createSharePost)
+
+	var notificationID uuid.UUID
+
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		err = s.postRepository.Create(tx, createSharePost)
+		if err != nil {
+			logs.Error(err)
+			return errs.NewInternalServerErrorWithMessage("Failed to create share post")
+		}
+
+		// ต้องไม่แชร์โพสต์ตัวเองถึงสร้าง notification
+		if createSharePostDTO.UserID != post.UserID {
+			createNotificationDTO := &user.Notification{
+				Type:       user.NotificationTypeShare,
+				Message:    "Share your post",
+				SenderID:   createSharePostDTO.UserID,
+				ReceiverID: post.UserID,
+				PostID:     &createSharePost.ID,
+			}
+			err = s.notificationService.CreateNotification(tx, createNotificationDTO)
+			if err != nil {
+				return err
+			}
+
+			notificationID = createNotificationDTO.ID
+		}
+
+		return nil
+	})
 	if err != nil {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to create share post")
+		_, ok := err.(*errs.AppError)
+		if !ok {
+			logs.Error(err)
+			return nil, err
+		}
 	}
 
-	sharePost, err := s.postRepository.PreloadRelations(createSharePost.ID)
+	sharePost, err := s.postRepository.PreloadRelations(s.db, createSharePost.ID)
 	if err != nil {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post with relations")
@@ -461,16 +515,15 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 		return nil, err
 	}
 
-	// ต้องไม่แชร์โพสต์ตัวเองถึงสร้าง notification
-	if userByID.ID != post.UserID {
-		createNotificationDTO := &user.Notification{
-			Type:       user.NotificationTypePost,
-			Message:    "Share your post",
-			SenderID:   userByID.ID,
-			ReceiverID: post.UserID,
-			PostID:     &createSharePost.ID,
+	// ต้องไม่แชร์โพสต์ตัวเองถึง broadcast notification
+	if createSharePostDTO.UserID != post.UserID {
+		notification, err := s.notificationRepository.PreloadRelation(s.db, notificationID)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification with relation")
 		}
-		notification, err := s.notificationService.CreateNotification(createNotificationDTO)
+
+		err = s.userService.GetNotificationUserImage(notification)
 		if err != nil {
 			return nil, err
 		}
@@ -505,22 +558,9 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 		go s.notificationSocket.BroadcastNotification(broadcastNotificationsDTO)
 	}
 
-	files, err := s.fileRepository.FindsByContentID(post.ID)
+	filesURL, err := s.fileService.PresignGetFiles(post.ID)
 	if err != nil {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find files of post")
-	}
-
-	filesURL := []string{}
-	if len(files) > 0 {
-		for _, file := range files {
-			fileURL, err := s.fileService.PresignGetFile(file.Filename)
-			if err != nil {
-				return nil, err
-			}
-
-			filesURL = append(filesURL, fileURL)
-		}
+		return nil, err
 	}
 
 	postParentSecureUser := &user.SecureUser{
@@ -683,13 +723,13 @@ func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPa
 	posts := []user.Post{}
 	postsCursorPagination := []Post{}
 	if cursor == "" {
-		posts, err = s.postRepository.FindsCursorPagination(nil, limitInt)
+		posts, err = s.postRepository.FindsCursorPagination(s.db, nil, limitInt)
 		if err != nil {
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts cursor pagination")
 		}
 	} else {
-		postCursor, err := s.postRepository.FindByIDCursor(*cursorID)
+		postCursor, err := s.postRepository.FindByIDCursor(s.db, *cursorID)
 		if err != nil && !helpers.IsErrRecordNotFound(err) {
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find post cursor by post id")
@@ -700,7 +740,7 @@ func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPa
 			return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Cursor by post id %v is not found", *cursorID))
 		}
 
-		posts, err = s.postRepository.FindsCursorPagination(postCursor, limitInt)
+		posts, err = s.postRepository.FindsCursorPagination(s.db, postCursor, limitInt)
 		if err != nil {
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts cursor pagination")
@@ -722,22 +762,9 @@ func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPa
 			}
 			commentsCount := len(comments)
 
-			files, err := s.fileRepository.FindsByContentID(post.ID)
+			filesURL, err := s.fileService.PresignGetFiles(post.ID)
 			if err != nil {
-				logs.Error(err)
-				return nil, errs.NewInternalServerErrorWithMessage("Failed to find files of post")
-			}
-
-			filesURL := []string{}
-			if len(files) > 0 {
-				for _, file := range files {
-					fileURL, err := s.fileService.PresignGetFile(file.Filename)
-					if err != nil {
-						return nil, err
-					}
-
-					filesURL = append(filesURL, fileURL)
-				}
+				return nil, err
 			}
 
 			updateLikes := []Like{}
@@ -806,21 +833,9 @@ func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPa
 					return nil, err
 				}
 
-				files, err = s.fileRepository.FindsByContentID(*post.ParentID)
+				filesURL, err = s.fileService.PresignGetFiles(*post.ParentID)
 				if err != nil {
-					logs.Error(err)
-					return nil, errs.NewInternalServerErrorWithMessage("Failed to find files of post parent")
-				}
-
-				if len(files) > 0 {
-					for _, file := range files {
-						fileURL, err := s.fileService.PresignGetFile(file.Filename)
-						if err != nil {
-							return nil, err
-						}
-
-						filesURL = append(filesURL, fileURL)
-					}
+					return nil, err
 				}
 
 				postParentSecureUser := &user.SecureUser{

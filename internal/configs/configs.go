@@ -55,7 +55,8 @@ func InitDB() *gorm.DB {
 		viper.GetInt("db.port"),
 	)
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
+		SkipDefaultTransaction: true,
+		Logger:                 logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
 		panic(err)

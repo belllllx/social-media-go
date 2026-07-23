@@ -160,7 +160,7 @@ func (h *authHandler) ResendEmailRegister(c *gin.Context) {
 		return
 	}
 
-	err := h.emailService.SendEmail(email, "register")
+	err := h.authService.ResendEmail(email, "register")
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -185,7 +185,7 @@ func (h *authHandler) ResendEmailForgotPassword(c *gin.Context) {
 		return
 	}
 
-	err := h.emailService.SendEmail(email, "reset password")
+	err := h.authService.ResendEmail(email, "reset password")
 	if err != nil {
 		helpers.HandleError(c, err)
 		return

@@ -16,50 +16,49 @@ type OTP struct {
 }
 
 type OTPRepository interface {
-	Create(otp *OTP) error
-	FindByEmail(email string) (*OTP, error)
-	FindNotExpired(email string) (*OTP, error)
-	Delete(email string) error
-	DeleteByExpired() error
+	Create(db *gorm.DB, otp *OTP) error
+	FindByEmail(db *gorm.DB, email string) (*OTP, error)
+	FindNotExpired(db *gorm.DB, email string) (*OTP, error)
+	Delete(db *gorm.DB, email string) error
+	DeleteByExpired(db *gorm.DB) error
 }
 
 type otpRepositoryDB struct {
-	db *gorm.DB
 }
 
 func NewOTPRepositoryDB(db *gorm.DB) OTPRepository {
 	db.AutoMigrate(&OTP{})
-	return &otpRepositoryDB{db: db}
+	return &otpRepositoryDB{}
 }
 
-func (r *otpRepositoryDB) Create(otp *OTP) error {
-	return r.db.Create(otp).Error
+func (r *otpRepositoryDB) Create(db *gorm.DB, otp *OTP) error {
+	return db.Create(otp).Error
 }
 
-func (r *otpRepositoryDB) FindByEmail(email string) (*OTP, error) {
+func (r *otpRepositoryDB) FindByEmail(db *gorm.DB, email string) (*OTP, error) {
 	otp := &OTP{}
-	err := r.db.Where("email = ?", email).Take(otp).Error
+	err := db.Where("email = ?", email).Take(otp).Error
 	if err != nil {
 		return nil, err
 	}
 	return otp, nil
 }
 
-func (r *otpRepositoryDB) FindNotExpired(email string) (*OTP, error) {
+func (r *otpRepositoryDB) FindNotExpired(db *gorm.DB, email string) (*OTP, error) {
 	otp := &OTP{}
-	err := r.db.Where("email = ? AND expired_at > ?", email, time.Now()).Take(otp).Error
+	err := db.Where("email = ? AND expired_at > ?", email, time.Now()).Take(otp).Error
 	if err != nil {
 		return nil, err
 	}
 	return otp, nil
 }
 
-func (r *otpRepositoryDB) Delete(email string) error {
+func (r *otpRepositoryDB) Delete(db *gorm.DB, email string) error {
 	otp := &OTP{}
-	return r.db.Where("email = ?", email).Delete(otp).Error
+	return db.Where("email = ?", email).Delete(otp).Error
 }
 
-func (r *otpRepositoryDB) DeleteByExpired() error {
+func (r *otpRepositoryDB) DeleteByExpired(db *gorm.DB) error {
 	otp := &OTP{}
-	return r.db.Where("expired_at < ?", time.Now()).Delete(otp).Error
+	return db.Where("expired_at < ?", time.Now()).Delete(otp).Error
 }
