@@ -46,7 +46,7 @@ type FilesURL struct {
 	FilesURL []string `json:"filesUrl"`
 }
 
-type FileData struct {
+type FileDataDTO struct {
 	Filename    string
 	ContentType string
 	Body        io.Reader
@@ -54,8 +54,8 @@ type FileData struct {
 }
 
 type FileService interface {
-	UploadFile(fileData FileData, fileType FileType) (*FileURL, error)
-	UploadFiles(filesData []FileData, fileType FileType) (*FilesURL, error)
+	UploadFile(fileDataDTO *FileDataDTO, fileType FileType) (*FileURL, error)
+	UploadFiles(filesDataDTO []FileDataDTO, fileType FileType) (*FilesURL, error)
 	DeleteFile(deleteFileDTO *DeleteFileDTO) error
 	PresignGetFile(contentID uuid.UUID) (string, error)
 	PresignGetFiles(contentID uuid.UUID) ([]string, error)
@@ -82,21 +82,21 @@ func NewFileService(
 	}
 }
 
-func (s *fileService) UploadFile(fileData FileData, fileType FileType) (*FileURL, error) {
+func (s *fileService) UploadFile(fileDataDTO *FileDataDTO, fileType FileType) (*FileURL, error) {
 	if fileType != FileTypeComment && fileType != FileTypeReply {
 		logs.Warn("Failed to upload file invalid file type")
 		return nil, errs.NewUnexpectedErrorWithMessage("Failed to upload file invalid file type")
 	}
 
-	if !allowedContentTypesCreateFile[fileData.ContentType] {
+	if !allowedContentTypesCreateFile[fileDataDTO.ContentType] {
 		return nil, errs.NewBadRequestErrorWithMessage("Invalid file type")
 	}
 
-	if fileData.Size > maxFileSize {
+	if fileDataDTO.Size > maxFileSize {
 		return nil, errs.NewBadRequestErrorWithMessage("File size exceeds 30 mb")
 	}
 
-	newFileName := helpers.GenerateFilename(fileData.Filename)
+	newFileName := helpers.GenerateFilename(fileDataDTO.Filename)
 	key := ""
 	switch fileType {
 	case FileTypeComment:
@@ -110,8 +110,8 @@ func (s *fileService) UploadFile(fileData FileData, fileType FileType) (*FileURL
 		s.s3Client,
 		ctx,
 		key,
-		fileData.Body,
-		fileData.ContentType,
+		fileDataDTO.Body,
+		fileDataDTO.ContentType,
 	)
 	if err != nil {
 		logs.Error(err)
@@ -145,18 +145,18 @@ func (s *fileService) UploadFile(fileData FileData, fileType FileType) (*FileURL
 	return fileURL, nil
 }
 
-func (s *fileService) UploadFiles(filesData []FileData, fileType FileType) (*FilesURL, error) {
+func (s *fileService) UploadFiles(filesDataDTO []FileDataDTO, fileType FileType) (*FilesURL, error) {
 	if fileType != FileTypePost {
 		logs.Warn("Failed to upload files invalid file type")
 		return nil, errs.NewUnexpectedErrorWithMessage("Failed to upload files invalid file type")
 	}
 
-	for _, fileData := range filesData {
-		if !allowedContentTypesCreateFiles[fileData.ContentType] {
+	for _, fileDataDTO := range filesDataDTO {
+		if !allowedContentTypesCreateFiles[fileDataDTO.ContentType] {
 			return nil, errs.NewBadRequestErrorWithMessage("Invalid file type")
 		}
 
-		if fileData.Size > maxFileSize {
+		if fileDataDTO.Size > maxFileSize {
 			return nil, errs.NewBadRequestErrorWithMessage("File size exceeds 30 mb")
 		}
 	}
@@ -166,10 +166,10 @@ func (s *fileService) UploadFiles(filesData []FileData, fileType FileType) (*Fil
 	createFiles := []File{}
 	ctx := context.Background()
 
-	for _, fileData := range filesData {
-		newFileName := helpers.GenerateFilename(fileData.Filename)
+	for _, fileDataDTO := range filesDataDTO {
+		newFileName := helpers.GenerateFilename(fileDataDTO.Filename)
 		key := ""
-		if strings.Contains(fileData.ContentType, "image") {
+		if strings.Contains(fileDataDTO.ContentType, "image") {
 			key = fmt.Sprintf("%s/%s", "post-image", newFileName)
 		} else {
 			key = fmt.Sprintf("%s/%s", "post-video", newFileName)
@@ -179,8 +179,8 @@ func (s *fileService) UploadFiles(filesData []FileData, fileType FileType) (*Fil
 			s.s3Client,
 			ctx,
 			key,
-			fileData.Body,
-			fileData.ContentType,
+			fileDataDTO.Body,
+			fileDataDTO.ContentType,
 		)
 		if err != nil {
 			logs.Error(err)

@@ -102,7 +102,11 @@ func AuthLogin(authService auth.AuthService) gin.HandlerFunc {
 			return
 		}
 
-		userID, err := authService.ValidateUserLogin(loginRequest)
+		loginDTO := &auth.LoginDTO{
+			Username: loginRequest.Username,
+			Password: loginRequest.Password,
+		}
+		userID, err := authService.ValidateUserLogin(loginDTO)
 		if err != nil {
 			helpers.HandleError(c, err)
 			return
@@ -289,14 +293,14 @@ func AuthGoogleCallback(redisClient *redis.Client, verifier *oidc.IDTokenVerifie
 			return
 		}
 
-		socialUser := &auth.SocialUser{
+		socialUserDTO := &auth.SocialUserDTO{
 			ProviderType: user.ProviderTypeGoogle,
 			Email:        googleClaims.Email,
 			Name:         googleClaims.Name,
 			AvatarURL:    googleClaims.Picture,
 		}
 
-		c.Set("socialUser", socialUser)
+		c.Set("socialUser", socialUserDTO)
 		c.Next()
 	}
 }
@@ -390,14 +394,14 @@ func AuthGithubCallback(redisClient *redis.Client) gin.HandlerFunc {
 			return
 		}
 
-		socialUser := &auth.SocialUser{
+		socialUserDTO := &auth.SocialUserDTO{
 			ProviderType: user.ProviderTypeGithub,
 			Email:        githubUser.Email,
 			Name:         githubUser.Name,
 			AvatarURL:    githubUser.AvatarURL,
 		}
 
-		c.Set("socialUser", socialUser)
+		c.Set("socialUser", socialUserDTO)
 		c.Next()
 	}
 }
@@ -461,14 +465,14 @@ func AuthFacebookCallback(redisClient *redis.Client) gin.HandlerFunc {
 			return
 		}
 
-		socialUser := &auth.SocialUser{
+		socialUserDTO := &auth.SocialUserDTO{
 			ProviderType: user.ProviderTypeFacebook,
 			Email:        facebookUser.Email,
 			Name:         facebookUser.Name,
 			AvatarURL:    facebookUser.Picture.Data.URL,
 		}
 
-		c.Set("socialUser", socialUser)
+		c.Set("socialUser", socialUserDTO)
 		c.Next()
 	}
 }

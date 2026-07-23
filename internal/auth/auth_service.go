@@ -28,7 +28,7 @@ type Tokens struct {
 	RefreshToken string `json:"refreshToken"`
 }
 
-type SocialUser struct {
+type SocialUserDTO struct {
 	ProviderType user.ProviderType
 	Email        string
 	Name         string
@@ -97,6 +97,11 @@ type SendEmailTokenClaims struct {
 	jwt.RegisteredClaims
 }
 
+type LoginDTO struct {
+	Username string
+	Password string
+}
+
 type RegisterPayload struct {
 	Fullname     string `json:"fullname"`
 	Username     string `json:"username"`
@@ -104,16 +109,23 @@ type RegisterPayload struct {
 	PasswordHash string `json:"passwordHash"`
 }
 
+type SendEmailRegisterDTO struct {
+	Fullname string
+	Username string
+	Email    string
+	Password string
+}
+
 type AuthService interface {
-	SendEmailRegister(sendEmailRegisterRequest *SendEmailRegisterRequest) (token string, err error)
-	SendEmailForgotPassword(sendEmailForgotPasswordRequest *SendEmailForgotPasswordRequest) (token string, err error)
+	SendEmailRegister(sendEmailRegisterDTO *SendEmailRegisterDTO) (token string, err error)
+	SendEmailForgotPassword(email string) (token string, err error)
 	ResendEmail(email, sendEmailType string) error
 	VerifyOTPRegister(email, otp string) error
 	VerifyOTPForgotPassword(email, otp string) (token string, err error)
-	ValidateUserLogin(loginRequest *LoginRequest) (userID *uuid.UUID, err error)
+	ValidateUserLogin(loginDTO *LoginDTO) (userID *uuid.UUID, err error)
 	CreateTokens(userID uuid.UUID) (tokens *Tokens, err error)
 	SocialLogin(providerType user.ProviderType) (url string, err error)
-	SocialLoginCallback(socialUser *SocialUser) (tokens *Tokens, url string, err error)
+	SocialLoginCallback(socialUserDTO *SocialUserDTO) (tokens *Tokens, url string, err error)
 }
 
 type authService struct {
@@ -153,8 +165,8 @@ func NewAuthService(
 	}
 }
 
-func (s *authService) SendEmailRegister(sendEmailRegisterRequest *SendEmailRegisterRequest) (string, error) {
-	userExist, err := s.userRepository.FindByUsername(s.db, sendEmailRegisterRequest.Username)
+func (s *authService) SendEmailRegister(sendEmailRegisterDTO *SendEmailRegisterDTO) (string, error) {
+	userExist, err := s.userRepository.FindByUsername(s.db, sendEmailRegisterDTO.Username)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return "", errs.NewInternalServerErrorWithMessage("Failed to find user")
@@ -164,7 +176,7 @@ func (s *authService) SendEmailRegister(sendEmailRegisterRequest *SendEmailRegis
 		return "", errs.NewBadRequestErrorWithMessage("Username is already exist")
 	}
 
-	userExist, err = s.userRepository.FindByEmail(s.db, sendEmailRegisterRequest.Email)
+	userExist, err = s.userRepository.FindByEmail(s.db, sendEmailRegisterDTO.Email)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return "", errs.NewInternalServerErrorWithMessage("Failed to find user")
@@ -174,14 +186,14 @@ func (s *authService) SendEmailRegister(sendEmailRegisterRequest *SendEmailRegis
 		return "", errs.NewBadRequestErrorWithMessage("Email is already exist")
 	}
 
-	err = s.emailService.SendEmail(s.db, sendEmailRegisterRequest.Email, "register")
+	err = s.emailService.SendEmail(s.db, sendEmailRegisterDTO.Email, "register")
 	if err != nil {
 		return "", err
 	}
 
 	token, err := helpers.NewJWT(
 		&SendEmailTokenClaims{
-			Email:             sendEmailRegisterRequest.Email,
+			Email:             sendEmailRegisterDTO.Email,
 			SendEmailVerified: true,
 			RegisteredClaims: jwt.RegisteredClaims{
 				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 15)),
@@ -195,16 +207,16 @@ func (s *authService) SendEmailRegister(sendEmailRegisterRequest *SendEmailRegis
 		return "", errs.NewUnexpectedErrorWithMessage("Failed to sign register token")
 	}
 
-	passwordHash, err := helpers.HashSecret(sendEmailRegisterRequest.Password)
+	passwordHash, err := helpers.HashSecret(sendEmailRegisterDTO.Password)
 	if err != nil {
 		logs.Error(err)
 		return "", errs.NewUnexpectedErrorWithMessage("Failed to hash password")
 	}
 
 	registerPayload := &RegisterPayload{
-		Fullname:     sendEmailRegisterRequest.Fullname,
-		Username:     sendEmailRegisterRequest.Username,
-		Email:        sendEmailRegisterRequest.Email,
+		Fullname:     sendEmailRegisterDTO.Fullname,
+		Username:     sendEmailRegisterDTO.Username,
+		Email:        sendEmailRegisterDTO.Email,
 		PasswordHash: passwordHash,
 	}
 	key := fmt.Sprintf("email:register-pending:%s", registerPayload.Email)
@@ -222,8 +234,8 @@ func (s *authService) SendEmailRegister(sendEmailRegisterRequest *SendEmailRegis
 	return token, nil
 }
 
-func (s *authService) SendEmailForgotPassword(sendEmailForgotPasswordRequest *SendEmailForgotPasswordRequest) (string, error) {
-	userExist, err := s.userRepository.FindByEmail(s.db, sendEmailForgotPasswordRequest.Email)
+func (s *authService) SendEmailForgotPassword(email string) (string, error) {
+	userExist, err := s.userRepository.FindByEmail(s.db, email)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return "", errs.NewInternalServerErrorWithMessage("Failed to find user by email")
@@ -231,7 +243,7 @@ func (s *authService) SendEmailForgotPassword(sendEmailForgotPasswordRequest *Se
 
 	if helpers.IsErrRecordNotFound(err) {
 		logs.Warn(err)
-		return "", errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Email %s is not found", sendEmailForgotPasswordRequest.Email))
+		return "", errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Email %s is not found", email))
 	}
 
 	// กรณี social account ห้าม
@@ -241,14 +253,14 @@ func (s *authService) SendEmailForgotPassword(sendEmailForgotPasswordRequest *Se
 		return "", errs.NewBadRequestErrorWithMessage("Cannot reset password for social media account")
 	}
 
-	err = s.emailService.SendEmail(s.db, sendEmailForgotPasswordRequest.Email, "reset password")
+	err = s.emailService.SendEmail(s.db, email, "reset password")
 	if err != nil {
 		return "", err
 	}
 
 	token, err := helpers.NewJWT(
 		&SendEmailTokenClaims{
-			Email:             sendEmailForgotPasswordRequest.Email,
+			Email:             email,
 			SendEmailVerified: true,
 			RegisteredClaims: jwt.RegisteredClaims{
 				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 15)),
@@ -362,8 +374,8 @@ func (s *authService) VerifyOTPForgotPassword(email, otp string) (string, error)
 	return token, nil
 }
 
-func (s *authService) ValidateUserLogin(loginRequest *LoginRequest) (*uuid.UUID, error) {
-	userExist, err := s.userRepository.FindByUsername(s.db, loginRequest.Username)
+func (s *authService) ValidateUserLogin(loginDTO *LoginDTO) (*uuid.UUID, error) {
+	userExist, err := s.userRepository.FindByUsername(s.db, loginDTO.Username)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return nil, errs.NewInternalServerError()
@@ -373,7 +385,7 @@ func (s *authService) ValidateUserLogin(loginRequest *LoginRequest) (*uuid.UUID,
 		return nil, errs.NewUnauthorizedError()
 	}
 
-	err = helpers.CompareSecret(*userExist.PasswordHash, loginRequest.Password)
+	err = helpers.CompareSecret(*userExist.PasswordHash, loginDTO.Password)
 	if err != nil {
 		return nil, errs.NewUnauthorizedError()
 	}
@@ -446,8 +458,8 @@ func (s *authService) SocialLogin(providerType user.ProviderType) (string, error
 	return url, nil
 }
 
-func (s *authService) SocialLoginCallback(socialUser *SocialUser) (*Tokens, string, error) {
-	userExist, err := s.userRepository.FindByEmail(s.db, socialUser.Email)
+func (s *authService) SocialLoginCallback(socialUserDTO *SocialUserDTO) (*Tokens, string, error) {
+	userExist, err := s.userRepository.FindByEmail(s.db, socialUserDTO.Email)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return nil, "", errs.NewInternalServerErrorWithMessage("Failed to find user")
@@ -459,10 +471,10 @@ func (s *authService) SocialLoginCallback(socialUser *SocialUser) (*Tokens, stri
 	// ยังไม่มี account -> create
 	if helpers.IsErrRecordNotFound(err) {
 		createUser := &user.User{
-			Fullname:     socialUser.Name,
-			Email:        socialUser.Email,
-			ProviderType: socialUser.ProviderType,
-			ProfileUrl:   &socialUser.AvatarURL,
+			Fullname:     socialUserDTO.Name,
+			Email:        socialUserDTO.Email,
+			ProviderType: socialUserDTO.ProviderType,
+			ProfileUrl:   &socialUserDTO.AvatarURL,
 		}
 		err = s.userRepository.Create(s.db, createUser)
 		if err != nil {
@@ -479,7 +491,7 @@ func (s *authService) SocialLoginCallback(socialUser *SocialUser) (*Tokens, stri
 	}
 
 	// กรณี provider ไม่ตรงกับ social login ที่ใช้
-	if userExist != nil && userExist.ProviderType != socialUser.ProviderType {
+	if userExist != nil && userExist.ProviderType != socialUserDTO.ProviderType {
 		socialAuthErrToken, err := helpers.NewJWT(
 			&SocialAuthErrorTokenClaims{
 				SocialAuthVerified: true,

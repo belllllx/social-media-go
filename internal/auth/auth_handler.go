@@ -94,7 +94,14 @@ func (h *authHandler) SendEmailRegister(c *gin.Context) {
 		return
 	}
 
-	token, err := h.authService.SendEmailRegister(sendEmailRegisterRequest)
+	sendEmailRegisterDTO := &SendEmailRegisterDTO{
+		Fullname: sendEmailRegisterRequest.Fullname,
+		Username: sendEmailRegisterRequest.Username,
+		Email:    sendEmailRegisterRequest.Email,
+		Password: sendEmailRegisterRequest.Password,
+	}
+
+	token, err := h.authService.SendEmailRegister(sendEmailRegisterDTO)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -129,7 +136,7 @@ func (h *authHandler) SendEmailForgotPassword(c *gin.Context) {
 		return
 	}
 
-	token, err := h.authService.SendEmailForgotPassword(sendEmailForgotPasswordRequest)
+	token, err := h.authService.SendEmailForgotPassword(sendEmailForgotPasswordRequest.Email)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -468,7 +475,7 @@ func (h *authHandler) GithubLogin(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/google/callback [get]
 func (h *authHandler) GoogleCallback(c *gin.Context) {
-	socialUser, ok := c.MustGet("socialUser").(*SocialUser)
+	socialUser, ok := c.MustGet("socialUser").(*SocialUserDTO)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
@@ -508,7 +515,7 @@ func (h *authHandler) GoogleCallback(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/facebook/callback [get]
 func (h *authHandler) FacebookCallback(c *gin.Context) {
-	socialUser, ok := c.MustGet("socialUser").(*SocialUser)
+	socialUser, ok := c.MustGet("socialUser").(*SocialUserDTO)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
@@ -548,7 +555,7 @@ func (h *authHandler) FacebookCallback(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/github/callback [get]
 func (h *authHandler) GithubCallback(c *gin.Context) {
-	socialUser, ok := c.MustGet("socialUser").(*SocialUser)
+	socialUser, ok := c.MustGet("socialUser").(*SocialUserDTO)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return

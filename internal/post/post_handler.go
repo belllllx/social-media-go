@@ -69,7 +69,7 @@ func (h *postHandler) UploadFiles(c *gin.Context) {
 		return
 	}
 
-	filesData := []file.FileData{}
+	filesDataDTO := []file.FileDataDTO{}
 	for _, fileHeader := range filesHeader {
 		fileOpen, err := fileHeader.Open()
 		if err != nil {
@@ -77,7 +77,7 @@ func (h *postHandler) UploadFiles(c *gin.Context) {
 			return
 		}
 
-		filesData = append(filesData, file.FileData{
+		filesDataDTO = append(filesDataDTO, file.FileDataDTO{
 			Filename:    fileHeader.Filename,
 			ContentType: fileHeader.Header.Get("Content-Type"),
 			Body:        fileOpen,
@@ -85,7 +85,7 @@ func (h *postHandler) UploadFiles(c *gin.Context) {
 		})
 	}
 
-	filesURL, err := h.fileService.UploadFiles(filesData, file.FileTypePost)
+	filesURL, err := h.fileService.UploadFiles(filesDataDTO, file.FileTypePost)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
