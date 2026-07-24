@@ -5,6 +5,7 @@ import (
 
 	"github.com/belllllx/social-media-go/internal/auth"
 	"github.com/belllllx/social-media-go/internal/bootstrap"
+	"github.com/belllllx/social-media-go/internal/configs"
 	"github.com/belllllx/social-media-go/internal/email"
 	"github.com/belllllx/social-media-go/internal/file"
 	"github.com/belllllx/social-media-go/internal/logs"
@@ -45,6 +46,10 @@ func main() {
 	app := bootstrap.NewApp()
 	defer app.Close()
 
+	googleConfig := configs.InitOAuth2GoogleConfig()
+	githubConfig := configs.InitOAuth2GithubConfig()
+	facebookConfig := configs.InitOAuth2FacebookConfig()
+
 	userRepositoryDB := user.NewUserRepositoryDB(app.DB)
 	emailRepositoryImpl := email.NewEmailRepositoryImpl()
 	otpRepositoryDB := otp.NewOTPRepositoryDB(app.DB)
@@ -64,6 +69,9 @@ func main() {
 		userRepositoryDB,
 		emailService,
 		otpService,
+		googleConfig,
+		githubConfig,
+		facebookConfig,
 	)
 	userService := user.NewUserService(app.DB, app.PresignClient, userRepositoryDB)
 	fileService := file.NewFileService(
@@ -177,6 +185,7 @@ func main() {
 		post.POST("/create", postHandler.CreatePost)
 		post.POST("/share/create/:parentID", postHandler.CreateSharePost)
 		post.GET("/finds", postHandler.FindsCursorPagination)
+		post.GET("/finds/:userID", postHandler.FindsWithUserIDCursorPagination)
 		post.GET("/find/:postID", postHandler.FindWithID)
 	}
 

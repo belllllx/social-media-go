@@ -13,6 +13,48 @@ import (
 	"gorm.io/gorm"
 )
 
+type FollowerData struct {
+	ID          int64     `json:"id"`
+	FollowerID  uuid.UUID `json:"followerId"`
+	FollowingID uuid.UUID `json:"followingId"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+type SecureUserFollow struct {
+	ID                   uuid.UUID      `json:"id"`
+	Fullname             string         `json:"fullname"`
+	Username             *string        `json:"username"`
+	Email                string         `json:"email"`
+	DateOfBirth          *time.Time     `json:"dateOfBirth"`
+	ProfileUrl           *string        `json:"profileUrl"`
+	ProfileBackgroundUrl *string        `json:"profileBackgroundUrl"`
+	Info                 *string        `json:"info"`
+	Role                 Role           `json:"role"`
+	ProviderType         ProviderType   `json:"providerType"`
+	Followers            []FollowerData `json:"followers"`
+	CreatedAt            time.Time      `json:"createdAt"`
+	UpdatedAt            time.Time      `json:"updatedAt"`
+}
+
+type Following struct {
+	ID            int64             `json:"id"`
+	FollowerID    uuid.UUID         `json:"followerId"`
+	FollowingID   uuid.UUID         `json:"followingId"`
+	FollowingUser *SecureUserFollow `json:"following"`
+	CreatedAt     time.Time         `json:"createdAt"`
+	UpdatedAt     time.Time         `json:"updatedAt"`
+}
+
+type Follower struct {
+	ID           int64             `json:"id"`
+	FollowerID   uuid.UUID         `json:"followerId"`
+	FollowingID  uuid.UUID         `json:"followingId"`
+	FollowerUser *SecureUserFollow `json:"follower"`
+	CreatedAt    time.Time         `json:"createdAt"`
+	UpdatedAt    time.Time         `json:"updatedAt"`
+}
+
 type SecureUser struct {
 	ID                   uuid.UUID    `json:"id"`
 	Fullname             string       `json:"fullname"`
@@ -24,6 +66,8 @@ type SecureUser struct {
 	Info                 *string      `json:"info"`
 	Role                 Role         `json:"role"`
 	ProviderType         ProviderType `json:"providerType"`
+	Followings           []Following  `json:"followings"`
+	Followers            []Follower   `json:"followers"`
 	CreatedAt            time.Time    `json:"createdAt"`
 	UpdatedAt            time.Time    `json:"updatedAt"`
 }
@@ -31,9 +75,7 @@ type SecureUser struct {
 type UserService interface {
 	SecureFindWithID(ID uuid.UUID) (*SecureUser, error)
 	ResetPassword(email, password string) error
-	GetPostUserImage(post *Post) error
-	GetPostLikeUserImage(like *Like) error
-	GetNotificationUserImage(notification *Notification) error
+	GetUserImage(user *User) error
 }
 
 type userService struct {
@@ -66,6 +108,97 @@ func (s *userService) SecureFindWithID(ID uuid.UUID) (*SecureUser, error) {
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("User id %v is not found", ID))
 	}
 
+	err = s.GetUserImage(user)
+	if err != nil {
+		return nil, err
+	}
+
+	followings := []Following{}
+	for _, following := range user.Followings {
+		err = s.GetUserImage(&following.Following)
+		if err != nil {
+			return nil, err
+		}
+
+		followerData := []FollowerData{}
+		for _, follower := range following.Following.Followers {
+			followerData = append(followerData, FollowerData{
+				ID:          follower.ID,
+				FollowerID:  follower.FollowerID,
+				FollowingID: follower.FollowingID,
+				CreatedAt:   follower.CreatedAt,
+				UpdatedAt:   follower.UpdatedAt,
+			})
+		}
+
+		secureUserFollow := &SecureUserFollow{
+			ID:                   following.FollowingID,
+			Fullname:             following.Following.Fullname,
+			Username:             following.Following.Username,
+			Email:                following.Following.Email,
+			DateOfBirth:          following.Following.DateOfBirth,
+			ProfileUrl:           following.Following.ProfileUrl,
+			ProfileBackgroundUrl: following.Following.ProfileBackgroundUrl,
+			Info:                 following.Following.Info,
+			Role:                 following.Following.Role,
+			ProviderType:         following.Following.ProviderType,
+			Followers:            followerData,
+			CreatedAt:            following.Following.CreatedAt,
+			UpdatedAt:            following.Following.UpdatedAt,
+		}
+		followings = append(followings, Following{
+			ID:            following.ID,
+			FollowerID:    following.FollowerID,
+			FollowingID:   following.FollowingID,
+			FollowingUser: secureUserFollow,
+			CreatedAt:     following.CreatedAt,
+			UpdatedAt:     following.UpdatedAt,
+		})
+	}
+
+	followers := []Follower{}
+	for _, follower := range user.Followers {
+		err = s.GetUserImage(&follower.Follower)
+		if err != nil {
+			return nil, err
+		}
+
+		followerData := []FollowerData{}
+		for _, follower := range follower.Follower.Followers {
+			followerData = append(followerData, FollowerData{
+				ID:          follower.ID,
+				FollowerID:  follower.FollowerID,
+				FollowingID: follower.FollowingID,
+				CreatedAt:   follower.CreatedAt,
+				UpdatedAt:   follower.UpdatedAt,
+			})
+		}
+
+		secureUserFollow := &SecureUserFollow{
+			ID:                   follower.FollowerID,
+			Fullname:             follower.Follower.Fullname,
+			Username:             follower.Follower.Username,
+			Email:                follower.Follower.Email,
+			DateOfBirth:          follower.Follower.DateOfBirth,
+			ProfileUrl:           follower.Follower.ProfileUrl,
+			ProfileBackgroundUrl: follower.Follower.ProfileBackgroundUrl,
+			Info:                 follower.Follower.Info,
+			Role:                 follower.Follower.Role,
+			ProviderType:         follower.Follower.ProviderType,
+			Followers:            followerData,
+			CreatedAt:            follower.Follower.CreatedAt,
+			UpdatedAt:            follower.Follower.UpdatedAt,
+		}
+		followers = append(followers, Follower{
+			ID:           follower.ID,
+			FollowerID:   follower.FollowerID,
+			FollowingID:  follower.FollowingID,
+			FollowerUser: secureUserFollow,
+			CreatedAt:    follower.CreatedAt,
+			UpdatedAt:    follower.UpdatedAt,
+		})
+	}
+
 	secureUser := &SecureUser{
 		ID:                   user.ID,
 		Fullname:             user.Fullname,
@@ -77,6 +210,8 @@ func (s *userService) SecureFindWithID(ID uuid.UUID) (*SecureUser, error) {
 		Info:                 user.Info,
 		Role:                 user.Role,
 		ProviderType:         user.ProviderType,
+		Followings:           followings,
+		Followers:            followers,
 		CreatedAt:            user.CreatedAt,
 		UpdatedAt:            user.UpdatedAt,
 	}
@@ -99,55 +234,19 @@ func (s *userService) ResetPassword(email, password string) error {
 	return nil
 }
 
-func (s *userService) GetPostUserImage(post *Post) error {
+func (s *userService) GetUserImage(user *User) error {
 	ctx := context.Background()
 
 	// ไม่ใช่ avater ของ social login
 	// อัพเดต profile url
-	if post.User.ProfileUrl != nil && !helpers.IsExternalURL(*post.User.ProfileUrl) {
-		req, err := helpers.PresignGetObject(s.presignClient, ctx, *post.User.ProfileUrl)
+	if user.ProfileUrl != nil && !helpers.IsExternalURL(*user.ProfileUrl) {
+		req, err := helpers.PresignGetObject(s.presignClient, ctx, *user.ProfileUrl)
 		if err != nil {
 			logs.Error(err)
-			return errs.NewInternalServerErrorWithMessage("Failed to presign get post user profile url object")
+			return errs.NewInternalServerErrorWithMessage("Failed to presign get user profile url object")
 		}
 
-		post.User.ProfileUrl = &req.URL
-	}
-
-	return nil
-}
-
-func (s *userService) GetPostLikeUserImage(like *Like) error {
-	ctx := context.Background()
-
-	// ไม่ใช่ avater ของ social login
-	// อัพเดต profile url
-	if like.User.ProfileUrl != nil && !helpers.IsExternalURL(*like.User.ProfileUrl) {
-		req, err := helpers.PresignGetObject(s.presignClient, ctx, *like.User.ProfileUrl)
-		if err != nil {
-			logs.Error(err)
-			return errs.NewInternalServerErrorWithMessage("Failed to presign get post like user profile url object")
-		}
-
-		like.User.ProfileUrl = &req.URL
-	}
-
-	return nil
-}
-
-func (s *userService) GetNotificationUserImage(notification *Notification) error {
-	ctx := context.Background()
-
-	// ไม่ใช่ avater ของ social login
-	// อัพเดต profile url
-	if notification.Sender.ProfileUrl != nil && !helpers.IsExternalURL(*notification.Sender.ProfileUrl) {
-		req, err := helpers.PresignGetObject(s.presignClient, ctx, *notification.Sender.ProfileUrl)
-		if err != nil {
-			logs.Error(err)
-			return errs.NewInternalServerErrorWithMessage("Failed to presign get notification sender profile url object")
-		}
-
-		notification.Sender.ProfileUrl = &req.URL
+		user.ProfileUrl = &req.URL
 	}
 
 	return nil

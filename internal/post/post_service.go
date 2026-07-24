@@ -115,6 +115,7 @@ type PostService interface {
 	CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, error)
 	CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*CreatedSharePost, error)
 	FindsCursorPagination(cursor, limit string) (*PostCursorPagination, error)
+	FindsWithUserIDCursorPagination(userID, cursor, limit string) (*PostCursorPagination, error)
 	FindWithID(postID string) (*Post, error)
 }
 
@@ -236,7 +237,7 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post with relations")
 	}
 
-	err = s.userService.GetPostUserImage(post)
+	err = s.userService.GetUserImage(&post.User)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +280,7 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		}
 
 		for i := range notifications {
-			err = s.userService.GetNotificationUserImage(&notifications[i])
+			err = s.userService.GetUserImage(&notifications[i].Sender)
 			if err != nil {
 				return nil, err
 			}
@@ -495,12 +496,12 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post with relations")
 	}
 
-	err = s.userService.GetPostUserImage(sharePost)
+	err = s.userService.GetUserImage(&sharePost.User)
 	if err != nil {
 		return nil, err
 	}
 
-	err = s.userService.GetPostUserImage(post)
+	err = s.userService.GetUserImage(&post.User)
 	if err != nil {
 		return nil, err
 	}
@@ -513,7 +514,7 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification with relation")
 		}
 
-		err = s.userService.GetNotificationUserImage(notification)
+		err = s.userService.GetUserImage(&notification.Sender)
 		if err != nil {
 			return nil, err
 		}
@@ -739,7 +740,7 @@ func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPa
 
 	if len(posts) > 0 {
 		for _, post := range posts {
-			err = s.userService.GetPostUserImage(&post)
+			err = s.userService.GetUserImage(&post.User)
 			if err != nil {
 				return nil, err
 			}
@@ -759,7 +760,7 @@ func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPa
 
 			updateLikes := []Like{}
 			for _, like := range post.Likes {
-				err = s.userService.GetPostLikeUserImage(&like)
+				err = s.userService.GetUserImage(&like.User)
 				if err != nil {
 					return nil, err
 				}
@@ -816,7 +817,209 @@ func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPa
 			}
 
 			if post.ParentID != nil {
-				err = s.userService.GetPostUserImage(post.Parent)
+				err = s.userService.GetUserImage(&post.Parent.User)
+				if err != nil {
+					return nil, err
+				}
+
+				filesURL, err = s.fileService.PresignGetFiles(*post.ParentID)
+				if err != nil {
+					return nil, err
+				}
+
+				postParentSecureUser := &user.SecureUser{
+					ID:                   post.Parent.UserID,
+					Fullname:             post.Parent.User.Fullname,
+					Username:             post.Parent.User.Username,
+					Email:                post.Parent.User.Email,
+					DateOfBirth:          post.Parent.User.DateOfBirth,
+					ProfileUrl:           post.Parent.User.ProfileUrl,
+					ProfileBackgroundUrl: post.Parent.User.ProfileBackgroundUrl,
+					Info:                 post.Parent.User.Info,
+					Role:                 post.Parent.User.Role,
+					ProviderType:         post.Parent.User.ProviderType,
+					CreatedAt:            post.Parent.User.CreatedAt,
+					UpdatedAt:            post.Parent.User.UpdatedAt,
+				}
+				postParent := &PostParent{
+					ID:        *post.ParentID,
+					Message:   post.Parent.Message,
+					UserID:    post.Parent.UserID,
+					User:      postParentSecureUser,
+					ParentID:  post.ParentID,
+					FilesURL:  filesURL,
+					CreatedAt: post.Parent.CreatedAt,
+					UpdatedAt: post.Parent.UpdatedAt,
+				}
+				postCursorPagination.ParentID = post.ParentID
+				postCursorPagination.Parent = postParent
+			}
+
+			postsCursorPagination = append(postsCursorPagination, postCursorPagination)
+		}
+	}
+
+	if len(postsCursorPagination) > 0 {
+		nextCursor = &postsCursorPagination[len(postsCursorPagination)-1].ID
+	}
+	postCursorPagination := &PostCursorPagination{
+		Posts:      postsCursorPagination,
+		NextCursor: nextCursor,
+	}
+	return postCursorPagination, nil
+}
+
+func (s *postService) FindsWithUserIDCursorPagination(userID, cursor, limit string) (*PostCursorPagination, error) {
+	var nextCursor *uuid.UUID
+	var cursorID *uuid.UUID
+
+	err := helpers.ValidateUUID(userID)
+	if err != nil {
+		logs.Warn(err)
+		return nil, err
+	}
+
+	userIDParse, err := helpers.ParseUUID(userID)
+	if err != nil {
+		logs.Error(err)
+		return nil, err
+	}
+
+	userByID, err := s.userService.SecureFindWithID(*userIDParse)
+	if err != nil {
+		return nil, err
+	}
+
+	if cursor != "" {
+		err := helpers.ValidateUUID(cursor)
+		if err != nil {
+			logs.Warn(err)
+			return nil, err
+		}
+
+		cursorID, err = helpers.ParseUUID(cursor)
+		if err != nil {
+			logs.Error(err)
+			return nil, err
+		}
+	}
+
+	limitInt, err := strconv.Atoi(limit)
+	if err != nil {
+		return nil, errs.NewBadRequestErrorWithMessage("Invalid limit must be string integer")
+	}
+
+	if limitInt <= 0 {
+		return nil, errs.NewBadRequestErrorWithMessage("Invalid limit must be greater than 0")
+	}
+
+	posts := []user.Post{}
+	postsCursorPagination := []Post{}
+	if cursor == "" {
+		posts, err = s.postRepository.FindsByUserIDCursorPagination(s.db, userByID.ID, nil, limitInt)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts by user id cursor pagination")
+		}
+	} else {
+		postCursor, err := s.postRepository.FindByIDCursor(s.db, *cursorID)
+		if err != nil && !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find post cursor by post id")
+		}
+
+		if helpers.IsErrRecordNotFound(err) {
+			logs.Warn(err)
+			return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Cursor by post id %v is not found", *cursorID))
+		}
+
+		posts, err = s.postRepository.FindsByUserIDCursorPagination(s.db, userByID.ID, postCursor, limitInt)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts by user id cursor pagination")
+		}
+	}
+
+	if len(posts) > 0 {
+		for _, post := range posts {
+			err = s.userService.GetUserImage(&post.User)
+			if err != nil {
+				return nil, err
+			}
+
+			comments := []user.Comment{}
+			for _, comment := range post.Comments {
+				if comment.ParentID == nil {
+					comments = append(comments, comment)
+				}
+			}
+			commentsCount := len(comments)
+
+			filesURL, err := s.fileService.PresignGetFiles(post.ID)
+			if err != nil {
+				return nil, err
+			}
+
+			updateLikes := []Like{}
+			for _, like := range post.Likes {
+				err = s.userService.GetUserImage(&like.User)
+				if err != nil {
+					return nil, err
+				}
+
+				secureUser := &user.SecureUser{
+					ID:                   like.UserID,
+					Fullname:             like.User.Fullname,
+					Username:             like.User.Username,
+					Email:                like.User.Email,
+					DateOfBirth:          like.User.DateOfBirth,
+					ProfileUrl:           like.User.ProfileUrl,
+					ProfileBackgroundUrl: like.User.ProfileBackgroundUrl,
+					Info:                 like.User.Info,
+					Role:                 like.User.Role,
+					ProviderType:         like.User.ProviderType,
+					CreatedAt:            like.User.CreatedAt,
+					UpdatedAt:            like.User.UpdatedAt,
+				}
+				updateLikes = append(updateLikes, Like{
+					ID:        like.ID,
+					UserID:    like.UserID,
+					User:      secureUser,
+					PostID:    like.PostID,
+					CommentID: like.CommentID,
+					CreatedAt: like.CreatedAt,
+					UpdatedAt: like.UpdatedAt,
+				})
+			}
+
+			secureUser := &user.SecureUser{
+				ID:                   post.UserID,
+				Fullname:             post.User.Fullname,
+				Username:             post.User.Username,
+				Email:                post.User.Email,
+				DateOfBirth:          post.User.DateOfBirth,
+				ProfileUrl:           post.User.ProfileUrl,
+				ProfileBackgroundUrl: post.User.ProfileBackgroundUrl,
+				Info:                 post.User.Info,
+				Role:                 post.User.Role,
+				ProviderType:         post.User.ProviderType,
+				CreatedAt:            post.User.CreatedAt,
+				UpdatedAt:            post.User.UpdatedAt,
+			}
+			postCursorPagination := Post{
+				ID:            post.ID,
+				Message:       post.Message,
+				UserID:        post.UserID,
+				User:          secureUser,
+				Likes:         updateLikes,
+				FilesURL:      filesURL,
+				CommentsCount: commentsCount,
+				CreatedAt:     post.CreatedAt,
+				UpdatedAt:     post.UpdatedAt,
+			}
+
+			if post.ParentID != nil {
+				err = s.userService.GetUserImage(&post.Parent.User)
 				if err != nil {
 					return nil, err
 				}
@@ -911,7 +1114,7 @@ func (s *postService) FindWithID(postID string) (*Post, error) {
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", *postIDParse))
 	}
 
-	err = s.userService.GetPostUserImage(post)
+	err = s.userService.GetUserImage(&post.User)
 	if err != nil {
 		return nil, err
 	}
@@ -931,7 +1134,7 @@ func (s *postService) FindWithID(postID string) (*Post, error) {
 
 	updateLikes := []Like{}
 	for _, like := range post.Likes {
-		err = s.userService.GetPostLikeUserImage(&like)
+		err = s.userService.GetUserImage(&like.User)
 		if err != nil {
 			return nil, err
 		}
@@ -988,7 +1191,7 @@ func (s *postService) FindWithID(postID string) (*Post, error) {
 	}
 
 	if post.ParentID != nil {
-		err = s.userService.GetPostUserImage(post.Parent)
+		err = s.userService.GetUserImage(&post.Parent.User)
 		if err != nil {
 			return nil, err
 		}

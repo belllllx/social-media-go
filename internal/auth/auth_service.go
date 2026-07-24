@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/belllllx/social-media-go/internal/configs"
 	"github.com/belllllx/social-media-go/internal/email"
 	"github.com/belllllx/social-media-go/internal/logs"
 	"github.com/belllllx/social-media-go/internal/otp"
@@ -147,11 +146,10 @@ func NewAuthService(
 	userRepository user.UserRepository,
 	emailService email.EmailService,
 	otpService otp.OTPService,
+	googleConfig *oauth2.Config,
+	githubConfig *oauth2.Config,
+	facebookConfig *oauth2.Config,
 ) AuthService {
-	googleConfig := configs.InitOAuth2GoogleConfig()
-	githubConfig := configs.InitOAuth2GithubConfig()
-	facebookConfig := configs.InitOAuth2FacebookConfig()
-
 	return &authService{
 		db:             db,
 		redisClient:    redisClient,

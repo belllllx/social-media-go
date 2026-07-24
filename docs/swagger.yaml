@@ -284,6 +284,49 @@ definitions:
       success:
         type: boolean
     type: object
+  user.Follower:
+    properties:
+      createdAt:
+        type: string
+      follower:
+        $ref: '#/definitions/user.SecureUserFollow'
+      followerId:
+        type: string
+      followingId:
+        type: string
+      id:
+        type: integer
+      updatedAt:
+        type: string
+    type: object
+  user.FollowerData:
+    properties:
+      createdAt:
+        type: string
+      followerId:
+        type: string
+      followingId:
+        type: string
+      id:
+        type: integer
+      updatedAt:
+        type: string
+    type: object
+  user.Following:
+    properties:
+      createdAt:
+        type: string
+      followerId:
+        type: string
+      following:
+        $ref: '#/definitions/user.SecureUserFollow'
+      followingId:
+        type: string
+      id:
+        type: integer
+      updatedAt:
+        type: string
+    type: object
   user.ProviderType:
     enum:
     - LOCAL
@@ -312,6 +355,45 @@ definitions:
         type: string
       email:
         type: string
+      followers:
+        items:
+          $ref: '#/definitions/user.Follower'
+        type: array
+      followings:
+        items:
+          $ref: '#/definitions/user.Following'
+        type: array
+      fullname:
+        type: string
+      id:
+        type: string
+      info:
+        type: string
+      profileBackgroundUrl:
+        type: string
+      profileUrl:
+        type: string
+      providerType:
+        $ref: '#/definitions/user.ProviderType'
+      role:
+        $ref: '#/definitions/user.Role'
+      updatedAt:
+        type: string
+      username:
+        type: string
+    type: object
+  user.SecureUserFollow:
+    properties:
+      createdAt:
+        type: string
+      dateOfBirth:
+        type: string
+      email:
+        type: string
+      followers:
+        items:
+          $ref: '#/definitions/user.FollowerData'
+        type: array
       fullname:
         type: string
       id:
@@ -864,6 +946,54 @@ paths:
     get:
       description: authentication and find posts cursor pagination
       parameters:
+      - description: cursor uuid for post id
+        in: query
+        name: cursor
+        type: string
+      - description: limit for posts cursor pagination
+        in: query
+        name: limit
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SwaggerResponseWithData'
+            - properties:
+                data:
+                  $ref: '#/definitions/post.PostCursorPagination'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - post
+  /post/finds/{userID}:
+    get:
+      description: authentication and find posts with user id cursor pagination
+      parameters:
+      - description: uuid for user id
+        in: path
+        name: userID
+        required: true
+        type: string
       - description: cursor uuid for post id
         in: query
         name: cursor

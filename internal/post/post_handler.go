@@ -23,6 +23,7 @@ type PostHandler interface {
 	CreatePost(c *gin.Context)
 	CreateSharePost(c *gin.Context)
 	FindsCursorPagination(c *gin.Context)
+	FindsWithUserIDCursorPagination(c *gin.Context)
 	FindWithID(c *gin.Context)
 }
 
@@ -235,6 +236,37 @@ func (h *postHandler) FindsCursorPagination(c *gin.Context) {
 	}
 
 	response.Ok(c, "Posts retrive successfully", postCursorPagination)
+}
+
+// FindsWithUserIDCursorPagination godoc
+//
+//	@Description	authentication and find posts with user id cursor pagination
+//	@Tags			post
+//	@Produce		json
+//	@Param			userID	path		string	true	"uuid for user id"
+//	@Param			cursor	query		string	false	"cursor uuid for post id"
+//	@Param			limit	query		int		true	"limit for posts cursor pagination"
+//	@Success		200		{object}	response.SwaggerResponseWithData{data=post.PostCursorPagination}
+//	@Failure		400		{object}	response.SwaggerBadRequestResponse
+//	@Failure		401		{object}	response.SwaggerResponse
+//	@Failure		404		{object}	response.SwaggerResponse
+//	@Failure		500		{object}	response.SwaggerResponse
+//	@Router			/post/finds/{userID} [get]
+func (h *postHandler) FindsWithUserIDCursorPagination(c *gin.Context) {
+	userID := c.Param("userID")
+	cursor := c.Query("cursor")
+	limit := c.Query("limit")
+	postCursorPagination, err := h.postService.FindsWithUserIDCursorPagination(
+		userID,
+		cursor,
+		limit,
+	)
+	if err != nil {
+		helpers.HandleError(c, err)
+		return
+	}
+
+	response.Ok(c, "Posts by user id retrive successfully", postCursorPagination)
 }
 
 // FindWithID godoc

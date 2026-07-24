@@ -3,6 +3,7 @@ package user
 import (
 	"time"
 
+	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -94,7 +95,7 @@ type Like struct {
 	Comment   *Comment   `gorm:"constraint:OnDelete:CASCADE"`
 }
 
-type Follower struct {
+type Follow struct {
 	ID          int64
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
@@ -124,8 +125,8 @@ type User struct {
 	Replies               []Comment      `gorm:"foreignKey:ReplyToUserID"`
 	SenderNotifications   []Notification `gorm:"foreignKey:SenderID;constraint:OnDelete:CASCADE"`
 	ReceiverNotifications []Notification `gorm:"foreignKey:ReceiverID;constraint:OnDelete:CASCADE"`
-	Followings            []Follower     `gorm:"foreignKey:FollowerID;constraint:OnDelete:CASCADE"`
-	Followers             []Follower     `gorm:"foreignKey:FollowingID;constraint:OnDelete:CASCADE"`
+	Followings            []Follow       `gorm:"foreignKey:FollowerID;constraint:OnDelete:CASCADE"`
+	Followers             []Follow       `gorm:"foreignKey:FollowingID;constraint:OnDelete:CASCADE"`
 }
 
 type UserRepository interface {
@@ -143,7 +144,7 @@ type userRepositoryDB struct {
 func NewUserRepositoryDB(db *gorm.DB) UserRepository {
 	db.AutoMigrate(
 		&User{},
-		&Follower{},
+		&Follow{},
 		&Like{},
 		&Comment{},
 		&Post{},
@@ -176,7 +177,13 @@ func (r *userRepositoryDB) FindByEmail(db *gorm.DB, email string) (*User, error)
 
 func (r *userRepositoryDB) FindByID(db *gorm.DB, userID uuid.UUID) (*User, error) {
 	user := &User{}
-	err := db.Where("id = ?", userID).Take(user).Error
+	err := db.
+		Where("id = ?", userID).
+		Preload("Followings.Following", helpers.OmitUserPasswordHash).
+		Preload("Followings.Following.Followers").
+		Preload("Followers.Follower", helpers.OmitUserPasswordHash).
+		Preload("Followers.Follower.Followers").
+		Take(user).Error
 	if err != nil {
 		return nil, err
 	}

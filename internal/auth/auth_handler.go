@@ -331,7 +331,7 @@ func (h *authHandler) Profile(c *gin.Context) {
 		return
 	}
 
-	response.Ok(c, "User retrieved successfully", secureUser)
+	response.Ok(c, "User retrive successfully", secureUser)
 }
 
 // Refresh godoc
