@@ -4,23 +4,24 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/google/uuid"
 	server "github.com/zishang520/socket.io/servers/socket/v3"
 )
 
 type BroadcastNotificationDTO struct {
-	ID         uuid.UUID             `json:"id"`
-	Type       user.NotificationType `json:"type"`
-	Message    string                `json:"message"`
-	IsRead     bool                  `json:"isRead"`
-	SenderID   uuid.UUID             `json:"senderId"`
-	Sender     *user.SecureUser      `json:"sender"`
-	ReceiverID uuid.UUID             `json:"receiverId"`
-	PostID     *uuid.UUID            `json:"postId"`
-	CommentID  *uuid.UUID            `json:"commentId"`
-	CreatedAt  time.Time             `json:"createdAt"`
-	UpdatedAt  time.Time             `json:"updatedAt"`
+	ID         uuid.UUID               `json:"id"`
+	Type       models.NotificationType `json:"type"`
+	Message    string                  `json:"message"`
+	IsRead     bool                    `json:"isRead"`
+	SenderID   uuid.UUID               `json:"senderId"`
+	Sender     *user.SecureUser        `json:"sender"`
+	ReceiverID uuid.UUID               `json:"receiverId"`
+	PostID     *uuid.UUID              `json:"postId"`
+	CommentID  *uuid.UUID              `json:"commentId"`
+	CreatedAt  time.Time               `json:"createdAt"`
+	UpdatedAt  time.Time               `json:"updatedAt"`
 }
 
 type NotificationSocket interface {

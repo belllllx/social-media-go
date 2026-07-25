@@ -50,10 +50,10 @@ func main() {
 	githubConfig := configs.InitOAuth2GithubConfig()
 	facebookConfig := configs.InitOAuth2FacebookConfig()
 
-	userRepositoryDB := user.NewUserRepositoryDB(app.DB)
+	userRepositoryDB := user.NewUserRepositoryDB()
 	emailRepositoryImpl := email.NewEmailRepositoryImpl()
-	otpRepositoryDB := otp.NewOTPRepositoryDB(app.DB)
-	fileRepositoryDB := file.NewFileRepositoryDB(app.DB)
+	otpRepositoryDB := otp.NewOTPRepositoryDB()
+	fileRepositoryDB := file.NewFileRepositoryDB()
 	postRepositoryDB := post.NewPostRepositoryDB()
 	notificationRepositoryDB := notification.NewNotificationRepositoryDB()
 
@@ -73,7 +73,11 @@ func main() {
 		githubConfig,
 		facebookConfig,
 	)
-	userService := user.NewUserService(app.DB, app.PresignClient, userRepositoryDB)
+	userService := user.NewUserService(
+		app.DB,
+		app.PresignClient,
+		userRepositoryDB,
+	)
 	fileService := file.NewFileService(
 		app.DB,
 		fileRepositoryDB,

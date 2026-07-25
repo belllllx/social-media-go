@@ -2,6 +2,7 @@ package post
 
 import (
 	"github.com/belllllx/social-media-go/internal/file"
+	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/internal/response"
 	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/belllllx/social-media-go/pkg/helpers"
@@ -86,7 +87,7 @@ func (h *postHandler) UploadFiles(c *gin.Context) {
 		})
 	}
 
-	filesURL, err := h.fileService.UploadFiles(filesDataDTO, file.FileTypePost)
+	filesURL, err := h.fileService.UploadFiles(filesDataDTO, models.FileTypePost)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -118,7 +119,7 @@ func (h *postHandler) DeleteFile(c *gin.Context) {
 
 	deleteFileDTO := &file.DeleteFileDTO{
 		FileURL:  deleteFileRequest.FileURL,
-		FileType: file.FileTypePost,
+		FileType: models.FileTypePost,
 	}
 	err = h.fileService.DeleteFile(deleteFileDTO)
 	if err != nil {

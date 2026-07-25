@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/belllllx/social-media-go/internal/logs"
+	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/pkg/errs"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/google/uuid"
@@ -20,7 +21,7 @@ type DeleteFileRequest struct {
 
 type DeleteFileDTO struct {
 	FileURL  string
-	FileType FileType
+	FileType models.FileType
 }
 
 const maxFileSize = 30 << 20 // 30 MB
@@ -54,8 +55,8 @@ type FileDataDTO struct {
 }
 
 type FileService interface {
-	UploadFile(fileDataDTO *FileDataDTO, fileType FileType) (*FileURL, error)
-	UploadFiles(filesDataDTO []FileDataDTO, fileType FileType) (*FilesURL, error)
+	UploadFile(fileDataDTO *FileDataDTO, fileType models.FileType) (*FileURL, error)
+	UploadFiles(filesDataDTO []FileDataDTO, fileType models.FileType) (*FilesURL, error)
 	DeleteFile(deleteFileDTO *DeleteFileDTO) error
 	PresignGetFile(contentID uuid.UUID) (string, error)
 	PresignGetFiles(contentID uuid.UUID) ([]string, error)
@@ -82,8 +83,8 @@ func NewFileService(
 	}
 }
 
-func (s *fileService) UploadFile(fileDataDTO *FileDataDTO, fileType FileType) (*FileURL, error) {
-	if fileType != FileTypeComment && fileType != FileTypeReply {
+func (s *fileService) UploadFile(fileDataDTO *FileDataDTO, fileType models.FileType) (*FileURL, error) {
+	if fileType != models.FileTypeComment && fileType != models.FileTypeReply {
 		logs.Warn("Failed to upload file invalid file type")
 		return nil, errs.NewUnexpectedErrorWithMessage("Failed to upload file invalid file type")
 	}
@@ -99,9 +100,9 @@ func (s *fileService) UploadFile(fileDataDTO *FileDataDTO, fileType FileType) (*
 	newFileName := helpers.GenerateFilename(fileDataDTO.Filename)
 	key := ""
 	switch fileType {
-	case FileTypeComment:
+	case models.FileTypeComment:
 		key = fmt.Sprintf("%s/%s", "comment-image", newFileName)
-	case FileTypeReply:
+	case models.FileTypeReply:
 		key = fmt.Sprintf("%s/%s", "reply-image", newFileName)
 	}
 
@@ -124,7 +125,7 @@ func (s *fileService) UploadFile(fileDataDTO *FileDataDTO, fileType FileType) (*
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to presign get file object")
 	}
 
-	createFile := &File{
+	createFile := &models.File{
 		Filename: key,
 		FileType: fileType,
 	}
@@ -145,8 +146,8 @@ func (s *fileService) UploadFile(fileDataDTO *FileDataDTO, fileType FileType) (*
 	return fileURL, nil
 }
 
-func (s *fileService) UploadFiles(filesDataDTO []FileDataDTO, fileType FileType) (*FilesURL, error) {
-	if fileType != FileTypePost {
+func (s *fileService) UploadFiles(filesDataDTO []FileDataDTO, fileType models.FileType) (*FilesURL, error) {
+	if fileType != models.FileTypePost {
 		logs.Warn("Failed to upload files invalid file type")
 		return nil, errs.NewUnexpectedErrorWithMessage("Failed to upload files invalid file type")
 	}
@@ -163,7 +164,7 @@ func (s *fileService) UploadFiles(filesDataDTO []FileDataDTO, fileType FileType)
 
 	keys := []string{}
 	filesURL := []string{}
-	createFiles := []File{}
+	createFiles := []models.File{}
 	ctx := context.Background()
 
 	for _, fileDataDTO := range filesDataDTO {
@@ -195,7 +196,7 @@ func (s *fileService) UploadFiles(filesDataDTO []FileDataDTO, fileType FileType)
 
 		keys = append(keys, key)
 		filesURL = append(filesURL, req.URL)
-		createFiles = append(createFiles, File{
+		createFiles = append(createFiles, models.File{
 			Filename: key,
 			FileType: fileType,
 		})

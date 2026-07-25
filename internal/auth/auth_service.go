@@ -10,6 +10,7 @@ import (
 
 	"github.com/belllllx/social-media-go/internal/email"
 	"github.com/belllllx/social-media-go/internal/logs"
+	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/internal/otp"
 	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/belllllx/social-media-go/pkg/errs"
@@ -28,7 +29,7 @@ type Tokens struct {
 }
 
 type SocialUserDTO struct {
-	ProviderType user.ProviderType
+	ProviderType models.ProviderType
 	Email        string
 	Name         string
 	AvatarURL    string
@@ -123,7 +124,7 @@ type AuthService interface {
 	VerifyOTPForgotPassword(email, otp string) (token string, err error)
 	ValidateUserLogin(loginDTO *LoginDTO) (userID *uuid.UUID, err error)
 	CreateTokens(userID uuid.UUID) (tokens *Tokens, err error)
-	SocialLogin(providerType user.ProviderType) (url string, err error)
+	SocialLogin(providerType models.ProviderType) (url string, err error)
 	SocialLoginCallback(socialUserDTO *SocialUserDTO) (tokens *Tokens, url string, err error)
 }
 
@@ -245,9 +246,9 @@ func (s *authService) SendEmailForgotPassword(email string) (string, error) {
 	}
 
 	// กรณี social account ห้าม
-	if userExist.ProviderType == user.ProviderTypeGoogle ||
-		userExist.ProviderType == user.ProviderTypeGithub ||
-		userExist.ProviderType == user.ProviderTypeFacebook {
+	if userExist.ProviderType == models.ProviderTypeGoogle ||
+		userExist.ProviderType == models.ProviderTypeGithub ||
+		userExist.ProviderType == models.ProviderTypeFacebook {
 		return "", errs.NewBadRequestErrorWithMessage("Cannot reset password for social media account")
 	}
 
@@ -302,7 +303,7 @@ func (s *authService) VerifyOTPRegister(email, otp string) error {
 		logs.Error(err)
 		return errs.NewUnexpectedErrorWithMessage("Failed to unmarshal json")
 	}
-	user := &user.User{
+	user := &models.User{
 		Fullname:     registerPayload.Fullname,
 		Username:     &registerPayload.Username,
 		Email:        registerPayload.Email,
@@ -430,7 +431,7 @@ func (s *authService) CreateTokens(userID uuid.UUID) (*Tokens, error) {
 	return tokens, nil
 }
 
-func (s *authService) SocialLogin(providerType user.ProviderType) (string, error) {
+func (s *authService) SocialLogin(providerType models.ProviderType) (string, error) {
 	state, err := helpers.GenerateRandomState()
 	if err != nil {
 		logs.Error(err)
@@ -446,11 +447,11 @@ func (s *authService) SocialLogin(providerType user.ProviderType) (string, error
 
 	url := ""
 	switch providerType {
-	case user.ProviderTypeGoogle:
+	case models.ProviderTypeGoogle:
 		url = s.googleConfig.AuthCodeURL(state, oauth2.AccessTypeOnline)
-	case user.ProviderTypeGithub:
+	case models.ProviderTypeGithub:
 		url = s.githubConfig.AuthCodeURL(state, oauth2.AccessTypeOnline)
-	case user.ProviderTypeFacebook:
+	case models.ProviderTypeFacebook:
 		url = s.facebookConfig.AuthCodeURL(state, oauth2.AccessTypeOnline)
 	}
 	return url, nil
@@ -468,7 +469,7 @@ func (s *authService) SocialLoginCallback(socialUserDTO *SocialUserDTO) (*Tokens
 
 	// ยังไม่มี account -> create
 	if helpers.IsErrRecordNotFound(err) {
-		createUser := &user.User{
+		createUser := &models.User{
 			Fullname:     socialUserDTO.Name,
 			Email:        socialUserDTO.Email,
 			ProviderType: socialUserDTO.ProviderType,

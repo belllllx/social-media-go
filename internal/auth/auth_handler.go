@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/belllllx/social-media-go/internal/email"
+	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/internal/response"
 	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/belllllx/social-media-go/pkg/helpers"
@@ -420,7 +421,7 @@ func (h *authHandler) ResetPassword(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/google [get]
 func (h *authHandler) GoogleLogin(c *gin.Context) {
-	url, err := h.authService.SocialLogin(user.ProviderTypeGoogle)
+	url, err := h.authService.SocialLogin(models.ProviderTypeGoogle)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -438,7 +439,7 @@ func (h *authHandler) GoogleLogin(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/facebook [get]
 func (h *authHandler) FacebookLogin(c *gin.Context) {
-	url, err := h.authService.SocialLogin(user.ProviderTypeFacebook)
+	url, err := h.authService.SocialLogin(models.ProviderTypeFacebook)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -456,7 +457,7 @@ func (h *authHandler) FacebookLogin(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/github [get]
 func (h *authHandler) GithubLogin(c *gin.Context) {
-	url, err := h.authService.SocialLogin(user.ProviderTypeGithub)
+	url, err := h.authService.SocialLogin(models.ProviderTypeGithub)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return

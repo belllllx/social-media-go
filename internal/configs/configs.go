@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin/binding"
@@ -62,6 +63,22 @@ func InitDB() *gorm.DB {
 		panic(err)
 	}
 	return db
+}
+
+func Migrate(db *gorm.DB) {
+	err := db.AutoMigrate(
+		&models.User{},
+		&models.Post{},
+		&models.OTP{},
+		&models.Notification{},
+		&models.Like{},
+		&models.Follow{},
+		&models.File{},
+		&models.Comment{},
+	)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func InitRedis() *redis.Client {

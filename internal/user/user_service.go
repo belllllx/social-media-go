@@ -7,6 +7,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/belllllx/social-media-go/internal/logs"
+	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/pkg/errs"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/google/uuid"
@@ -22,19 +23,19 @@ type FollowerData struct {
 }
 
 type SecureUserFollow struct {
-	ID                   uuid.UUID      `json:"id"`
-	Fullname             string         `json:"fullname"`
-	Username             *string        `json:"username"`
-	Email                string         `json:"email"`
-	DateOfBirth          *time.Time     `json:"dateOfBirth"`
-	ProfileUrl           *string        `json:"profileUrl"`
-	ProfileBackgroundUrl *string        `json:"profileBackgroundUrl"`
-	Info                 *string        `json:"info"`
-	Role                 Role           `json:"role"`
-	ProviderType         ProviderType   `json:"providerType"`
-	Followers            []FollowerData `json:"followers"`
-	CreatedAt            time.Time      `json:"createdAt"`
-	UpdatedAt            time.Time      `json:"updatedAt"`
+	ID                   uuid.UUID           `json:"id"`
+	Fullname             string              `json:"fullname"`
+	Username             *string             `json:"username"`
+	Email                string              `json:"email"`
+	DateOfBirth          *time.Time          `json:"dateOfBirth"`
+	ProfileUrl           *string             `json:"profileUrl"`
+	ProfileBackgroundUrl *string             `json:"profileBackgroundUrl"`
+	Info                 *string             `json:"info"`
+	Role                 models.Role         `json:"role"`
+	ProviderType         models.ProviderType `json:"providerType"`
+	Followers            []FollowerData      `json:"followers"`
+	CreatedAt            time.Time           `json:"createdAt"`
+	UpdatedAt            time.Time           `json:"updatedAt"`
 }
 
 type Following struct {
@@ -56,26 +57,26 @@ type Follower struct {
 }
 
 type SecureUser struct {
-	ID                   uuid.UUID    `json:"id"`
-	Fullname             string       `json:"fullname"`
-	Username             *string      `json:"username"`
-	Email                string       `json:"email"`
-	DateOfBirth          *time.Time   `json:"dateOfBirth"`
-	ProfileUrl           *string      `json:"profileUrl"`
-	ProfileBackgroundUrl *string      `json:"profileBackgroundUrl"`
-	Info                 *string      `json:"info"`
-	Role                 Role         `json:"role"`
-	ProviderType         ProviderType `json:"providerType"`
-	Followings           []Following  `json:"followings"`
-	Followers            []Follower   `json:"followers"`
-	CreatedAt            time.Time    `json:"createdAt"`
-	UpdatedAt            time.Time    `json:"updatedAt"`
+	ID                   uuid.UUID           `json:"id"`
+	Fullname             string              `json:"fullname"`
+	Username             *string             `json:"username"`
+	Email                string              `json:"email"`
+	DateOfBirth          *time.Time          `json:"dateOfBirth"`
+	ProfileUrl           *string             `json:"profileUrl"`
+	ProfileBackgroundUrl *string             `json:"profileBackgroundUrl"`
+	Info                 *string             `json:"info"`
+	Role                 models.Role         `json:"role"`
+	ProviderType         models.ProviderType `json:"providerType"`
+	Followings           []Following         `json:"followings"`
+	Followers            []Follower          `json:"followers"`
+	CreatedAt            time.Time           `json:"createdAt"`
+	UpdatedAt            time.Time           `json:"updatedAt"`
 }
 
 type UserService interface {
 	SecureFindWithID(ID uuid.UUID) (*SecureUser, error)
 	ResetPassword(email, password string) error
-	GetUserImage(user *User) error
+	GetUserImage(user *models.User) error
 }
 
 type userService struct {
@@ -234,7 +235,7 @@ func (s *userService) ResetPassword(email, password string) error {
 	return nil
 }
 
-func (s *userService) GetUserImage(user *User) error {
+func (s *userService) GetUserImage(user *models.User) error {
 	ctx := context.Background()
 
 	// ไม่ใช่ avater ของ social login

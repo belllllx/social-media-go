@@ -9,6 +9,7 @@ import (
 
 	"github.com/belllllx/social-media-go/internal/file"
 	"github.com/belllllx/social-media-go/internal/logs"
+	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/internal/notification"
 	"github.com/belllllx/social-media-go/internal/socket"
 	"github.com/belllllx/social-media-go/internal/user"
@@ -166,7 +167,7 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		return nil, errs.NewBadRequestErrorWithMessage("Create post must contains with message or files")
 	}
 
-	createPost := &user.Post{
+	createPost := &models.Post{
 		Message: &createPostDTO.Message,
 		UserID:  createPostDTO.UserID,
 	}
@@ -177,7 +178,7 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find users by id except")
 	}
 
-	createNotificationsDTO := []user.Notification{}
+	createNotificationsDTO := []models.Notification{}
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		err := s.postRepository.Create(tx, createPost)
@@ -195,7 +196,7 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 					return errs.NewUnexpectedErrorWithMessage("Failed to split presigned url")
 				}
 				filePath := fmt.Sprintf("%s/%s", fileDIR, filename)
-				err = s.fileRepository.UpdateContentID(tx, createPost.ID, filePath, file.FileTypePost)
+				err = s.fileRepository.UpdateContentID(tx, createPost.ID, filePath, models.FileTypePost)
 				if err != nil {
 					logs.Error(err)
 					return errs.NewInternalServerErrorWithMessage("Failed to update file of post")
@@ -206,8 +207,8 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		// มี users ถึงสร้าง notifications
 		if len(usersExcept) > 0 {
 			for _, userExcept := range usersExcept {
-				createNotificationsDTO = append(createNotificationsDTO, user.Notification{
-					Type:       user.NotificationTypePost,
+				createNotificationsDTO = append(createNotificationsDTO, models.Notification{
+					Type:       models.NotificationTypePost,
 					Message:    "Create a new post",
 					SenderID:   createPostDTO.UserID,
 					ReceiverID: userExcept.ID,
@@ -448,7 +449,7 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post id %v to share is not found", parentID))
 	}
 
-	createSharePost := &user.Post{
+	createSharePost := &models.Post{
 		Message:  &createSharePostDTO.Message,
 		UserID:   createSharePostDTO.UserID,
 		ParentID: &post.ID,
@@ -465,8 +466,8 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 
 		// ต้องไม่แชร์โพสต์ตัวเองถึงสร้าง notification
 		if createSharePostDTO.UserID != post.UserID {
-			createNotificationDTO := &user.Notification{
-				Type:       user.NotificationTypeShare,
+			createNotificationDTO := &models.Notification{
+				Type:       models.NotificationTypeShare,
 				Message:    "Share your post",
 				SenderID:   createSharePostDTO.UserID,
 				ReceiverID: post.UserID,
@@ -711,7 +712,7 @@ func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPa
 		return nil, errs.NewBadRequestErrorWithMessage("Invalid limit must be greater than 0")
 	}
 
-	posts := []user.Post{}
+	posts := []models.Post{}
 	postsCursorPagination := []Post{}
 	if cursor == "" {
 		posts, err = s.postRepository.FindsCursorPagination(s.db, nil, limitInt)
@@ -745,7 +746,7 @@ func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPa
 				return nil, err
 			}
 
-			comments := []user.Comment{}
+			comments := []models.Comment{}
 			for _, comment := range post.Comments {
 				if comment.ParentID == nil {
 					comments = append(comments, comment)
@@ -913,7 +914,7 @@ func (s *postService) FindsWithUserIDCursorPagination(userID, cursor, limit stri
 		return nil, errs.NewBadRequestErrorWithMessage("Invalid limit must be greater than 0")
 	}
 
-	posts := []user.Post{}
+	posts := []models.Post{}
 	postsCursorPagination := []Post{}
 	if cursor == "" {
 		posts, err = s.postRepository.FindsByUserIDCursorPagination(s.db, userByID.ID, nil, limitInt)
@@ -947,7 +948,7 @@ func (s *postService) FindsWithUserIDCursorPagination(userID, cursor, limit stri
 				return nil, err
 			}
 
-			comments := []user.Comment{}
+			comments := []models.Comment{}
 			for _, comment := range post.Comments {
 				if comment.ParentID == nil {
 					comments = append(comments, comment)
@@ -1119,7 +1120,7 @@ func (s *postService) FindWithID(postID string) (*Post, error) {
 		return nil, err
 	}
 
-	comments := []user.Comment{}
+	comments := []models.Comment{}
 	for _, comment := range post.Comments {
 		if comment.ParentID == nil {
 			comments = append(comments, comment)

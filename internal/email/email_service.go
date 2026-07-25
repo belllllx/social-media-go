@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/belllllx/social-media-go/internal/logs"
+	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/internal/otp"
 	"github.com/belllllx/social-media-go/pkg/errs"
 	"github.com/belllllx/social-media-go/pkg/helpers"
@@ -56,7 +57,7 @@ func (s *emailService) SendEmail(db *gorm.DB, email, sendEmailType string) error
 		return errs.NewUnexpectedErrorWithMessage("Failed to hash otp")
 	}
 
-	createOTP := otp.OTP{
+	createOTP := models.OTP{
 		Email:     email,
 		OTPHash:   otpHash,
 		ExpiredAt: time.Now().Add(time.Minute * 10),

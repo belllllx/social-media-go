@@ -33,6 +33,8 @@ func NewApp() *App {
 	configs.InitValidator()
 
 	db := configs.InitDB()
+	configs.Migrate(db)
+
 	redisClient := configs.InitRedis()
 	verifier := configs.InitOIDCVerifier()
 	s3Client := configs.InitS3Client()

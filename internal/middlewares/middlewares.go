@@ -11,6 +11,7 @@ import (
 	"github.com/belllllx/social-media-go/internal/auth"
 	"github.com/belllllx/social-media-go/internal/configs"
 	"github.com/belllllx/social-media-go/internal/logs"
+	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/internal/response"
 	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/belllllx/social-media-go/pkg/helpers"
@@ -294,7 +295,7 @@ func AuthGoogleCallback(redisClient *redis.Client, verifier *oidc.IDTokenVerifie
 		}
 
 		socialUserDTO := &auth.SocialUserDTO{
-			ProviderType: user.ProviderTypeGoogle,
+			ProviderType: models.ProviderTypeGoogle,
 			Email:        googleClaims.Email,
 			Name:         googleClaims.Name,
 			AvatarURL:    googleClaims.Picture,
@@ -395,7 +396,7 @@ func AuthGithubCallback(redisClient *redis.Client) gin.HandlerFunc {
 		}
 
 		socialUserDTO := &auth.SocialUserDTO{
-			ProviderType: user.ProviderTypeGithub,
+			ProviderType: models.ProviderTypeGithub,
 			Email:        githubUser.Email,
 			Name:         githubUser.Name,
 			AvatarURL:    githubUser.AvatarURL,
@@ -466,7 +467,7 @@ func AuthFacebookCallback(redisClient *redis.Client) gin.HandlerFunc {
 		}
 
 		socialUserDTO := &auth.SocialUserDTO{
-			ProviderType: user.ProviderTypeFacebook,
+			ProviderType: models.ProviderTypeFacebook,
 			Email:        facebookUser.Email,
 			Name:         facebookUser.Name,
 			AvatarURL:    facebookUser.Picture.Data.URL,
