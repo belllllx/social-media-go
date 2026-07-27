@@ -643,7 +643,7 @@ const docTemplate = `{
         },
         "/post/create": {
             "post": {
-                "description": "authentication create post, notifications and socket broadcast post, notifications to client",
+                "description": "authentication create post, notifications and socket emit post, notifications to client",
                 "consumes": [
                     "application/json"
                 ],
@@ -979,7 +979,7 @@ const docTemplate = `{
         },
         "/post/share/create/{parentID}": {
             "post": {
-                "description": "authentication create share post, notification and socket broadcast share post, notification to client",
+                "description": "authentication create share post, notification and socket emit share post, notification to client",
                 "consumes": [
                     "application/json"
                 ],
@@ -1019,6 +1019,81 @@ const docTemplate = `{
                                     "properties": {
                                         "data": {
                                             "$ref": "#/definitions/post.CreatedSharePost"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/post/update/{postID}": {
+            "patch": {
+                "description": "authentication update post and socket emit to clients",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "post"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "uuid for post id",
+                        "name": "postID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "update post payload",
+                        "name": "payload",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/post.UpdatePostRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SwaggerResponseWithData"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/post.Post"
                                         }
                                     }
                                 }
@@ -1232,6 +1307,32 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "models.ProviderType": {
+            "type": "string",
+            "enum": [
+                "LOCAL",
+                "GOOGLE",
+                "FACEBOOK",
+                "GITHUB"
+            ],
+            "x-enum-varnames": [
+                "ProviderTypeLocal",
+                "ProviderTypeGoogle",
+                "ProviderTypeFacebook",
+                "ProviderTypeGithub"
+            ]
+        },
+        "models.Role": {
+            "type": "string",
+            "enum": [
+                "USER",
+                "ADMIN"
+            ],
+            "x-enum-varnames": [
+                "RoleUser",
+                "RoleAdmin"
+            ]
         },
         "post.Comment": {
             "type": "object",
@@ -1494,6 +1595,26 @@ const docTemplate = `{
                 }
             }
         },
+        "post.UpdatePostRequest": {
+            "type": "object",
+            "properties": {
+                "filesUrl": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "isSharePost": {
+                    "type": "boolean"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "shouldDeleteCurrentFiles": {
+                    "type": "boolean"
+                }
+            }
+        },
         "response.SwaggerBadRequestResponse": {
             "type": "object",
             "properties": {
@@ -1609,32 +1730,6 @@ const docTemplate = `{
                 }
             }
         },
-        "user.ProviderType": {
-            "type": "string",
-            "enum": [
-                "LOCAL",
-                "GOOGLE",
-                "FACEBOOK",
-                "GITHUB"
-            ],
-            "x-enum-varnames": [
-                "ProviderTypeLocal",
-                "ProviderTypeGoogle",
-                "ProviderTypeFacebook",
-                "ProviderTypeGithub"
-            ]
-        },
-        "user.Role": {
-            "type": "string",
-            "enum": [
-                "USER",
-                "ADMIN"
-            ],
-            "x-enum-varnames": [
-                "RoleUser",
-                "RoleAdmin"
-            ]
-        },
         "user.SecureUser": {
             "type": "object",
             "properties": {
@@ -1675,10 +1770,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "providerType": {
-                    "$ref": "#/definitions/user.ProviderType"
+                    "$ref": "#/definitions/models.ProviderType"
                 },
                 "role": {
-                    "$ref": "#/definitions/user.Role"
+                    "$ref": "#/definitions/models.Role"
                 },
                 "updatedAt": {
                     "type": "string"
@@ -1722,10 +1817,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "providerType": {
-                    "$ref": "#/definitions/user.ProviderType"
+                    "$ref": "#/definitions/models.ProviderType"
                 },
                 "role": {
-                    "$ref": "#/definitions/user.Role"
+                    "$ref": "#/definitions/models.Role"
                 },
                 "updatedAt": {
                     "type": "string"

@@ -7,11 +7,11 @@ import (
 )
 
 type Post struct {
-	ID            uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey;index:idx_posts_cursor,sort:desc"`
+	ID            uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey;index:idx_posts_cursor,sort:desc;index:idx_posts_user_cursor,sort:desc"`
 	Message       *string
-	CreatedAt     time.Time `gorm:"index:idx_posts_cursor,sort:desc"`
+	CreatedAt     time.Time `gorm:"index:idx_posts_cursor,sort:desc;index:idx_posts_user_cursor,sort:desc"`
 	UpdatedAt     time.Time
-	UserID        uuid.UUID `gorm:"index"`
+	UserID        uuid.UUID `gorm:"index:idx_posts_user_cursor"`
 	User          User      `gorm:"constraint:OnDelete:CASCADE"`
 	ParentID      *uuid.UUID
 	Parent        *Post          `gorm:"foreignkey:ParentID;constraint:OnDelete:CASCADE"`

@@ -10,7 +10,7 @@ import (
 	server "github.com/zishang520/socket.io/servers/socket/v3"
 )
 
-type BroadcastNotificationDTO struct {
+type EmitNotificationDTO struct {
 	ID         uuid.UUID               `json:"id"`
 	Type       models.NotificationType `json:"type"`
 	Message    string                  `json:"message"`
@@ -25,8 +25,8 @@ type BroadcastNotificationDTO struct {
 }
 
 type NotificationSocket interface {
-	BroadcastNotification(broadcastNotificationDTO *BroadcastNotificationDTO)
-	BroadcastNotifications(broadcastNotificationsDTO []BroadcastNotificationDTO)
+	EmitNotification(emitNotificationDTO *EmitNotificationDTO)
+	EmitNotifications(emitNotificationsDTO []EmitNotificationDTO)
 }
 
 type notificationSocket struct {
@@ -37,14 +37,14 @@ func NewNotificationSocket(socket *server.Server) NotificationSocket {
 	return &notificationSocket{socket: socket}
 }
 
-func (s *notificationSocket) BroadcastNotification(broadcastNotificationDTO *BroadcastNotificationDTO) {
-	event := fmt.Sprintf("notification:%v", broadcastNotificationDTO.ReceiverID)
-	s.socket.Emit(event, broadcastNotificationDTO)
+func (s *notificationSocket) EmitNotification(emitNotificationDTO *EmitNotificationDTO) {
+	event := fmt.Sprintf("notification:%v", emitNotificationDTO.ReceiverID)
+	s.socket.Emit(event, emitNotificationDTO)
 }
 
-func (s *notificationSocket) BroadcastNotifications(broadcastNotificationsDTO []BroadcastNotificationDTO) {
-	for _, broadcastNotificationDTO := range broadcastNotificationsDTO {
-		event := fmt.Sprintf("notification:%v", broadcastNotificationDTO.ReceiverID)
-		s.socket.Emit(event, broadcastNotificationDTO)
+func (s *notificationSocket) EmitNotifications(emitNotificationsDTO []EmitNotificationDTO) {
+	for _, emitNotificationDTO := range emitNotificationsDTO {
+		event := fmt.Sprintf("notification:%v", emitNotificationDTO.ReceiverID)
+		s.socket.Emit(event, emitNotificationDTO)
 	}
 }

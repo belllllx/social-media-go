@@ -9,11 +9,12 @@ import (
 type FileRepository interface {
 	Create(db *gorm.DB, file *models.File) error
 	CreateMany(db *gorm.DB, files []models.File) error
-	UpdateContentID(db *gorm.DB, contentID uuid.UUID, filename string, fileType models.FileType) error
 	FindByContentID(db *gorm.DB, contentID uuid.UUID) (*models.File, error)
 	FindsByContentID(db *gorm.DB, contentID uuid.UUID) ([]models.File, error)
 	FindByFilenameType(db *gorm.DB, filename string, fileType models.FileType) (*models.File, error)
+	UpdateContentID(db *gorm.DB, contentID uuid.UUID, filename string, fileType models.FileType) error
 	Delete(db *gorm.DB, id int64, filename string, fileType models.FileType) error
+	DeleteMany(db *gorm.DB, files []models.File) error
 }
 
 type fileRepositoryDB struct {
@@ -29,16 +30,6 @@ func (r *fileRepositoryDB) Create(db *gorm.DB, file *models.File) error {
 
 func (r *fileRepositoryDB) CreateMany(db *gorm.DB, files []models.File) error {
 	return db.Create(&files).Error
-}
-
-func (r *fileRepositoryDB) UpdateContentID(
-	db *gorm.DB,
-	contentID uuid.UUID,
-	filename string,
-	fileType models.FileType,
-) error {
-	file := &models.File{}
-	return db.Model(file).Where("filename = ? AND file_type = ?", filename, fileType).Update("content_id", contentID).Error
 }
 
 func (r *fileRepositoryDB) FindByContentID(db *gorm.DB, contentID uuid.UUID) (*models.File, error) {
@@ -72,6 +63,16 @@ func (r *fileRepositoryDB) FindByFilenameType(
 	return file, nil
 }
 
+func (r *fileRepositoryDB) UpdateContentID(
+	db *gorm.DB,
+	contentID uuid.UUID,
+	filename string,
+	fileType models.FileType,
+) error {
+	file := &models.File{}
+	return db.Model(file).Where("filename = ? AND file_type = ?", filename, fileType).Update("content_id", contentID).Error
+}
+
 func (r *fileRepositoryDB) Delete(
 	db *gorm.DB,
 	id int64,
@@ -80,4 +81,8 @@ func (r *fileRepositoryDB) Delete(
 ) error {
 	file := &models.File{}
 	return db.Where("id = ? AND filename = ? AND file_type = ?", id, filename, fileType).Delete(file).Error
+}
+
+func (r *fileRepositoryDB) DeleteMany(db *gorm.DB, files []models.File) error {
+	return db.Delete(&files).Error
 }

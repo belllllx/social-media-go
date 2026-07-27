@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/belllllx/social-media-go/internal/file"
 	"github.com/belllllx/social-media-go/internal/logs"
 	"github.com/belllllx/social-media-go/internal/models"
@@ -19,6 +20,14 @@ import (
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
+
+type UpdatePostDTO struct {
+	PostID                   string
+	Message                  *string
+	FilesURL                 []string
+	ShouldDeleteCurrentFiles bool
+	IsSharePost              bool
+}
 
 type CreateSharePostDTO struct {
 	Message  string
@@ -118,11 +127,13 @@ type PostService interface {
 	FindsCursorPagination(cursor, limit string) (*PostCursorPagination, error)
 	FindsWithUserIDCursorPagination(userID, cursor, limit string) (*PostCursorPagination, error)
 	FindWithID(postID string) (*Post, error)
+	UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error)
 }
 
 type postService struct {
 	db                     *gorm.DB
 	redisClient            *redis.Client
+	s3Client               *s3.Client
 	postRepository         PostRepository
 	userRepository         user.UserRepository
 	fileRepository         file.FileRepository
@@ -137,6 +148,7 @@ type postService struct {
 func NewPostService(
 	db *gorm.DB,
 	redisClient *redis.Client,
+	s3Client *s3.Client,
 	postRepository PostRepository,
 	userRepository user.UserRepository,
 	fileRepository file.FileRepository,
@@ -150,6 +162,7 @@ func NewPostService(
 	return &postService{
 		db:                     db,
 		redisClient:            redisClient,
+		s3Client:               s3Client,
 		postRepository:         postRepository,
 		userRepository:         userRepository,
 		fileRepository:         fileRepository,
@@ -287,7 +300,7 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 			}
 		}
 
-		broadcastNotificationsDTO := []socket.BroadcastNotificationDTO{}
+		emitNotificationsDTO := []socket.EmitNotificationDTO{}
 		for _, notification := range notifications {
 			notificationSender := &user.SecureUser{
 				ID:                   notification.SenderID,
@@ -304,7 +317,7 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 				UpdatedAt:            notification.Sender.UpdatedAt,
 			}
 
-			broadcastNotificationsDTO = append(broadcastNotificationsDTO, socket.BroadcastNotificationDTO{
+			emitNotificationsDTO = append(emitNotificationsDTO, socket.EmitNotificationDTO{
 				ID:         notification.ID,
 				Type:       notification.Type,
 				Message:    notification.Message,
@@ -318,7 +331,7 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 				UpdatedAt:  notification.UpdatedAt,
 			})
 		}
-		go s.notificationSocket.BroadcastNotifications(broadcastNotificationsDTO)
+		go s.notificationSocket.EmitNotifications(emitNotificationsDTO)
 
 		likesDTO := []socket.LikeDTO{}
 		for _, like := range post.Likes {
@@ -346,37 +359,22 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 			})
 		}
 
-		// กรณีไม่มี files
-		if len(createPostDTO.FilesURL) == 0 {
-			broadcastPostDTO := &socket.BroadcastPostDTO{
-				ID:            post.ID,
-				Message:       post.Message,
-				UserID:        post.UserID,
-				User:          secureUser,
-				ParentID:      post.ParentID,
-				Likes:         likesDTO,
-				Comments:      commentsDTO,
-				CommentsCount: len(post.Comments),
-				CreatedAt:     post.CreatedAt,
-				UpdatedAt:     post.UpdatedAt,
-			}
-			go s.postSocket.BroadcastPost(broadcastPostDTO)
-		} else {
-			broadcastPostWithFilesDTO := &socket.BroadcastPostWithFilesDTO{
-				ID:            post.ID,
-				Message:       post.Message,
-				UserID:        post.UserID,
-				User:          secureUser,
-				ParentID:      post.ParentID,
-				Likes:         likesDTO,
-				Comments:      commentsDTO,
-				FilesURL:      filesURL,
-				CommentsCount: len(post.Comments),
-				CreatedAt:     post.CreatedAt,
-				UpdatedAt:     post.UpdatedAt,
-			}
-			go s.postSocket.BroadcastPostWithFiles(broadcastPostWithFilesDTO)
+		postDTO := &socket.PostDTO{
+			ID:            post.ID,
+			Message:       post.Message,
+			UserID:        post.UserID,
+			User:          secureUser,
+			ParentID:      post.ParentID,
+			Likes:         likesDTO,
+			Comments:      commentsDTO,
+			CommentsCount: len(post.Comments),
+			CreatedAt:     post.CreatedAt,
+			UpdatedAt:     post.UpdatedAt,
 		}
+		if len(createPostDTO.FilesURL) > 0 {
+			postDTO.FilesURL = filesURL
+		}
+		go s.postSocket.EmitCreate(postDTO)
 	}
 
 	likes := []Like{}
@@ -487,8 +485,8 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 		_, ok := err.(*errs.AppError)
 		if !ok {
 			logs.Error(err)
-			return nil, err
 		}
+		return nil, err
 	}
 
 	sharePost, err := s.postRepository.PreloadRelations(s.db, createSharePost.ID)
@@ -534,7 +532,7 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 			CreatedAt:            notification.Sender.CreatedAt,
 			UpdatedAt:            notification.Sender.UpdatedAt,
 		}
-		broadcastNotificationsDTO := &socket.BroadcastNotificationDTO{
+		emitNotificationsDTO := &socket.EmitNotificationDTO{
 			ID:         notification.ID,
 			Type:       notification.Type,
 			Message:    notification.Message,
@@ -547,7 +545,7 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 			CreatedAt:  notification.CreatedAt,
 			UpdatedAt:  notification.UpdatedAt,
 		}
-		go s.notificationSocket.BroadcastNotification(broadcastNotificationsDTO)
+		go s.notificationSocket.EmitNotification(emitNotificationsDTO)
 	}
 
 	filesURL, err := s.fileService.PresignGetFiles(post.ID)
@@ -618,7 +616,7 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 			UpdatedAt:     comment.UpdatedAt,
 		})
 	}
-	broadcastSharePostDTO := &socket.BroadcastSharePostDTO{
+	postDTO := &socket.PostDTO{
 		ID:            sharePost.ID,
 		Message:       sharePost.Message,
 		UserID:        sharePost.UserID,
@@ -631,7 +629,7 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 		CreatedAt:     sharePost.CreatedAt,
 		UpdatedAt:     sharePost.UpdatedAt,
 	}
-	go s.postSocket.BroadcastSharePost(broadcastSharePostDTO)
+	go s.postSocket.EmitCreate(postDTO)
 
 	postParent := &PostParent{
 		ID:        post.ID,
@@ -810,6 +808,7 @@ func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPa
 				Message:       post.Message,
 				UserID:        post.UserID,
 				User:          secureUser,
+				ParentID:      post.ParentID,
 				Likes:         updateLikes,
 				FilesURL:      filesURL,
 				CommentsCount: commentsCount,
@@ -852,7 +851,6 @@ func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPa
 					CreatedAt: post.Parent.CreatedAt,
 					UpdatedAt: post.Parent.UpdatedAt,
 				}
-				postCursorPagination.ParentID = post.ParentID
 				postCursorPagination.Parent = postParent
 			}
 
@@ -1012,6 +1010,7 @@ func (s *postService) FindsWithUserIDCursorPagination(userID, cursor, limit stri
 				Message:       post.Message,
 				UserID:        post.UserID,
 				User:          secureUser,
+				ParentID:      post.ParentID,
 				Likes:         updateLikes,
 				FilesURL:      filesURL,
 				CommentsCount: commentsCount,
@@ -1054,7 +1053,6 @@ func (s *postService) FindsWithUserIDCursorPagination(userID, cursor, limit stri
 					CreatedAt: post.Parent.CreatedAt,
 					UpdatedAt: post.Parent.UpdatedAt,
 				}
-				postCursorPagination.ParentID = post.ParentID
 				postCursorPagination.Parent = postParent
 			}
 
@@ -1184,6 +1182,7 @@ func (s *postService) FindWithID(postID string) (*Post, error) {
 		Message:       post.Message,
 		UserID:        post.UserID,
 		User:          secureUser,
+		ParentID:      post.ParentID,
 		Likes:         updateLikes,
 		FilesURL:      filesURL,
 		CommentsCount: commentsCount,
@@ -1226,7 +1225,6 @@ func (s *postService) FindWithID(postID string) (*Post, error) {
 			CreatedAt: post.Parent.CreatedAt,
 			UpdatedAt: post.Parent.UpdatedAt,
 		}
-		postResp.ParentID = post.ParentID
 		postResp.Parent = postParent
 	}
 
@@ -1242,5 +1240,266 @@ func (s *postService) FindWithID(postID string) (*Post, error) {
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to set post from redis")
 	}
 
+	return postResp, nil
+}
+
+func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
+	if updatePostDTO.Message == nil && len(updatePostDTO.FilesURL) == 0 && !updatePostDTO.IsSharePost {
+		return nil, errs.NewBadRequestErrorWithMessage("Update post must contains with message or files")
+	}
+
+	err := helpers.ValidateUUID(updatePostDTO.PostID)
+	if err != nil {
+		logs.Warn(err)
+		return nil, err
+	}
+
+	postID, err := helpers.ParseUUID(updatePostDTO.PostID)
+	if err != nil {
+		logs.Error(err)
+		return nil, err
+	}
+
+	postByID, err := s.postRepository.FindByID(s.db, *postID)
+	if err != nil && !helpers.IsErrRecordNotFound(err) {
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id")
+	}
+
+	if helpers.IsErrRecordNotFound(err) {
+		logs.Warn(err)
+		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", *postID))
+	}
+
+	updatePost := &models.Post{
+		Message: updatePostDTO.Message,
+	}
+
+	files := []models.File{}
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		err = s.postRepository.Update(
+			tx,
+			postByID.ID,
+			updatePost,
+		)
+		if err != nil {
+			logs.Error(err)
+			return errs.NewInternalServerErrorWithMessage("Failed to update post")
+		}
+
+		if len(updatePostDTO.FilesURL) > 0 && updatePostDTO.ShouldDeleteCurrentFiles {
+			files, err = s.fileRepository.FindsByContentID(tx, postByID.ID)
+			if err != nil {
+				logs.Error(err)
+				return errs.NewInternalServerErrorWithMessage("Failed to find files of post")
+			}
+
+			if len(files) > 0 {
+				err = s.fileRepository.DeleteMany(tx, files)
+				if err != nil {
+					logs.Error(err)
+					return errs.NewInternalServerErrorWithMessage("Failed to delete files of post")
+				}
+			}
+
+			for _, fileURL := range updatePostDTO.FilesURL {
+				fileDIR, filename, err := helpers.SplitPresignedURL(fileURL)
+				if err != nil {
+					logs.Error(err)
+					return errs.NewUnexpectedErrorWithMessage("Failed to split presigned url")
+				}
+				filePath := fmt.Sprintf("%s/%s", fileDIR, filename)
+				err = s.fileRepository.UpdateContentID(tx, postByID.ID, filePath, models.FileTypePost)
+				if err != nil {
+					logs.Error(err)
+					return errs.NewInternalServerErrorWithMessage("Failed to update file of post")
+				}
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		_, ok := err.(*errs.AppError)
+		if !ok {
+			logs.Error(err)
+		}
+		return nil, err
+	}
+
+	post, err := s.postRepository.FindByIDPreloadRelations(s.db, postByID.ID)
+	if err != nil && !helpers.IsErrRecordNotFound(err) {
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id with relations")
+	}
+
+	if helpers.IsErrRecordNotFound(err) {
+		logs.Warn(err)
+		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", postByID.ID))
+	}
+
+	comments := []models.Comment{}
+	for _, comment := range post.Comments {
+		if comment.ParentID == nil {
+			comments = append(comments, comment)
+		}
+	}
+	commentsCount := len(comments)
+
+	err = s.userService.GetUserImage(&post.User)
+	if err != nil {
+		return nil, err
+	}
+
+	updateLikes := []Like{}
+	for _, like := range post.Likes {
+		err = s.userService.GetUserImage(&like.User)
+		if err != nil {
+			return nil, err
+		}
+
+		secureUser := &user.SecureUser{
+			ID:                   like.UserID,
+			Fullname:             like.User.Fullname,
+			Username:             like.User.Username,
+			Email:                like.User.Email,
+			DateOfBirth:          like.User.DateOfBirth,
+			ProfileUrl:           like.User.ProfileUrl,
+			ProfileBackgroundUrl: like.User.ProfileBackgroundUrl,
+			Info:                 like.User.Info,
+			Role:                 like.User.Role,
+			ProviderType:         like.User.ProviderType,
+			CreatedAt:            like.User.CreatedAt,
+			UpdatedAt:            like.User.UpdatedAt,
+		}
+		updateLikes = append(updateLikes, Like{
+			ID:        like.ID,
+			UserID:    like.UserID,
+			User:      secureUser,
+			PostID:    like.PostID,
+			CommentID: like.CommentID,
+			CreatedAt: like.CreatedAt,
+			UpdatedAt: like.UpdatedAt,
+		})
+	}
+
+	secureUser := &user.SecureUser{
+		ID:                   post.UserID,
+		Fullname:             post.User.Fullname,
+		Username:             post.User.Username,
+		Email:                post.User.Email,
+		DateOfBirth:          post.User.DateOfBirth,
+		ProfileUrl:           post.User.ProfileUrl,
+		ProfileBackgroundUrl: post.User.ProfileBackgroundUrl,
+		Info:                 post.User.Info,
+		Role:                 post.User.Role,
+		ProviderType:         post.User.ProviderType,
+		CreatedAt:            post.User.CreatedAt,
+		UpdatedAt:            post.User.UpdatedAt,
+	}
+
+	likesDTO := []socket.LikeDTO{}
+	for _, like := range post.Likes {
+		likesDTO = append(likesDTO, socket.LikeDTO{
+			ID:        like.ID,
+			UserID:    like.UserID,
+			PostID:    like.PostID,
+			CommentID: like.CommentID,
+			CreatedAt: like.CreatedAt,
+			UpdatedAt: like.UpdatedAt,
+		})
+	}
+
+	postDTO := &socket.PostDTO{
+		ID:            post.ID,
+		Message:       post.Message,
+		UserID:        post.UserID,
+		User:          secureUser,
+		ParentID:      post.ParentID,
+		Likes:         likesDTO,
+		CommentsCount: len(post.Comments),
+		CreatedAt:     post.CreatedAt,
+		UpdatedAt:     post.UpdatedAt,
+	}
+
+	postResp := &Post{
+		ID:            post.ID,
+		Message:       post.Message,
+		UserID:        post.UserID,
+		User:          secureUser,
+		ParentID:      post.ParentID,
+		Likes:         updateLikes,
+		CommentsCount: commentsCount,
+		CreatedAt:     post.CreatedAt,
+		UpdatedAt:     post.UpdatedAt,
+	}
+
+	if post.ParentID != nil {
+		err = s.userService.GetUserImage(&post.Parent.User)
+		if err != nil {
+			return nil, err
+		}
+
+		postParentSecureUser := &user.SecureUser{
+			ID:                   post.Parent.UserID,
+			Fullname:             post.Parent.User.Fullname,
+			Username:             post.Parent.User.Username,
+			Email:                post.Parent.User.Email,
+			DateOfBirth:          post.Parent.User.DateOfBirth,
+			ProfileUrl:           post.Parent.User.ProfileUrl,
+			ProfileBackgroundUrl: post.Parent.User.ProfileBackgroundUrl,
+			Info:                 post.Parent.User.Info,
+			Role:                 post.Parent.User.Role,
+			ProviderType:         post.Parent.User.ProviderType,
+			CreatedAt:            post.Parent.User.CreatedAt,
+			UpdatedAt:            post.Parent.User.UpdatedAt,
+		}
+		postParent := &PostParent{
+			ID:        *post.ParentID,
+			Message:   post.Parent.Message,
+			UserID:    post.Parent.UserID,
+			User:      postParentSecureUser,
+			ParentID:  post.ParentID,
+			CreatedAt: post.Parent.CreatedAt,
+			UpdatedAt: post.Parent.UpdatedAt,
+		}
+
+		postParentDTO := &socket.PostParentDTO{
+			ID:        *post.ParentID,
+			Message:   post.Parent.Message,
+			UserID:    post.Parent.UserID,
+			User:      postParentSecureUser,
+			ParentID:  post.ParentID,
+			CreatedAt: post.Parent.CreatedAt,
+			UpdatedAt: post.Parent.UpdatedAt,
+		}
+
+		postDTO.Parent = postParentDTO
+		postResp.Parent = postParent
+	}
+
+	if len(updatePostDTO.FilesURL) == 0 || !updatePostDTO.ShouldDeleteCurrentFiles {
+		go s.postSocket.EmitUpdate(postDTO)
+		return postResp, nil
+	}
+
+	ctx := context.Background()
+	for _, file := range files {
+		_, err = helpers.DeleteObject(s.s3Client, ctx, file.Filename)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to delete file from bucket")
+		}
+	}
+
+	filesURL, err := s.fileService.PresignGetFiles(post.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	postDTO.FilesURL = filesURL
+	postResp.FilesURL = filesURL
+
+	go s.postSocket.EmitUpdate(postDTO)
 	return postResp, nil
 }

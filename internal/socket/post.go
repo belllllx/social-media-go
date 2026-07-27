@@ -40,51 +40,24 @@ type CommentDTO struct {
 	UpdatedAt     time.Time  `json:"updatedAt"`
 }
 
-type BroadcastSharePostDTO struct {
+type PostDTO struct {
 	ID            uuid.UUID        `json:"id"`
 	Message       *string          `json:"message"`
 	UserID        uuid.UUID        `json:"userId"`
 	User          *user.SecureUser `json:"user"`
 	ParentID      *uuid.UUID       `json:"parentId"`
-	Parent        *PostParentDTO   `json:"parent"`
+	Parent        *PostParentDTO   `json:"parent,omitempty"`
 	Likes         []LikeDTO        `json:"likes"`
-	Comments      []CommentDTO     `json:"comments"`
-	CommentsCount int              `json:"commentsCount"`
-	CreatedAt     time.Time        `json:"createdAt"`
-	UpdatedAt     time.Time        `json:"updatedAt"`
-}
-
-type BroadcastPostDTO struct {
-	ID            uuid.UUID        `json:"id"`
-	Message       *string          `json:"message"`
-	UserID        uuid.UUID        `json:"userId"`
-	User          *user.SecureUser `json:"user"`
-	ParentID      *uuid.UUID       `json:"parentId"`
-	Likes         []LikeDTO        `json:"likes"`
-	Comments      []CommentDTO     `json:"comments"`
-	CommentsCount int              `json:"commentsCount"`
-	CreatedAt     time.Time        `json:"createdAt"`
-	UpdatedAt     time.Time        `json:"updatedAt"`
-}
-
-type BroadcastPostWithFilesDTO struct {
-	ID            uuid.UUID        `json:"id"`
-	Message       *string          `json:"message"`
-	UserID        uuid.UUID        `json:"userId"`
-	User          *user.SecureUser `json:"user"`
-	ParentID      *uuid.UUID       `json:"parentId"`
-	Likes         []LikeDTO        `json:"likes"`
-	Comments      []CommentDTO     `json:"comments"`
-	FilesURL      []string         `json:"filesUrl"`
+	Comments      []CommentDTO     `json:"comments,omitempty"`
+	FilesURL      []string         `json:"filesUrl,omitempty"`
 	CommentsCount int              `json:"commentsCount"`
 	CreatedAt     time.Time        `json:"createdAt"`
 	UpdatedAt     time.Time        `json:"updatedAt"`
 }
 
 type PostSocket interface {
-	BroadcastPost(broadcastPostDTO *BroadcastPostDTO)
-	BroadcastPostWithFiles(broadcastPostWithFilesDTO *BroadcastPostWithFilesDTO)
-	BroadcastSharePost(broadcastSharePostDTO *BroadcastSharePostDTO)
+	EmitCreate(postDTO *PostDTO)
+	EmitUpdate(postDTO *PostDTO)
 }
 
 type postSocket struct {
@@ -95,14 +68,10 @@ func NewPostSocket(socket *server.Server) PostSocket {
 	return &postSocket{socket: socket}
 }
 
-func (s *postSocket) BroadcastPost(broadcastPostDTO *BroadcastPostDTO) {
-	s.socket.Emit("newPost", broadcastPostDTO)
+func (s *postSocket) EmitCreate(postDTO *PostDTO) {
+	s.socket.Emit("newPost", postDTO)
 }
 
-func (s *postSocket) BroadcastPostWithFiles(broadcastPostWithFilesDTO *BroadcastPostWithFilesDTO) {
-	s.socket.Emit("newPost", broadcastPostWithFilesDTO)
-}
-
-func (s *postSocket) BroadcastSharePost(broadcastSharePostDTO *BroadcastSharePostDTO) {
-	s.socket.Emit("newPost", broadcastSharePostDTO)
+func (s *postSocket) EmitUpdate(postDTO *PostDTO) {
+	s.socket.Emit("updatePost", postDTO)
 }

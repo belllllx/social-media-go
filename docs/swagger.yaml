@@ -81,6 +81,26 @@ definitions:
           type: string
         type: array
     type: object
+  models.ProviderType:
+    enum:
+    - LOCAL
+    - GOOGLE
+    - FACEBOOK
+    - GITHUB
+    type: string
+    x-enum-varnames:
+    - ProviderTypeLocal
+    - ProviderTypeGoogle
+    - ProviderTypeFacebook
+    - ProviderTypeGithub
+  models.Role:
+    enum:
+    - USER
+    - ADMIN
+    type: string
+    x-enum-varnames:
+    - RoleUser
+    - RoleAdmin
   post.Comment:
     properties:
       createdAt:
@@ -252,6 +272,19 @@ definitions:
       userId:
         type: string
     type: object
+  post.UpdatePostRequest:
+    properties:
+      filesUrl:
+        items:
+          type: string
+        type: array
+      isSharePost:
+        type: boolean
+      message:
+        type: string
+      shouldDeleteCurrentFiles:
+        type: boolean
+    type: object
   response.SwaggerBadRequestResponse:
     properties:
       errorFields:
@@ -327,26 +360,6 @@ definitions:
       updatedAt:
         type: string
     type: object
-  user.ProviderType:
-    enum:
-    - LOCAL
-    - GOOGLE
-    - FACEBOOK
-    - GITHUB
-    type: string
-    x-enum-varnames:
-    - ProviderTypeLocal
-    - ProviderTypeGoogle
-    - ProviderTypeFacebook
-    - ProviderTypeGithub
-  user.Role:
-    enum:
-    - USER
-    - ADMIN
-    type: string
-    x-enum-varnames:
-    - RoleUser
-    - RoleAdmin
   user.SecureUser:
     properties:
       createdAt:
@@ -374,9 +387,9 @@ definitions:
       profileUrl:
         type: string
       providerType:
-        $ref: '#/definitions/user.ProviderType'
+        $ref: '#/definitions/models.ProviderType'
       role:
-        $ref: '#/definitions/user.Role'
+        $ref: '#/definitions/models.Role'
       updatedAt:
         type: string
       username:
@@ -405,9 +418,9 @@ definitions:
       profileUrl:
         type: string
       providerType:
-        $ref: '#/definitions/user.ProviderType'
+        $ref: '#/definitions/models.ProviderType'
       role:
-        $ref: '#/definitions/user.Role'
+        $ref: '#/definitions/models.Role'
       updatedAt:
         type: string
       username:
@@ -828,8 +841,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: authentication create post, notifications and socket broadcast
-        post, notifications to client
+      description: authentication create post, notifications and socket emit post,
+        notifications to client
       parameters:
       - description: create post payload
         in: body
@@ -1037,7 +1050,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: authentication create share post, notification and socket broadcast
+      description: authentication create share post, notification and socket emit
         share post, notification to client
       parameters:
       - description: uuid for parent post id
@@ -1061,6 +1074,52 @@ paths:
             - properties:
                 data:
                   $ref: '#/definitions/post.CreatedSharePost'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - post
+  /post/update/{postID}:
+    patch:
+      consumes:
+      - application/json
+      description: authentication update post and socket emit to clients
+      parameters:
+      - description: uuid for post id
+        in: path
+        name: postID
+        required: true
+        type: string
+      - description: update post payload
+        in: body
+        name: payload
+        schema:
+          $ref: '#/definitions/post.UpdatePostRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SwaggerResponseWithData'
+            - properties:
+                data:
+                  $ref: '#/definitions/post.Post'
               type: object
         "400":
           description: Bad Request

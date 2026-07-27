@@ -9,6 +9,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type UpdatePostRequest struct {
+	Message                  *string  `json:"message"`
+	FilesURL                 []string `json:"filesUrl" binding:"dive,presignedurl"`
+	ShouldDeleteCurrentFiles bool     `json:"shouldDeleteCurrentFiles"`
+	IsSharePost              bool     `json:"isSharePost"`
+}
+
 type CreateSharePostRequest struct {
 	Message string `json:"message"`
 }
@@ -26,6 +33,7 @@ type PostHandler interface {
 	FindsCursorPagination(c *gin.Context)
 	FindsWithUserIDCursorPagination(c *gin.Context)
 	FindWithID(c *gin.Context)
+	UpdatePost(c *gin.Context)
 }
 
 type postHandler struct {
@@ -132,12 +140,12 @@ func (h *postHandler) DeleteFile(c *gin.Context) {
 
 // CreatePost godoc
 //
-//	@Description	authentication create post, notifications and socket broadcast post, notifications to client
+//	@Description	authentication create post, notifications and socket emit post, notifications to client
 //	@Tags			post
 //	@Accept			json
 //	@Produce		json
 //	@Param			payload	body		CreatePostRequest	false	"create post payload"
-//	@Success		201		{object}	response.SwaggerResponseWithData{data=post.CreatedPost}
+//	@Success		201		{object}	response.SwaggerResponseWithData{data=CreatedPost}
 //	@Failure		400		{object}	response.SwaggerBadRequestResponse
 //	@Failure		401		{object}	response.SwaggerResponse
 //	@Failure		404		{object}	response.SwaggerResponse
@@ -173,13 +181,13 @@ func (h *postHandler) CreatePost(c *gin.Context) {
 
 // CreateSharePost godoc
 //
-//	@Description	authentication create share post, notification and socket broadcast share post, notification to client
+//	@Description	authentication create share post, notification and socket emit share post, notification to client
 //	@Tags			post
 //	@Accept			json
 //	@Produce		json
 //	@Param			parentID	path		string					true	"uuid for parent post id"
 //	@Param			payload		body		CreateSharePostRequest	false	"create share post payload"
-//	@Success		201			{object}	response.SwaggerResponseWithData{data=post.CreatedSharePost}
+//	@Success		201			{object}	response.SwaggerResponseWithData{data=CreatedSharePost}
 //	@Failure		400			{object}	response.SwaggerBadRequestResponse
 //	@Failure		401			{object}	response.SwaggerResponse
 //	@Failure		404			{object}	response.SwaggerResponse
@@ -221,7 +229,7 @@ func (h *postHandler) CreateSharePost(c *gin.Context) {
 //	@Produce		json
 //	@Param			cursor	query		string	false	"cursor uuid for post id"
 //	@Param			limit	query		int		true	"limit for posts cursor pagination"
-//	@Success		200		{object}	response.SwaggerResponseWithData{data=post.PostCursorPagination}
+//	@Success		200		{object}	response.SwaggerResponseWithData{data=PostCursorPagination}
 //	@Failure		400		{object}	response.SwaggerBadRequestResponse
 //	@Failure		401		{object}	response.SwaggerResponse
 //	@Failure		404		{object}	response.SwaggerResponse
@@ -247,7 +255,7 @@ func (h *postHandler) FindsCursorPagination(c *gin.Context) {
 //	@Param			userID	path		string	true	"uuid for user id"
 //	@Param			cursor	query		string	false	"cursor uuid for post id"
 //	@Param			limit	query		int		true	"limit for posts cursor pagination"
-//	@Success		200		{object}	response.SwaggerResponseWithData{data=post.PostCursorPagination}
+//	@Success		200		{object}	response.SwaggerResponseWithData{data=PostCursorPagination}
 //	@Failure		400		{object}	response.SwaggerBadRequestResponse
 //	@Failure		401		{object}	response.SwaggerResponse
 //	@Failure		404		{object}	response.SwaggerResponse
@@ -276,7 +284,7 @@ func (h *postHandler) FindsWithUserIDCursorPagination(c *gin.Context) {
 //	@Tags			post
 //	@Produce		json
 //	@Param			postID	path		string	true	"uuid for post id"
-//	@Success		200		{object}	response.SwaggerResponseWithData{data=post.Post}
+//	@Success		200		{object}	response.SwaggerResponseWithData{data=Post}
 //	@Failure		400		{object}	response.SwaggerBadRequestResponse
 //	@Failure		401		{object}	response.SwaggerResponse
 //	@Failure		404		{object}	response.SwaggerResponse
@@ -291,4 +299,43 @@ func (h *postHandler) FindWithID(c *gin.Context) {
 	}
 
 	response.Ok(c, "Post retrive successfully", post)
+}
+
+// UpdatePost godoc
+//
+//	@Description	authentication update post and socket emit to clients
+//	@Tags			post
+//	@Accept			json
+//	@Produce		json
+//	@Param			postID	path		string				true	"uuid for post id"
+//	@Param			payload	body		UpdatePostRequest	false	"update post payload"
+//	@Success		200		{object}	response.SwaggerResponseWithData{data=Post}
+//	@Failure		400		{object}	response.SwaggerBadRequestResponse
+//	@Failure		401		{object}	response.SwaggerResponse
+//	@Failure		404		{object}	response.SwaggerResponse
+//	@Failure		500		{object}	response.SwaggerResponse
+//	@Router			/post/update/{postID} [patch]
+func (h *postHandler) UpdatePost(c *gin.Context) {
+	postID := c.Param("postID")
+	updatePostRequest := &UpdatePostRequest{}
+	err := c.ShouldBind(updatePostRequest)
+	if err != nil {
+		response.AbortWithError(c, err)
+		return
+	}
+
+	updatePostDTO := &UpdatePostDTO{
+		PostID:                   postID,
+		Message:                  updatePostRequest.Message,
+		FilesURL:                 updatePostRequest.FilesURL,
+		ShouldDeleteCurrentFiles: updatePostRequest.ShouldDeleteCurrentFiles,
+		IsSharePost:              updatePostRequest.IsSharePost,
+	}
+	post, err := h.postService.UpdatePost(updatePostDTO)
+	if err != nil {
+		helpers.HandleError(c, err)
+		return
+	}
+
+	response.Ok(c, "Update post successfully", post)
 }

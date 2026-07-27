@@ -88,6 +88,7 @@ func main() {
 	postService := post.NewPostService(
 		app.DB,
 		app.RedisClient,
+		app.S3Client,
 		postRepositoryDB,
 		userRepositoryDB,
 		fileRepositoryDB,
@@ -191,6 +192,7 @@ func main() {
 		post.GET("/finds", postHandler.FindsCursorPagination)
 		post.GET("/finds/:userID", postHandler.FindsWithUserIDCursorPagination)
 		post.GET("/find/:postID", postHandler.FindWithID)
+		post.PATCH("/update/:postID", postHandler.UpdatePost)
 	}
 
 	app.Run()

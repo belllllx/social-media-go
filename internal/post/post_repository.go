@@ -17,11 +17,13 @@ type Cursor struct {
 type PostRepository interface {
 	Create(db *gorm.DB, post *models.Post) error
 	PreloadRelations(db *gorm.DB, postID uuid.UUID) (*models.Post, error)
+	FindByID(db *gorm.DB, postID uuid.UUID) (*models.Post, error)
 	FindByIDPreloadRelation(db *gorm.DB, postID uuid.UUID) (*models.Post, error)
 	FindByIDPreloadRelations(db *gorm.DB, postID uuid.UUID) (*models.Post, error)
 	FindByIDCursor(db *gorm.DB, postID uuid.UUID) (*Cursor, error)
 	FindsCursorPagination(db *gorm.DB, cursor *Cursor, limit int) ([]models.Post, error)
 	FindsByUserIDCursorPagination(db *gorm.DB, userID uuid.UUID, cursor *Cursor, limit int) ([]models.Post, error)
+	Update(db *gorm.DB, postID uuid.UUID, updatePost *models.Post) error
 }
 
 type postRepositoryDB struct {
@@ -43,6 +45,15 @@ func (r *postRepositoryDB) PreloadRelations(db *gorm.DB, postID uuid.UUID) (*mod
 		Preload("Comments").
 		Limit(1).
 		Find(post).Error
+	if err != nil {
+		return nil, err
+	}
+	return post, nil
+}
+
+func (r *postRepositoryDB) FindByID(db *gorm.DB, postID uuid.UUID) (*models.Post, error) {
+	post := &models.Post{}
+	err := db.Where("id = ?", postID).Take(post).Error
 	if err != nil {
 		return nil, err
 	}
@@ -155,4 +166,13 @@ func (r *postRepositoryDB) FindsByUserIDCursorPagination(
 		return nil, err
 	}
 	return *posts, nil
+}
+
+func (r *postRepositoryDB) Update(db *gorm.DB, postID uuid.UUID, updatePost *models.Post) error {
+	post := &models.Post{}
+	err := db.Model(post).Where("id = ?", postID).Updates(*updatePost).Error
+	if err != nil {
+		return err
+	}
+	return nil
 }
