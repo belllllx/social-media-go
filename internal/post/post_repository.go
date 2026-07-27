@@ -41,8 +41,6 @@ func (r *postRepositoryDB) PreloadRelations(db *gorm.DB, postID uuid.UUID) (*mod
 	post := &models.Post{}
 	err := db.Where("id = ?", postID).
 		Preload("User", helpers.OmitUserPasswordHash).
-		Preload("Likes").
-		Preload("Comments").
 		Limit(1).
 		Find(post).Error
 	if err != nil {

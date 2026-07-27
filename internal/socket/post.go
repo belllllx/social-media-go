@@ -20,24 +20,13 @@ type PostParentDTO struct {
 }
 
 type LikeDTO struct {
-	ID        int64      `json:"id"`
-	UserID    uuid.UUID  `json:"userId"`
-	PostID    *uuid.UUID `json:"postId"`
-	CommentID *uuid.UUID `json:"commentId"`
-	CreatedAt time.Time  `json:"createdAt"`
-	UpdatedAt time.Time  `json:"updatedAt"`
-}
-
-type CommentDTO struct {
-	ID            uuid.UUID  `json:"id"`
-	Message       *string    `json:"message"`
-	UserID        uuid.UUID  `json:"userId"`
-	PostID        uuid.UUID  `json:"postId"`
-	ParentID      *uuid.UUID `json:"parentId"`
-	ReplyID       *uuid.UUID `json:"replyId"`
-	ReplyToUserID *uuid.UUID `json:"replyToUserId"`
-	CreatedAt     time.Time  `json:"createdAt"`
-	UpdatedAt     time.Time  `json:"updatedAt"`
+	ID        int64            `json:"id"`
+	UserID    uuid.UUID        `json:"userId"`
+	User      *user.SecureUser `json:"user"`
+	PostID    *uuid.UUID       `json:"postId"`
+	CommentID *uuid.UUID       `json:"commentId"`
+	CreatedAt time.Time        `json:"createdAt"`
+	UpdatedAt time.Time        `json:"updatedAt"`
 }
 
 type PostDTO struct {
@@ -47,10 +36,9 @@ type PostDTO struct {
 	User          *user.SecureUser `json:"user"`
 	ParentID      *uuid.UUID       `json:"parentId"`
 	Parent        *PostParentDTO   `json:"parent,omitempty"`
-	Likes         []LikeDTO        `json:"likes"`
-	Comments      []CommentDTO     `json:"comments,omitempty"`
+	Likes         []LikeDTO        `json:"likes,omitempty"`
 	FilesURL      []string         `json:"filesUrl,omitempty"`
-	CommentsCount int              `json:"commentsCount"`
+	CommentsCount int              `json:"commentsCount,omitempty"`
 	CreatedAt     time.Time        `json:"createdAt"`
 	UpdatedAt     time.Time        `json:"updatedAt"`
 }

@@ -51,18 +51,6 @@ type Like struct {
 	UpdatedAt time.Time        `json:"updatedAt"`
 }
 
-type Comment struct {
-	ID            uuid.UUID  `json:"id"`
-	Message       *string    `json:"message"`
-	UserID        uuid.UUID  `json:"userId"`
-	PostID        uuid.UUID  `json:"postId"`
-	ParentID      *uuid.UUID `json:"parentId"`
-	ReplyID       *uuid.UUID `json:"replyId"`
-	ReplyToUserID *uuid.UUID `json:"replyToUserId"`
-	CreatedAt     time.Time  `json:"createdAt"`
-	UpdatedAt     time.Time  `json:"updatedAt"`
-}
-
 type PostParent struct {
 	ID        uuid.UUID        `json:"id"`
 	Message   *string          `json:"message"`
@@ -94,31 +82,25 @@ type PostCursorPagination struct {
 }
 
 type CreatedSharePost struct {
-	ID            uuid.UUID        `json:"id"`
-	Message       *string          `json:"message"`
-	UserID        uuid.UUID        `json:"userId"`
-	User          *user.SecureUser `json:"user"`
-	ParentID      *uuid.UUID       `json:"parentId"`
-	Parent        *PostParent      `json:"parent"`
-	Likes         []Like           `json:"likes"`
-	Comments      []Comment        `json:"comments"`
-	CommentsCount int              `json:"commentsCount"`
-	CreatedAt     time.Time        `json:"createdAt"`
-	UpdatedAt     time.Time        `json:"updatedAt"`
+	ID        uuid.UUID        `json:"id"`
+	Message   *string          `json:"message"`
+	UserID    uuid.UUID        `json:"userId"`
+	User      *user.SecureUser `json:"user"`
+	ParentID  *uuid.UUID       `json:"parentId"`
+	Parent    *PostParent      `json:"parent"`
+	CreatedAt time.Time        `json:"createdAt"`
+	UpdatedAt time.Time        `json:"updatedAt"`
 }
 
 type CreatedPost struct {
-	ID            uuid.UUID        `json:"id"`
-	Message       *string          `json:"message"`
-	UserID        uuid.UUID        `json:"userId"`
-	User          *user.SecureUser `json:"user"`
-	ParentID      *uuid.UUID       `json:"parentId"`
-	Likes         []Like           `json:"likes"`
-	Comments      []Comment        `json:"comments"`
-	FilesURL      []string         `json:"filesUrl,omitempty"`
-	CommentsCount int              `json:"commentsCount"`
-	CreatedAt     time.Time        `json:"createdAt"`
-	UpdatedAt     time.Time        `json:"updatedAt"`
+	ID        uuid.UUID        `json:"id"`
+	Message   *string          `json:"message"`
+	UserID    uuid.UUID        `json:"userId"`
+	User      *user.SecureUser `json:"user"`
+	ParentID  *uuid.UUID       `json:"parentId"`
+	FilesURL  []string         `json:"filesUrl,omitempty"`
+	CreatedAt time.Time        `json:"createdAt"`
+	UpdatedAt time.Time        `json:"updatedAt"`
 }
 
 type PostService interface {
@@ -281,7 +263,7 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		UpdatedAt:            post.User.UpdatedAt,
 	}
 
-	// มี user ถึง broadcast notifications กับ post
+	// มี user ถึง emit notifications กับ post
 	if len(usersExcept) > 0 {
 		notificationsID := []uuid.UUID{}
 		for _, createNotificationDTO := range createNotificationsDTO {
@@ -333,43 +315,14 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		}
 		go s.notificationSocket.EmitNotifications(emitNotificationsDTO)
 
-		likesDTO := []socket.LikeDTO{}
-		for _, like := range post.Likes {
-			likesDTO = append(likesDTO, socket.LikeDTO{
-				ID:        like.ID,
-				UserID:    like.UserID,
-				PostID:    like.PostID,
-				CommentID: like.CommentID,
-				CreatedAt: like.CreatedAt,
-				UpdatedAt: like.UpdatedAt,
-			})
-		}
-		commentsDTO := []socket.CommentDTO{}
-		for _, comment := range post.Comments {
-			commentsDTO = append(commentsDTO, socket.CommentDTO{
-				ID:            comment.ID,
-				Message:       comment.Message,
-				UserID:        comment.UserID,
-				PostID:        comment.PostID,
-				ParentID:      comment.ParentID,
-				ReplyID:       comment.ReplyID,
-				ReplyToUserID: comment.ReplyToUserID,
-				CreatedAt:     comment.CreatedAt,
-				UpdatedAt:     comment.UpdatedAt,
-			})
-		}
-
 		postDTO := &socket.PostDTO{
-			ID:            post.ID,
-			Message:       post.Message,
-			UserID:        post.UserID,
-			User:          secureUser,
-			ParentID:      post.ParentID,
-			Likes:         likesDTO,
-			Comments:      commentsDTO,
-			CommentsCount: len(post.Comments),
-			CreatedAt:     post.CreatedAt,
-			UpdatedAt:     post.UpdatedAt,
+			ID:        post.ID,
+			Message:   post.Message,
+			UserID:    post.UserID,
+			User:      secureUser,
+			ParentID:  post.ParentID,
+			CreatedAt: post.CreatedAt,
+			UpdatedAt: post.UpdatedAt,
 		}
 		if len(createPostDTO.FilesURL) > 0 {
 			postDTO.FilesURL = filesURL
@@ -377,43 +330,14 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		go s.postSocket.EmitCreate(postDTO)
 	}
 
-	likes := []Like{}
-	for _, like := range post.Likes {
-		likes = append(likes, Like{
-			ID:        like.ID,
-			UserID:    like.UserID,
-			PostID:    like.PostID,
-			CommentID: like.CommentID,
-			CreatedAt: like.CreatedAt,
-			UpdatedAt: like.UpdatedAt,
-		})
-	}
-	comments := []Comment{}
-	for _, comment := range post.Comments {
-		comments = append(comments, Comment{
-			ID:            comment.ID,
-			Message:       comment.Message,
-			UserID:        comment.UserID,
-			PostID:        comment.PostID,
-			ParentID:      comment.ParentID,
-			ReplyID:       comment.ReplyID,
-			ReplyToUserID: comment.ReplyToUserID,
-			CreatedAt:     comment.CreatedAt,
-			UpdatedAt:     comment.UpdatedAt,
-		})
-	}
-
 	respPost := &CreatedPost{
-		ID:            post.ID,
-		Message:       post.Message,
-		UserID:        post.UserID,
-		User:          secureUser,
-		ParentID:      post.ParentID,
-		Likes:         likes,
-		Comments:      comments,
-		CommentsCount: len(post.Comments),
-		CreatedAt:     post.CreatedAt,
-		UpdatedAt:     post.UpdatedAt,
+		ID:        post.ID,
+		Message:   post.Message,
+		UserID:    post.UserID,
+		User:      secureUser,
+		ParentID:  post.ParentID,
+		CreatedAt: post.CreatedAt,
+		UpdatedAt: post.UpdatedAt,
 	}
 
 	if len(createPostDTO.FilesURL) > 0 {
@@ -505,7 +429,7 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 		return nil, err
 	}
 
-	// ต้องไม่แชร์โพสต์ตัวเองถึง broadcast notification
+	// ต้องไม่แชร์โพสต์ตัวเองถึง emit notification
 	if createSharePostDTO.UserID != post.UserID {
 		notification, err := s.notificationRepository.PreloadRelation(s.db, notificationID)
 		if err != nil {
@@ -591,43 +515,15 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 		CreatedAt:            sharePost.User.CreatedAt,
 		UpdatedAt:            sharePost.User.UpdatedAt,
 	}
-	likesDTO := []socket.LikeDTO{}
-	for _, like := range sharePost.Likes {
-		likesDTO = append(likesDTO, socket.LikeDTO{
-			ID:        like.ID,
-			UserID:    like.UserID,
-			PostID:    like.PostID,
-			CommentID: like.CommentID,
-			CreatedAt: like.CreatedAt,
-			UpdatedAt: like.UpdatedAt,
-		})
-	}
-	commentsDTO := []socket.CommentDTO{}
-	for _, comment := range sharePost.Comments {
-		commentsDTO = append(commentsDTO, socket.CommentDTO{
-			ID:            comment.ID,
-			Message:       comment.Message,
-			UserID:        comment.UserID,
-			PostID:        comment.PostID,
-			ParentID:      comment.ParentID,
-			ReplyID:       comment.ReplyID,
-			ReplyToUserID: comment.ReplyToUserID,
-			CreatedAt:     comment.CreatedAt,
-			UpdatedAt:     comment.UpdatedAt,
-		})
-	}
 	postDTO := &socket.PostDTO{
-		ID:            sharePost.ID,
-		Message:       sharePost.Message,
-		UserID:        sharePost.UserID,
-		User:          secureUser,
-		ParentID:      sharePost.ParentID,
-		Parent:        postParentDTO,
-		Likes:         likesDTO,
-		Comments:      commentsDTO,
-		CommentsCount: len(sharePost.Comments),
-		CreatedAt:     sharePost.CreatedAt,
-		UpdatedAt:     sharePost.UpdatedAt,
+		ID:        sharePost.ID,
+		Message:   sharePost.Message,
+		UserID:    sharePost.UserID,
+		User:      secureUser,
+		ParentID:  sharePost.ParentID,
+		Parent:    postParentDTO,
+		CreatedAt: sharePost.CreatedAt,
+		UpdatedAt: sharePost.UpdatedAt,
 	}
 	go s.postSocket.EmitCreate(postDTO)
 
@@ -641,44 +537,15 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 		CreatedAt: post.CreatedAt,
 		UpdatedAt: post.UpdatedAt,
 	}
-	likes := []Like{}
-	for _, like := range sharePost.Likes {
-		likes = append(likes, Like{
-			ID:        like.ID,
-			UserID:    like.UserID,
-			PostID:    like.PostID,
-			CommentID: like.CommentID,
-			CreatedAt: like.CreatedAt,
-			UpdatedAt: like.UpdatedAt,
-		})
-	}
-	comments := []Comment{}
-	for _, comment := range sharePost.Comments {
-		comments = append(comments, Comment{
-			ID:            comment.ID,
-			Message:       comment.Message,
-			UserID:        comment.UserID,
-			PostID:        comment.PostID,
-			ParentID:      comment.ParentID,
-			ReplyID:       comment.ReplyID,
-			ReplyToUserID: comment.ReplyToUserID,
-			CreatedAt:     comment.CreatedAt,
-			UpdatedAt:     comment.UpdatedAt,
-		})
-	}
-
 	createdSharePost := &CreatedSharePost{
-		ID:            sharePost.ID,
-		Message:       sharePost.Message,
-		UserID:        sharePost.UserID,
-		User:          secureUser,
-		ParentID:      sharePost.ParentID,
-		Parent:        postParent,
-		Likes:         likes,
-		Comments:      comments,
-		CommentsCount: len(sharePost.Comments),
-		CreatedAt:     sharePost.CreatedAt,
-		UpdatedAt:     sharePost.UpdatedAt,
+		ID:        sharePost.ID,
+		Message:   sharePost.Message,
+		UserID:    sharePost.UserID,
+		User:      secureUser,
+		ParentID:  sharePost.ParentID,
+		Parent:    postParent,
+		CreatedAt: sharePost.CreatedAt,
+		UpdatedAt: sharePost.UpdatedAt,
 	}
 	return createdSharePost, nil
 }
@@ -1287,6 +1154,7 @@ func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
 			return errs.NewInternalServerErrorWithMessage("Failed to update post")
 		}
 
+		// กรณีมีไฟล์และลบรูปปัจจุบัน
 		if len(updatePostDTO.FilesURL) > 0 && updatePostDTO.ShouldDeleteCurrentFiles {
 			files, err = s.fileRepository.FindsByContentID(tx, postByID.ID)
 			if err != nil {
@@ -1351,6 +1219,7 @@ func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
 		return nil, err
 	}
 
+	likesDTO := []socket.LikeDTO{}
 	updateLikes := []Like{}
 	for _, like := range post.Likes {
 		err = s.userService.GetUserImage(&like.User)
@@ -1381,6 +1250,15 @@ func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
 			CreatedAt: like.CreatedAt,
 			UpdatedAt: like.UpdatedAt,
 		})
+		likesDTO = append(likesDTO, socket.LikeDTO{
+			ID:        like.ID,
+			UserID:    like.UserID,
+			User:      secureUser,
+			PostID:    like.PostID,
+			CommentID: like.CommentID,
+			CreatedAt: like.CreatedAt,
+			UpdatedAt: like.UpdatedAt,
+		})
 	}
 
 	secureUser := &user.SecureUser{
@@ -1397,19 +1275,6 @@ func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
 		CreatedAt:            post.User.CreatedAt,
 		UpdatedAt:            post.User.UpdatedAt,
 	}
-
-	likesDTO := []socket.LikeDTO{}
-	for _, like := range post.Likes {
-		likesDTO = append(likesDTO, socket.LikeDTO{
-			ID:        like.ID,
-			UserID:    like.UserID,
-			PostID:    like.PostID,
-			CommentID: like.CommentID,
-			CreatedAt: like.CreatedAt,
-			UpdatedAt: like.UpdatedAt,
-		})
-	}
-
 	postDTO := &socket.PostDTO{
 		ID:            post.ID,
 		Message:       post.Message,
@@ -1417,11 +1282,10 @@ func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
 		User:          secureUser,
 		ParentID:      post.ParentID,
 		Likes:         likesDTO,
-		CommentsCount: len(post.Comments),
+		CommentsCount: commentsCount,
 		CreatedAt:     post.CreatedAt,
 		UpdatedAt:     post.UpdatedAt,
 	}
-
 	postResp := &Post{
 		ID:            post.ID,
 		Message:       post.Message,
@@ -1463,7 +1327,6 @@ func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
 			CreatedAt: post.Parent.CreatedAt,
 			UpdatedAt: post.Parent.UpdatedAt,
 		}
-
 		postParentDTO := &socket.PostParentDTO{
 			ID:        *post.ParentID,
 			Message:   post.Parent.Message,
@@ -1478,17 +1341,20 @@ func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
 		postResp.Parent = postParent
 	}
 
+	// กรณีไม่มีไฟล์และไม่ลบรูปปัจจุบัน
 	if len(updatePostDTO.FilesURL) == 0 || !updatePostDTO.ShouldDeleteCurrentFiles {
 		go s.postSocket.EmitUpdate(postDTO)
 		return postResp, nil
 	}
 
-	ctx := context.Background()
-	for _, file := range files {
-		_, err = helpers.DeleteObject(s.s3Client, ctx, file.Filename)
-		if err != nil {
-			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to delete file from bucket")
+	if len(files) > 0 {
+		ctx := context.Background()
+		for _, file := range files {
+			_, err = helpers.DeleteObject(s.s3Client, ctx, file.Filename)
+			if err != nil {
+				logs.Error(err)
+				return nil, errs.NewInternalServerErrorWithMessage("Failed to delete file from bucket")
+			}
 		}
 	}
 
