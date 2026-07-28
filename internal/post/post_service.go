@@ -41,6 +41,15 @@ type CreatePostDTO struct {
 	UserID   uuid.UUID
 }
 
+type DeletedPost struct {
+	ID        uuid.UUID  `json:"id"`
+	Message   *string    `json:"message"`
+	UserID    uuid.UUID  `json:"userId"`
+	ParentID  *uuid.UUID `json:"parentId"`
+	CreatedAt time.Time  `json:"createdAt"`
+	UpdatedAt time.Time  `json:"updatedAt"`
+}
+
 type Like struct {
 	ID        int64            `json:"id"`
 	UserID    uuid.UUID        `json:"userId"`
@@ -110,6 +119,7 @@ type PostService interface {
 	FindsWithUserIDCursorPagination(userID, cursor, limit string) (*PostCursorPagination, error)
 	FindWithID(postID string) (*Post, error)
 	UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error)
+	DeletePost(postID string) (*DeletedPost, error)
 }
 
 type postService struct {
@@ -227,10 +237,10 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		return nil, err
 	}
 
-	post, err := s.postRepository.PreloadRelations(s.db, createPost.ID)
+	post, err := s.postRepository.FindByIDWithUserRelation(s.db, createPost.ID)
 	if err != nil {
 		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post with relations")
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post with user relation")
 	}
 
 	err = s.userService.GetUserImage(&post.User)
@@ -269,10 +279,10 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		for _, createNotificationDTO := range createNotificationsDTO {
 			notificationsID = append(notificationsID, createNotificationDTO.ID)
 		}
-		notifications, err := s.notificationRepository.PreloadsRelation(s.db, notificationsID)
+		notifications, err := s.notificationRepository.FindsWithSenderRelation(s.db, notificationsID)
 		if err != nil {
 			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notifications with relation")
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notifications with sender relation")
 		}
 
 		for i := range notifications {
@@ -360,7 +370,7 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 		return nil, err
 	}
 
-	post, err := s.postRepository.FindByIDPreloadRelation(s.db, *parentID)
+	post, err := s.postRepository.FindByIDWithUserRelation(s.db, *parentID)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id")
@@ -413,10 +423,10 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 		return nil, err
 	}
 
-	sharePost, err := s.postRepository.PreloadRelations(s.db, createSharePost.ID)
+	sharePost, err := s.postRepository.FindByIDWithUserRelation(s.db, createSharePost.ID)
 	if err != nil {
 		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post with relations")
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post with user relation")
 	}
 
 	err = s.userService.GetUserImage(&sharePost.User)
@@ -431,10 +441,10 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 
 	// ต้องไม่แชร์โพสต์ตัวเองถึง emit notification
 	if createSharePostDTO.UserID != post.UserID {
-		notification, err := s.notificationRepository.PreloadRelation(s.db, notificationID)
+		notification, err := s.notificationRepository.FindWithSenderRelation(s.db, notificationID)
 		if err != nil {
 			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification with relation")
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification with sender relation")
 		}
 
 		err = s.userService.GetUserImage(&notification.Sender)
@@ -580,10 +590,10 @@ func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPa
 	posts := []models.Post{}
 	postsCursorPagination := []Post{}
 	if cursor == "" {
-		posts, err = s.postRepository.FindsCursorPagination(s.db, nil, limitInt)
+		posts, err = s.postRepository.FindsCursorPaginationWithPostRelations(s.db, nil, limitInt)
 		if err != nil {
 			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts cursor pagination")
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts cursor pagination with relations")
 		}
 	} else {
 		postCursor, err := s.postRepository.FindByIDCursor(s.db, *cursorID)
@@ -597,10 +607,10 @@ func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPa
 			return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Cursor by post id %v is not found", *cursorID))
 		}
 
-		posts, err = s.postRepository.FindsCursorPagination(s.db, postCursor, limitInt)
+		posts, err = s.postRepository.FindsCursorPaginationWithPostRelations(s.db, postCursor, limitInt)
 		if err != nil {
 			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts cursor pagination")
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts cursor pagination with relations")
 		}
 	}
 
@@ -782,10 +792,10 @@ func (s *postService) FindsWithUserIDCursorPagination(userID, cursor, limit stri
 	posts := []models.Post{}
 	postsCursorPagination := []Post{}
 	if cursor == "" {
-		posts, err = s.postRepository.FindsByUserIDCursorPagination(s.db, userByID.ID, nil, limitInt)
+		posts, err = s.postRepository.FindsByUserIDCursorPaginationWithPostRelations(s.db, userByID.ID, nil, limitInt)
 		if err != nil {
 			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts by user id cursor pagination")
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts by user id cursor pagination with relations")
 		}
 	} else {
 		postCursor, err := s.postRepository.FindByIDCursor(s.db, *cursorID)
@@ -799,10 +809,10 @@ func (s *postService) FindsWithUserIDCursorPagination(userID, cursor, limit stri
 			return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Cursor by post id %v is not found", *cursorID))
 		}
 
-		posts, err = s.postRepository.FindsByUserIDCursorPagination(s.db, userByID.ID, postCursor, limitInt)
+		posts, err = s.postRepository.FindsByUserIDCursorPaginationWithPostRelations(s.db, userByID.ID, postCursor, limitInt)
 		if err != nil {
 			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts by user id cursor pagination")
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts by user id cursor pagination with relations")
 		}
 	}
 
@@ -969,7 +979,7 @@ func (s *postService) FindWithID(postID string) (*Post, error) {
 		return post, nil
 	}
 
-	post, err := s.postRepository.FindByIDPreloadRelations(s.db, *postIDParse)
+	post, err := s.postRepository.FindByIDWithPostRelations(s.db, *postIDParse)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post with relations")
@@ -1195,7 +1205,7 @@ func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
 		return nil, err
 	}
 
-	post, err := s.postRepository.FindByIDPreloadRelations(s.db, postByID.ID)
+	post, err := s.postRepository.FindByIDWithPostRelations(s.db, postByID.ID)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id with relations")
@@ -1368,4 +1378,8 @@ func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
 
 	go s.postSocket.EmitUpdate(postDTO)
 	return postResp, nil
+}
+
+func (s *postService) DeletePost(postID string) (*DeletedPost, error) {
+	return nil, nil
 }

@@ -10,8 +10,8 @@ import (
 type NotificationRepository interface {
 	Create(db *gorm.DB, notification *models.Notification) error
 	CreateMany(db *gorm.DB, notifications []models.Notification) error
-	PreloadRelation(db *gorm.DB, notificationID uuid.UUID) (*models.Notification, error)
-	PreloadsRelation(db *gorm.DB, notificationsID []uuid.UUID) ([]models.Notification, error)
+	FindWithSenderRelation(db *gorm.DB, notificationID uuid.UUID) (*models.Notification, error)
+	FindsWithSenderRelation(db *gorm.DB, notificationsID []uuid.UUID) ([]models.Notification, error)
 }
 
 type notificationRepositoryDB struct {
@@ -29,16 +29,16 @@ func (r *notificationRepositoryDB) CreateMany(db *gorm.DB, notifications []model
 	return db.Create(&notifications).Error
 }
 
-func (r *notificationRepositoryDB) PreloadRelation(db *gorm.DB, notificationID uuid.UUID) (*models.Notification, error) {
+func (r *notificationRepositoryDB) FindWithSenderRelation(db *gorm.DB, notificationID uuid.UUID) (*models.Notification, error) {
 	notification := &models.Notification{}
-	err := db.Where("id = ?", notificationID).Preload("Sender", helpers.OmitUserPasswordHash).Limit(1).Find(notification).Error
+	err := db.Where("id = ?", notificationID).Preload("Sender", helpers.OmitUserPasswordHash).Take(notification).Error
 	if err != nil {
 		return nil, err
 	}
 	return notification, nil
 }
 
-func (r *notificationRepositoryDB) PreloadsRelation(db *gorm.DB, notificationsID []uuid.UUID) ([]models.Notification, error) {
+func (r *notificationRepositoryDB) FindsWithSenderRelation(db *gorm.DB, notificationsID []uuid.UUID) ([]models.Notification, error) {
 	notifications := &[]models.Notification{}
 	err := db.Where("id IN ?", notificationsID).Preload("Sender", helpers.OmitUserPasswordHash).Find(notifications).Error
 	if err != nil {

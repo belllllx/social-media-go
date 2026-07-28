@@ -16,13 +16,12 @@ type Cursor struct {
 
 type PostRepository interface {
 	Create(db *gorm.DB, post *models.Post) error
-	PreloadRelations(db *gorm.DB, postID uuid.UUID) (*models.Post, error)
 	FindByID(db *gorm.DB, postID uuid.UUID) (*models.Post, error)
-	FindByIDPreloadRelation(db *gorm.DB, postID uuid.UUID) (*models.Post, error)
-	FindByIDPreloadRelations(db *gorm.DB, postID uuid.UUID) (*models.Post, error)
+	FindByIDWithUserRelation(db *gorm.DB, postID uuid.UUID) (*models.Post, error)
+	FindByIDWithPostRelations(db *gorm.DB, postID uuid.UUID) (*models.Post, error)
 	FindByIDCursor(db *gorm.DB, postID uuid.UUID) (*Cursor, error)
-	FindsCursorPagination(db *gorm.DB, cursor *Cursor, limit int) ([]models.Post, error)
-	FindsByUserIDCursorPagination(db *gorm.DB, userID uuid.UUID, cursor *Cursor, limit int) ([]models.Post, error)
+	FindsCursorPaginationWithPostRelations(db *gorm.DB, cursor *Cursor, limit int) ([]models.Post, error)
+	FindsByUserIDCursorPaginationWithPostRelations(db *gorm.DB, userID uuid.UUID, cursor *Cursor, limit int) ([]models.Post, error)
 	Update(db *gorm.DB, postID uuid.UUID, updatePost *models.Post) error
 }
 
@@ -37,18 +36,6 @@ func (r *postRepositoryDB) Create(db *gorm.DB, post *models.Post) error {
 	return db.Create(post).Error
 }
 
-func (r *postRepositoryDB) PreloadRelations(db *gorm.DB, postID uuid.UUID) (*models.Post, error) {
-	post := &models.Post{}
-	err := db.Where("id = ?", postID).
-		Preload("User", helpers.OmitUserPasswordHash).
-		Limit(1).
-		Find(post).Error
-	if err != nil {
-		return nil, err
-	}
-	return post, nil
-}
-
 func (r *postRepositoryDB) FindByID(db *gorm.DB, postID uuid.UUID) (*models.Post, error) {
 	post := &models.Post{}
 	err := db.Where("id = ?", postID).Take(post).Error
@@ -58,7 +45,7 @@ func (r *postRepositoryDB) FindByID(db *gorm.DB, postID uuid.UUID) (*models.Post
 	return post, nil
 }
 
-func (r *postRepositoryDB) FindByIDPreloadRelation(db *gorm.DB, postID uuid.UUID) (*models.Post, error) {
+func (r *postRepositoryDB) FindByIDWithUserRelation(db *gorm.DB, postID uuid.UUID) (*models.Post, error) {
 	post := &models.Post{}
 	err := db.Where("id = ?", postID).Preload("User", helpers.OmitUserPasswordHash).Take(post).Error
 	if err != nil {
@@ -67,7 +54,7 @@ func (r *postRepositoryDB) FindByIDPreloadRelation(db *gorm.DB, postID uuid.UUID
 	return post, nil
 }
 
-func (r *postRepositoryDB) FindByIDPreloadRelations(db *gorm.DB, postID uuid.UUID) (*models.Post, error) {
+func (r *postRepositoryDB) FindByIDWithPostRelations(db *gorm.DB, postID uuid.UUID) (*models.Post, error) {
 	post := &models.Post{}
 	err := db.
 		Where("id = ?", postID).
@@ -98,7 +85,7 @@ func (r *postRepositoryDB) FindByIDCursor(db *gorm.DB, postID uuid.UUID) (*Curso
 	return cursor, nil
 }
 
-func (r *postRepositoryDB) FindsCursorPagination(
+func (r *postRepositoryDB) FindsCursorPaginationWithPostRelations(
 	db *gorm.DB,
 	cursor *Cursor,
 	limit int,
@@ -131,7 +118,7 @@ func (r *postRepositoryDB) FindsCursorPagination(
 	return *posts, nil
 }
 
-func (r *postRepositoryDB) FindsByUserIDCursorPagination(
+func (r *postRepositoryDB) FindsByUserIDCursorPaginationWithPostRelations(
 	db *gorm.DB,
 	userID uuid.UUID,
 	cursor *Cursor,

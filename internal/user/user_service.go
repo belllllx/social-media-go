@@ -98,10 +98,10 @@ func NewUserService(
 }
 
 func (s *userService) SecureFindWithID(ID uuid.UUID) (*SecureUser, error) {
-	user, err := s.userRepository.FindByID(s.db, ID)
+	user, err := s.userRepository.FindByIDWithFollowRelations(s.db, ID)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
-		return nil, errs.NewInternalServerError()
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find user by id with follow relations")
 	}
 
 	if helpers.IsErrRecordNotFound(err) {

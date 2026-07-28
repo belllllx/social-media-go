@@ -11,7 +11,7 @@ type UserRepository interface {
 	Create(db *gorm.DB, user *models.User) error
 	FindByUsername(db *gorm.DB, username string) (*models.User, error)
 	FindByEmail(db *gorm.DB, email string) (*models.User, error)
-	FindByID(db *gorm.DB, userID uuid.UUID) (*models.User, error)
+	FindByIDWithFollowRelations(db *gorm.DB, userID uuid.UUID) (*models.User, error)
 	FindsByIDExcept(db *gorm.DB, userID uuid.UUID) ([]models.User, error)
 	UpdatePassword(db *gorm.DB, email, passwordHash string) error
 }
@@ -45,7 +45,7 @@ func (r *userRepositoryDB) FindByEmail(db *gorm.DB, email string) (*models.User,
 	return user, nil
 }
 
-func (r *userRepositoryDB) FindByID(db *gorm.DB, userID uuid.UUID) (*models.User, error) {
+func (r *userRepositoryDB) FindByIDWithFollowRelations(db *gorm.DB, userID uuid.UUID) (*models.User, error) {
 	user := &models.User{}
 	err := db.
 		Where("id = ?", userID).

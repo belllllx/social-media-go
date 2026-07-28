@@ -340,7 +340,7 @@ func (h *authHandler) Profile(c *gin.Context) {
 //	@Description	authentication refresh token
 //	@Tags			auth
 //	@Produce		json
-//	@Success		200	{object}	response.SwaggerResponseWithData{data=auth.Tokens}
+//	@Success		200	{object}	response.SwaggerResponseWithData{data=Tokens}
 //	@Failure		401	{object}	response.SwaggerResponse
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/refresh-token [post]
