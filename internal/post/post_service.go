@@ -1359,12 +1359,19 @@ func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
 
 	if len(files) > 0 {
 		ctx := context.Background()
+		keys := []string{}
 		for _, file := range files {
-			_, err = helpers.DeleteObject(s.s3Client, ctx, file.Filename)
-			if err != nil {
-				logs.Error(err)
-				return nil, errs.NewInternalServerErrorWithMessage("Failed to delete file from bucket")
-			}
+			keys = append(keys, file.Filename)
+		}
+
+		_, err = helpers.DeleteObjects(
+			s.s3Client,
+			ctx,
+			keys,
+		)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to delete files from bucket")
 		}
 	}
 
@@ -1381,5 +1388,162 @@ func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
 }
 
 func (s *postService) DeletePost(postID string) (*DeletedPost, error) {
-	return nil, nil
+	err := helpers.ValidateUUID(postID)
+	if err != nil {
+		logs.Warn(err)
+		return nil, err
+	}
+
+	postIDParse, err := helpers.ParseUUID(postID)
+	if err != nil {
+		logs.Error(err)
+		return nil, err
+	}
+
+	post, err := s.postRepository.FindByIDWithParentRelation(s.db, *postIDParse)
+	if err != nil && !helpers.IsErrRecordNotFound(err) {
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id with parent relation")
+	}
+
+	if helpers.IsErrRecordNotFound(err) {
+		logs.Warn(err)
+		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", *postIDParse))
+	}
+
+	// กรณีแชร์โพส
+	if post.ParentID != nil {
+		notification, err := s.notificationRepository.FindOfPost(
+			s.db,
+			post.UserID,
+			post.Parent.UserID,
+			post.ID,
+		)
+		if err != nil && !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification of share post")
+		}
+
+		// กรณีมีแจ้งเตือน emit กลับไปหา client เพื่อลบออก
+		if notification != nil {
+			emitNotificationDTO := &socket.EmitNotificationDTO{
+				ID:         notification.ID,
+				Type:       notification.Type,
+				Message:    notification.Message,
+				IsRead:     notification.IsRead,
+				SenderID:   notification.SenderID,
+				ReceiverID: notification.ReceiverID,
+				PostID:     notification.PostID,
+				CreatedAt:  notification.CreatedAt,
+				UpdatedAt:  notification.UpdatedAt,
+			}
+			go s.notificationSocket.EmitNotification(emitNotificationDTO)
+		}
+	}
+
+	// กรณีโพสปกติ
+	usersExcept, err := s.userRepository.FindsByIDExcept(s.db, post.UserID)
+	if len(usersExcept) > 0 {
+		for _, userExcept := range usersExcept {
+			notifications, err := s.notificationRepository.FindsOfPost(
+				s.db,
+				post.UserID,
+				userExcept.ID,
+				post.ID,
+			)
+			if err != nil {
+				logs.Error(err)
+				return nil, errs.NewInternalServerErrorWithMessage("Failed to find notifications of post")
+			}
+
+			// กรณีมีแจ้งเตือน emit กลับไปหา client เพื่อลบออก
+			if len(notifications) > 0 {
+				emitNotificationsDTO := []socket.EmitNotificationDTO{}
+				for _, notification := range notifications {
+					emitNotificationsDTO = append(emitNotificationsDTO, socket.EmitNotificationDTO{
+						ID:         notification.ID,
+						Type:       notification.Type,
+						Message:    notification.Message,
+						IsRead:     notification.IsRead,
+						SenderID:   notification.SenderID,
+						ReceiverID: notification.ReceiverID,
+						PostID:     notification.PostID,
+						CreatedAt:  notification.CreatedAt,
+						UpdatedAt:  notification.UpdatedAt,
+					})
+				}
+
+				go s.notificationSocket.EmitNotifications(emitNotificationsDTO)
+			}
+		}
+	}
+
+	files, err := s.fileRepository.FindsByContentID(s.db, post.ID)
+	if err != nil {
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find files of post")
+	}
+
+	if len(files) > 0 {
+		keys := []string{}
+		for _, file := range files {
+			keys = append(keys, file.Filename)
+		}
+
+		_, err = helpers.DeleteObjects(
+			s.s3Client,
+			context.Background(),
+			keys,
+		)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to delete files from bucket")
+		}
+	}
+
+	deletedPost := &models.Post{}
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		if len(files) > 0 {
+			err = s.fileRepository.DeleteMany(tx, files)
+			if err != nil {
+				logs.Error(err)
+				return errs.NewInternalServerErrorWithMessage("Failed to delete files of post")
+			}
+		}
+
+		deletedPost, err = s.postRepository.Delete(tx, post.ID)
+		if err != nil {
+			logs.Error(err)
+			return errs.NewInternalServerErrorWithMessage("Failed to delete post")
+		}
+
+		return nil
+	})
+	if err != nil {
+		_, ok := err.(*errs.AppError)
+		if !ok {
+			logs.Error(err)
+		}
+		return nil, err
+	}
+
+	postDTO := &socket.PostDTO{
+		ID:        deletedPost.ID,
+		Message:   deletedPost.Message,
+		UserID:    deletedPost.UserID,
+		ParentID:  deletedPost.ParentID,
+		CreatedAt: deletedPost.CreatedAt,
+		UpdatedAt: deletedPost.UpdatedAt,
+	}
+	go s.postSocket.EmitDelete(postDTO)
+
+	deletedPostResp := &DeletedPost{
+		ID:        deletedPost.ID,
+		Message:   deletedPost.Message,
+		UserID:    deletedPost.UserID,
+		ParentID:  deletedPost.ParentID,
+		CreatedAt: deletedPost.CreatedAt,
+		UpdatedAt: deletedPost.UpdatedAt,
+	}
+	return deletedPostResp, nil
 }

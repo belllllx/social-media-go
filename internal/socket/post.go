@@ -33,7 +33,7 @@ type PostDTO struct {
 	ID            uuid.UUID        `json:"id"`
 	Message       *string          `json:"message"`
 	UserID        uuid.UUID        `json:"userId"`
-	User          *user.SecureUser `json:"user"`
+	User          *user.SecureUser `json:"user,omitempty"`
 	ParentID      *uuid.UUID       `json:"parentId"`
 	Parent        *PostParentDTO   `json:"parent,omitempty"`
 	Likes         []LikeDTO        `json:"likes,omitempty"`
@@ -46,6 +46,7 @@ type PostDTO struct {
 type PostSocket interface {
 	EmitCreate(postDTO *PostDTO)
 	EmitUpdate(postDTO *PostDTO)
+	EmitDelete(postDTO *PostDTO)
 }
 
 type postSocket struct {
@@ -62,4 +63,8 @@ func (s *postSocket) EmitCreate(postDTO *PostDTO) {
 
 func (s *postSocket) EmitUpdate(postDTO *PostDTO) {
 	s.socket.Emit("updatePost", postDTO)
+}
+
+func (s *postSocket) EmitDelete(postDTO *PostDTO) {
+	s.socket.Emit("deletePost", postDTO)
 }

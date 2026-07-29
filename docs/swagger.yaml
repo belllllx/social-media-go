@@ -101,27 +101,6 @@ definitions:
     x-enum-varnames:
     - RoleUser
     - RoleAdmin
-  post.Comment:
-    properties:
-      createdAt:
-        type: string
-      id:
-        type: string
-      message:
-        type: string
-      parentId:
-        type: string
-      postId:
-        type: string
-      replyId:
-        type: string
-      replyToUserId:
-        type: string
-      updatedAt:
-        type: string
-      userId:
-        type: string
-    type: object
   post.CreatePostRequest:
     properties:
       filesUrl:
@@ -138,12 +117,6 @@ definitions:
     type: object
   post.CreatedPost:
     properties:
-      comments:
-        items:
-          $ref: '#/definitions/post.Comment'
-        type: array
-      commentsCount:
-        type: integer
       createdAt:
         type: string
       filesUrl:
@@ -152,10 +125,6 @@ definitions:
         type: array
       id:
         type: string
-      likes:
-        items:
-          $ref: '#/definitions/post.Like'
-        type: array
       message:
         type: string
       parentId:
@@ -169,20 +138,10 @@ definitions:
     type: object
   post.CreatedSharePost:
     properties:
-      comments:
-        items:
-          $ref: '#/definitions/post.Comment'
-        type: array
-      commentsCount:
-        type: integer
       createdAt:
         type: string
       id:
         type: string
-      likes:
-        items:
-          $ref: '#/definitions/post.Like'
-        type: array
       message:
         type: string
       parent:
@@ -193,6 +152,21 @@ definitions:
         type: string
       user:
         $ref: '#/definitions/user.SecureUser'
+      userId:
+        type: string
+    type: object
+  post.DeletedPost:
+    properties:
+      createdAt:
+        type: string
+      id:
+        type: string
+      message:
+        type: string
+      parentId:
+        type: string
+      updatedAt:
+        type: string
       userId:
         type: string
     type: object
@@ -860,6 +834,45 @@ paths:
             - properties:
                 data:
                   $ref: '#/definitions/post.CreatedPost'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - post
+  /post/delete/{postID}:
+    delete:
+      description: authentication delete post and socket emit notifications to client
+      parameters:
+      - description: uuid for post id
+        in: path
+        name: postID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SwaggerResponseWithData'
+            - properties:
+                data:
+                  $ref: '#/definitions/post.DeletedPost'
               type: object
         "400":
           description: Bad Request

@@ -7,6 +7,7 @@ import (
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Cursor struct {
@@ -18,11 +19,13 @@ type PostRepository interface {
 	Create(db *gorm.DB, post *models.Post) error
 	FindByID(db *gorm.DB, postID uuid.UUID) (*models.Post, error)
 	FindByIDWithUserRelation(db *gorm.DB, postID uuid.UUID) (*models.Post, error)
+	FindByIDWithParentRelation(db *gorm.DB, postID uuid.UUID) (*models.Post, error)
 	FindByIDWithPostRelations(db *gorm.DB, postID uuid.UUID) (*models.Post, error)
 	FindByIDCursor(db *gorm.DB, postID uuid.UUID) (*Cursor, error)
 	FindsCursorPaginationWithPostRelations(db *gorm.DB, cursor *Cursor, limit int) ([]models.Post, error)
 	FindsByUserIDCursorPaginationWithPostRelations(db *gorm.DB, userID uuid.UUID, cursor *Cursor, limit int) ([]models.Post, error)
 	Update(db *gorm.DB, postID uuid.UUID, updatePost *models.Post) error
+	Delete(db *gorm.DB, postID uuid.UUID) (*models.Post, error)
 }
 
 type postRepositoryDB struct {
@@ -48,6 +51,15 @@ func (r *postRepositoryDB) FindByID(db *gorm.DB, postID uuid.UUID) (*models.Post
 func (r *postRepositoryDB) FindByIDWithUserRelation(db *gorm.DB, postID uuid.UUID) (*models.Post, error) {
 	post := &models.Post{}
 	err := db.Where("id = ?", postID).Preload("User", helpers.OmitUserPasswordHash).Take(post).Error
+	if err != nil {
+		return nil, err
+	}
+	return post, nil
+}
+
+func (r *postRepositoryDB) FindByIDWithParentRelation(db *gorm.DB, postID uuid.UUID) (*models.Post, error) {
+	post := &models.Post{}
+	err := db.Where("id = ?", postID).Preload("Parent").Take(post).Error
 	if err != nil {
 		return nil, err
 	}
@@ -160,4 +172,13 @@ func (r *postRepositoryDB) Update(db *gorm.DB, postID uuid.UUID, updatePost *mod
 		return err
 	}
 	return nil
+}
+
+func (r *postRepositoryDB) Delete(db *gorm.DB, postID uuid.UUID) (*models.Post, error) {
+	post := &models.Post{}
+	err := db.Clauses(clause.Returning{}).Where("id = ?", postID).Delete(post).Error
+	if err != nil {
+		return nil, err
+	}
+	return post, nil
 }

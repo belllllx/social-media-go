@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/belllllx/social-media-go/pkg/errs"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -214,6 +215,26 @@ func DeleteObject(
 	return s3Client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(viper.GetString("app.aws_bucket_name")),
 		Key:    aws.String(key),
+	})
+}
+
+func DeleteObjects(
+	s3Client *s3.Client,
+	ctx context.Context,
+	keys []string,
+) (*s3.DeleteObjectsOutput, error) {
+	objectsIdentifier := []types.ObjectIdentifier{}
+	for _, key := range keys {
+		objectsIdentifier = append(objectsIdentifier, types.ObjectIdentifier{
+			Key: aws.String(key),
+		})
+	}
+
+	return s3Client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+		Bucket: aws.String(viper.GetString("app.aws_bucket_name")),
+		Delete: &types.Delete{
+			Objects: objectsIdentifier,
+		},
 	})
 }
 

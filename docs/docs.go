@@ -766,6 +766,70 @@ const docTemplate = `{
                 }
             }
         },
+        "/post/delete/{postID}": {
+            "delete": {
+                "description": "authentication delete post and socket emit notifications to client",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "post"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "uuid for post id",
+                        "name": "postID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SwaggerResponseWithData"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/post.DeletedPost"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/post/find/{postID}": {
             "get": {
                 "description": "authentication and find post with id",
@@ -1334,38 +1398,6 @@ const docTemplate = `{
                 "RoleAdmin"
             ]
         },
-        "post.Comment": {
-            "type": "object",
-            "properties": {
-                "createdAt": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "message": {
-                    "type": "string"
-                },
-                "parentId": {
-                    "type": "string"
-                },
-                "postId": {
-                    "type": "string"
-                },
-                "replyId": {
-                    "type": "string"
-                },
-                "replyToUserId": {
-                    "type": "string"
-                },
-                "updatedAt": {
-                    "type": "string"
-                },
-                "userId": {
-                    "type": "string"
-                }
-            }
-        },
         "post.CreatePostRequest": {
             "type": "object",
             "properties": {
@@ -1391,15 +1423,6 @@ const docTemplate = `{
         "post.CreatedPost": {
             "type": "object",
             "properties": {
-                "comments": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/post.Comment"
-                    }
-                },
-                "commentsCount": {
-                    "type": "integer"
-                },
                 "createdAt": {
                     "type": "string"
                 },
@@ -1411,12 +1434,6 @@ const docTemplate = `{
                 },
                 "id": {
                     "type": "string"
-                },
-                "likes": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/post.Like"
-                    }
                 },
                 "message": {
                     "type": "string"
@@ -1438,26 +1455,11 @@ const docTemplate = `{
         "post.CreatedSharePost": {
             "type": "object",
             "properties": {
-                "comments": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/post.Comment"
-                    }
-                },
-                "commentsCount": {
-                    "type": "integer"
-                },
                 "createdAt": {
                     "type": "string"
                 },
                 "id": {
                     "type": "string"
-                },
-                "likes": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/post.Like"
-                    }
                 },
                 "message": {
                     "type": "string"
@@ -1473,6 +1475,29 @@ const docTemplate = `{
                 },
                 "user": {
                     "$ref": "#/definitions/user.SecureUser"
+                },
+                "userId": {
+                    "type": "string"
+                }
+            }
+        },
+        "post.DeletedPost": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "parentId": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
                 },
                 "userId": {
                     "type": "string"

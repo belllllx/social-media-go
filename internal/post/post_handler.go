@@ -34,6 +34,7 @@ type PostHandler interface {
 	FindsWithUserIDCursorPagination(c *gin.Context)
 	FindWithID(c *gin.Context)
 	UpdatePost(c *gin.Context)
+	DeletePost(c *gin.Context)
 }
 
 type postHandler struct {
@@ -338,4 +339,27 @@ func (h *postHandler) UpdatePost(c *gin.Context) {
 	}
 
 	response.Ok(c, "Update post successfully", post)
+}
+
+// DeletePost godoc
+//
+//	@Description	authentication delete post and socket emit notifications to client
+//	@Tags			post
+//	@Produce		json
+//	@Param			postID	path		string	true	"uuid for post id"
+//	@Success		200		{object}	response.SwaggerResponseWithData{data=DeletedPost}
+//	@Failure		400		{object}	response.SwaggerBadRequestResponse
+//	@Failure		401		{object}	response.SwaggerResponse
+//	@Failure		404		{object}	response.SwaggerResponse
+//	@Failure		500		{object}	response.SwaggerResponse
+//	@Router			/post/delete/{postID} [delete]
+func (h *postHandler) DeletePost(c *gin.Context) {
+	postID := c.Param("postID")
+	deletedPost, err := h.postService.DeletePost(postID)
+	if err != nil {
+		helpers.HandleError(c, err)
+		return
+	}
+
+	response.Ok(c, "Post delete successfully", deletedPost)
 }

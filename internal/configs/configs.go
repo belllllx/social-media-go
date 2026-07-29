@@ -2,6 +2,7 @@ package configs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -91,9 +92,10 @@ func InitRedis() *redis.Client {
 func InitValidator() {
 	v, ok := binding.Validator.Engine().(*validator.Validate)
 	if !ok {
-		return
+		panic(errors.New("Invalid validator"))
 	}
 
+	// ทำให้เมื่อ validation error จะไปใช้ชื่อจาก json tag แทน struct field
 	v.RegisterTagNameFunc(func(fld reflect.StructField) string {
 		name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
 		if name == "-" {

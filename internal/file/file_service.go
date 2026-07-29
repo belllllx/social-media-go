@@ -133,7 +133,11 @@ func (s *fileService) UploadFile(fileDataDTO *FileDataDTO, fileType models.FileT
 	if err != nil {
 		logs.Error(err)
 
-		if _, err := helpers.DeleteObject(s.s3Client, ctx, key); err != nil {
+		if _, err := helpers.DeleteObject(
+			s.s3Client,
+			ctx,
+			key,
+		); err != nil {
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to create file and delete object")
 		}
@@ -206,11 +210,13 @@ func (s *fileService) UploadFiles(filesDataDTO []FileDataDTO, fileType models.Fi
 	if err != nil {
 		logs.Error(err)
 
-		for _, key := range keys {
-			if _, err := helpers.DeleteObject(s.s3Client, ctx, key); err != nil {
-				logs.Error(err)
-				return nil, errs.NewInternalServerErrorWithMessage("Failed to create files and delete object")
-			}
+		if _, err := helpers.DeleteObjects(
+			s.s3Client,
+			ctx,
+			keys,
+		); err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to create files and delete object")
 		}
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to create files")
 	}
@@ -228,6 +234,7 @@ func (s *fileService) DeleteFile(deleteFileDTO *DeleteFileDTO) error {
 		logs.Error(err)
 		return errs.NewUnexpectedErrorWithMessage("Failed to split presigned url")
 	}
+
 	filePath := fmt.Sprintf("%s/%s", fileDIR, filename)
 	file, err := s.fileRepository.FindByFilenameType(s.db, filePath, deleteFileDTO.FileType)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {

@@ -193,6 +193,7 @@ func main() {
 		post.GET("/finds/:userID", postHandler.FindsWithUserIDCursorPagination)
 		post.GET("/find/:postID", postHandler.FindWithID)
 		post.PATCH("/update/:postID", postHandler.UpdatePost)
+		post.DELETE("/delete/:postID", postHandler.DeletePost)
 	}
 
 	app.Run()
