@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"github.com/belllllx/social-media-go/internal/auth"
 	"github.com/belllllx/social-media-go/internal/bootstrap"
@@ -108,10 +110,15 @@ func main() {
 	postHandler := post.NewPostHandler(fileService, postService)
 
 	app.Cron.AddFunc("*/30 * * * *", func() {
-		err := otpService.DeleteWithExpired(app.DB)
-		if err == nil {
-			logs.Info("Delete otp expired by cron successfully")
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+
+		err := otpService.DeleteWithExpired(ctx, app.DB)
+		if err != nil {
+			return
 		}
+
+		logs.Info("Delete otp expired by cron successfully")
 	})
 	app.Cron.Start()
 

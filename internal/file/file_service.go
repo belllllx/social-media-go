@@ -55,11 +55,19 @@ type FileDataDTO struct {
 }
 
 type FileService interface {
-	UploadFile(fileDataDTO *FileDataDTO, fileType models.FileType) (*FileURL, error)
-	UploadFiles(filesDataDTO []FileDataDTO, fileType models.FileType) (*FilesURL, error)
-	DeleteFile(deleteFileDTO *DeleteFileDTO) error
-	PresignGetFile(contentID uuid.UUID) (string, error)
-	PresignGetFiles(contentID uuid.UUID) ([]string, error)
+	UploadFile(
+		ctx context.Context,
+		fileDataDTO *FileDataDTO,
+		fileType models.FileType,
+	) (*FileURL, error)
+	UploadFiles(
+		ctx context.Context,
+		filesDataDTO []FileDataDTO,
+		fileType models.FileType,
+	) (*FilesURL, error)
+	DeleteFile(ctx context.Context, deleteFileDTO *DeleteFileDTO) error
+	PresignGetFile(ctx context.Context, contentID uuid.UUID) (string, error)
+	PresignGetFiles(ctx context.Context, contentID uuid.UUID) ([]string, error)
 }
 
 type fileService struct {
@@ -83,7 +91,11 @@ func NewFileService(
 	}
 }
 
-func (s *fileService) UploadFile(fileDataDTO *FileDataDTO, fileType models.FileType) (*FileURL, error) {
+func (s *fileService) UploadFile(
+	ctx context.Context,
+	fileDataDTO *FileDataDTO,
+	fileType models.FileType,
+) (*FileURL, error) {
 	if fileType != models.FileTypeComment && fileType != models.FileTypeReply {
 		logs.Warn("Failed to upload file invalid file type")
 		return nil, errs.NewUnexpectedErrorWithMessage("Failed to upload file invalid file type")
@@ -106,10 +118,9 @@ func (s *fileService) UploadFile(fileDataDTO *FileDataDTO, fileType models.FileT
 		key = fmt.Sprintf("%s/%s", "reply-image", newFileName)
 	}
 
-	ctx := context.Background()
 	_, err := helpers.PutObject(
-		s.s3Client,
 		ctx,
+		s.s3Client,
 		key,
 		fileDataDTO.Body,
 		fileDataDTO.ContentType,
@@ -119,7 +130,11 @@ func (s *fileService) UploadFile(fileDataDTO *FileDataDTO, fileType models.FileT
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to upload file to bucket")
 	}
 
-	req, err := helpers.PresignGetObject(s.presignClient, ctx, key)
+	req, err := helpers.PresignGetObject(
+		ctx,
+		s.presignClient,
+		key,
+	)
 	if err != nil {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to presign get file object")
@@ -129,13 +144,17 @@ func (s *fileService) UploadFile(fileDataDTO *FileDataDTO, fileType models.FileT
 		Filename: key,
 		FileType: fileType,
 	}
-	err = s.fileRepository.Create(s.db, createFile)
+	err = s.fileRepository.Create(
+		ctx,
+		s.db,
+		createFile,
+	)
 	if err != nil {
 		logs.Error(err)
 
 		if _, err := helpers.DeleteObject(
-			s.s3Client,
 			ctx,
+			s.s3Client,
 			key,
 		); err != nil {
 			logs.Error(err)
@@ -150,7 +169,11 @@ func (s *fileService) UploadFile(fileDataDTO *FileDataDTO, fileType models.FileT
 	return fileURL, nil
 }
 
-func (s *fileService) UploadFiles(filesDataDTO []FileDataDTO, fileType models.FileType) (*FilesURL, error) {
+func (s *fileService) UploadFiles(
+	ctx context.Context,
+	filesDataDTO []FileDataDTO,
+	fileType models.FileType,
+) (*FilesURL, error) {
 	if fileType != models.FileTypePost {
 		logs.Warn("Failed to upload files invalid file type")
 		return nil, errs.NewUnexpectedErrorWithMessage("Failed to upload files invalid file type")
@@ -169,7 +192,6 @@ func (s *fileService) UploadFiles(filesDataDTO []FileDataDTO, fileType models.Fi
 	keys := []string{}
 	filesURL := []string{}
 	createFiles := []models.File{}
-	ctx := context.Background()
 
 	for _, fileDataDTO := range filesDataDTO {
 		newFileName := helpers.GenerateFilename(fileDataDTO.Filename)
@@ -181,8 +203,8 @@ func (s *fileService) UploadFiles(filesDataDTO []FileDataDTO, fileType models.Fi
 		}
 
 		_, err := helpers.PutObject(
-			s.s3Client,
 			ctx,
+			s.s3Client,
 			key,
 			fileDataDTO.Body,
 			fileDataDTO.ContentType,
@@ -192,7 +214,11 @@ func (s *fileService) UploadFiles(filesDataDTO []FileDataDTO, fileType models.Fi
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to upload files to bucket")
 		}
 
-		req, err := helpers.PresignGetObject(s.presignClient, ctx, key)
+		req, err := helpers.PresignGetObject(
+			ctx,
+			s.presignClient,
+			key,
+		)
 		if err != nil {
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to presign get file object")
@@ -206,13 +232,17 @@ func (s *fileService) UploadFiles(filesDataDTO []FileDataDTO, fileType models.Fi
 		})
 	}
 
-	err := s.fileRepository.CreateMany(s.db, createFiles)
+	err := s.fileRepository.CreateMany(
+		ctx,
+		s.db,
+		createFiles,
+	)
 	if err != nil {
 		logs.Error(err)
 
 		if _, err := helpers.DeleteObjects(
-			s.s3Client,
 			ctx,
+			s.s3Client,
 			keys,
 		); err != nil {
 			logs.Error(err)
@@ -228,7 +258,7 @@ func (s *fileService) UploadFiles(filesDataDTO []FileDataDTO, fileType models.Fi
 	return filesURLData, nil
 }
 
-func (s *fileService) DeleteFile(deleteFileDTO *DeleteFileDTO) error {
+func (s *fileService) DeleteFile(ctx context.Context, deleteFileDTO *DeleteFileDTO) error {
 	fileDIR, filename, err := helpers.SplitPresignedURL(deleteFileDTO.FileURL)
 	if err != nil {
 		logs.Error(err)
@@ -236,7 +266,12 @@ func (s *fileService) DeleteFile(deleteFileDTO *DeleteFileDTO) error {
 	}
 
 	filePath := fmt.Sprintf("%s/%s", fileDIR, filename)
-	file, err := s.fileRepository.FindByFilenameType(s.db, filePath, deleteFileDTO.FileType)
+	file, err := s.fileRepository.FindByFilenameType(
+		ctx,
+		s.db,
+		filePath,
+		deleteFileDTO.FileType,
+	)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to find file")
@@ -247,13 +282,18 @@ func (s *fileService) DeleteFile(deleteFileDTO *DeleteFileDTO) error {
 		return errs.NewNotFoundErrorWithMessage(fmt.Sprintf("File %s is not found", deleteFileDTO.FileURL))
 	}
 
-	_, err = helpers.DeleteObject(s.s3Client, context.Background(), file.Filename)
+	_, err = helpers.DeleteObject(
+		ctx,
+		s.s3Client,
+		file.Filename,
+	)
 	if err != nil {
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to delete file object")
 	}
 
 	err = s.fileRepository.Delete(
+		ctx,
 		s.db,
 		file.ID,
 		file.Filename,
@@ -267,8 +307,12 @@ func (s *fileService) DeleteFile(deleteFileDTO *DeleteFileDTO) error {
 	return nil
 }
 
-func (s *fileService) PresignGetFile(contentID uuid.UUID) (string, error) {
-	file, err := s.fileRepository.FindByContentID(s.db, contentID)
+func (s *fileService) PresignGetFile(ctx context.Context, contentID uuid.UUID) (string, error) {
+	file, err := s.fileRepository.FindByContentID(
+		ctx,
+		s.db,
+		contentID,
+	)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return "", errs.NewInternalServerErrorWithMessage("Failed to find file")
@@ -279,8 +323,11 @@ func (s *fileService) PresignGetFile(contentID uuid.UUID) (string, error) {
 		return "", errs.NewNotFoundErrorWithMessage(fmt.Sprintf("File by content id %v not found", contentID))
 	}
 
-	ctx := context.Background()
-	req, err := helpers.PresignGetObject(s.presignClient, ctx, file.Filename)
+	req, err := helpers.PresignGetObject(
+		ctx,
+		s.presignClient,
+		file.Filename,
+	)
 	if err != nil {
 		logs.Error(err)
 		return "", errs.NewInternalServerErrorWithMessage("Failed to presign get file object")
@@ -289,18 +336,25 @@ func (s *fileService) PresignGetFile(contentID uuid.UUID) (string, error) {
 	return req.URL, nil
 }
 
-func (s *fileService) PresignGetFiles(contentID uuid.UUID) ([]string, error) {
-	files, err := s.fileRepository.FindsByContentID(s.db, contentID)
+func (s *fileService) PresignGetFiles(ctx context.Context, contentID uuid.UUID) ([]string, error) {
+	files, err := s.fileRepository.FindsByContentID(
+		ctx,
+		s.db,
+		contentID,
+	)
 	if err != nil {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find files")
 	}
 
 	filesURL := []string{}
-	ctx := context.Background()
 	if len(files) > 0 {
 		for _, file := range files {
-			req, err := helpers.PresignGetObject(s.presignClient, ctx, file.Filename)
+			req, err := helpers.PresignGetObject(
+				ctx,
+				s.presignClient,
+				file.Filename,
+			)
 			if err != nil {
 				logs.Error(err)
 				return nil, errs.NewInternalServerErrorWithMessage("Failed to presign get file object")

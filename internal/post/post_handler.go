@@ -62,6 +62,8 @@ func NewPostHandler(fileService file.FileService, postService PostService) PostH
 //	@Failure		500		{object}	response.SwaggerResponse
 //	@Router			/post/upload-files [post]
 func (h *postHandler) UploadFiles(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	errFields := map[string]string{}
 	form, err := c.MultipartForm()
 	if err != nil {
@@ -96,7 +98,11 @@ func (h *postHandler) UploadFiles(c *gin.Context) {
 		})
 	}
 
-	filesURL, err := h.fileService.UploadFiles(filesDataDTO, models.FileTypePost)
+	filesURL, err := h.fileService.UploadFiles(
+		ctx,
+		filesDataDTO,
+		models.FileTypePost,
+	)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -119,6 +125,8 @@ func (h *postHandler) UploadFiles(c *gin.Context) {
 //	@Failure		500		{object}	response.SwaggerResponse
 //	@Router			/post/delete/file [delete]
 func (h *postHandler) DeleteFile(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	deleteFileRequest := &file.DeleteFileRequest{}
 	err := c.ShouldBind(deleteFileRequest)
 	if err != nil {
@@ -130,7 +138,7 @@ func (h *postHandler) DeleteFile(c *gin.Context) {
 		FileURL:  deleteFileRequest.FileURL,
 		FileType: models.FileTypePost,
 	}
-	err = h.fileService.DeleteFile(deleteFileDTO)
+	err = h.fileService.DeleteFile(ctx, deleteFileDTO)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -153,6 +161,8 @@ func (h *postHandler) DeleteFile(c *gin.Context) {
 //	@Failure		500		{object}	response.SwaggerResponse
 //	@Router			/post/create [post]
 func (h *postHandler) CreatePost(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	user, ok := c.MustGet("user").(*user.SecureUser)
 	if !ok {
 		response.AbortWithUnauthorized(c)
@@ -171,7 +181,7 @@ func (h *postHandler) CreatePost(c *gin.Context) {
 		FilesURL: createPostRequest.FilesURL,
 		UserID:   user.ID,
 	}
-	createdPost, err := h.postService.CreatePost(createPostDTO)
+	createdPost, err := h.postService.CreatePost(ctx, createPostDTO)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -195,6 +205,8 @@ func (h *postHandler) CreatePost(c *gin.Context) {
 //	@Failure		500			{object}	response.SwaggerResponse
 //	@Router			/post/share/create/{parentID} [post]
 func (h *postHandler) CreateSharePost(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	user, ok := c.MustGet("user").(*user.SecureUser)
 	if !ok {
 		response.AbortWithUnauthorized(c)
@@ -214,7 +226,7 @@ func (h *postHandler) CreateSharePost(c *gin.Context) {
 		UserID:   user.ID,
 		ParentID: parentID,
 	}
-	createdSharePost, err := h.postService.CreateSharePost(createSharePostDTO)
+	createdSharePost, err := h.postService.CreateSharePost(ctx, createSharePostDTO)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -237,9 +249,15 @@ func (h *postHandler) CreateSharePost(c *gin.Context) {
 //	@Failure		500		{object}	response.SwaggerResponse
 //	@Router			/post/finds [get]
 func (h *postHandler) FindsCursorPagination(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	cursor := c.Query("cursor")
 	limit := c.Query("limit")
-	postCursorPagination, err := h.postService.FindsCursorPagination(cursor, limit)
+	postCursorPagination, err := h.postService.FindsCursorPagination(
+		ctx,
+		cursor,
+		limit,
+	)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -263,10 +281,13 @@ func (h *postHandler) FindsCursorPagination(c *gin.Context) {
 //	@Failure		500		{object}	response.SwaggerResponse
 //	@Router			/post/finds/{userID} [get]
 func (h *postHandler) FindsWithUserIDCursorPagination(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	userID := c.Param("userID")
 	cursor := c.Query("cursor")
 	limit := c.Query("limit")
 	postCursorPagination, err := h.postService.FindsWithUserIDCursorPagination(
+		ctx,
 		userID,
 		cursor,
 		limit,
@@ -292,8 +313,10 @@ func (h *postHandler) FindsWithUserIDCursorPagination(c *gin.Context) {
 //	@Failure		500		{object}	response.SwaggerResponse
 //	@Router			/post/find/{postID} [get]
 func (h *postHandler) FindWithID(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	postID := c.Param("postID")
-	post, err := h.postService.FindWithID(postID)
+	post, err := h.postService.FindWithID(ctx, postID)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -317,6 +340,8 @@ func (h *postHandler) FindWithID(c *gin.Context) {
 //	@Failure		500		{object}	response.SwaggerResponse
 //	@Router			/post/update/{postID} [patch]
 func (h *postHandler) UpdatePost(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	postID := c.Param("postID")
 	updatePostRequest := &UpdatePostRequest{}
 	err := c.ShouldBind(updatePostRequest)
@@ -332,7 +357,7 @@ func (h *postHandler) UpdatePost(c *gin.Context) {
 		ShouldDeleteCurrentFiles: updatePostRequest.ShouldDeleteCurrentFiles,
 		IsSharePost:              updatePostRequest.IsSharePost,
 	}
-	post, err := h.postService.UpdatePost(updatePostDTO)
+	post, err := h.postService.UpdatePost(ctx, updatePostDTO)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -354,8 +379,10 @@ func (h *postHandler) UpdatePost(c *gin.Context) {
 //	@Failure		500		{object}	response.SwaggerResponse
 //	@Router			/post/delete/{postID} [delete]
 func (h *postHandler) DeletePost(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	postID := c.Param("postID")
-	deletedPost, err := h.postService.DeletePost(postID)
+	deletedPost, err := h.postService.DeletePost(ctx, postID)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return

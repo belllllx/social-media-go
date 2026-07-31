@@ -1,6 +1,7 @@
 package email
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -13,7 +14,12 @@ import (
 )
 
 type EmailService interface {
-	SendEmail(db *gorm.DB, email, sendEmailType string) error
+	SendEmail(
+		ctx context.Context,
+		db *gorm.DB,
+		email,
+		sendEmailType string,
+	) error
 }
 
 type emailService struct {
@@ -31,8 +37,17 @@ func NewEmailService(
 	}
 }
 
-func (s *emailService) SendEmail(db *gorm.DB, email, sendEmailType string) error {
-	isOTPExist, err := s.otpRepository.FindByEmail(db, email)
+func (s *emailService) SendEmail(
+	ctx context.Context,
+	db *gorm.DB,
+	email,
+	sendEmailType string,
+) error {
+	isOTPExist, err := s.otpRepository.FindByEmail(
+		ctx,
+		db,
+		email,
+	)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to send email")
@@ -40,7 +55,11 @@ func (s *emailService) SendEmail(db *gorm.DB, email, sendEmailType string) error
 
 	// ลบ otp ของเก่าถ้าเจอ
 	if isOTPExist != nil {
-		if err := s.otpRepository.Delete(db, isOTPExist.Email); err != nil {
+		if err := s.otpRepository.Delete(
+			ctx,
+			db,
+			isOTPExist.Email,
+		); err != nil {
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to delete otp")
 		}
@@ -62,16 +81,29 @@ func (s *emailService) SendEmail(db *gorm.DB, email, sendEmailType string) error
 		OTPHash:   otpHash,
 		ExpiredAt: time.Now().Add(time.Minute * 10),
 	}
-	err = s.otpRepository.Create(db, &createOTP)
+	err = s.otpRepository.Create(
+		ctx,
+		db,
+		&createOTP,
+	)
 	if err != nil {
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to create otp")
 	}
 
-	err = s.emailRepository.Send(email, otpString, sendEmailType)
+	err = s.emailRepository.Send(
+		ctx,
+		email,
+		otpString,
+		sendEmailType,
+	)
 	if err != nil {
 		logs.Error(err)
-		if err := s.otpRepository.Delete(db, email); err != nil {
+		if err := s.otpRepository.Delete(
+			ctx,
+			db,
+			email,
+		); err != nil {
 			logs.Error(err)
 		}
 

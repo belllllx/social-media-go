@@ -88,6 +88,8 @@ func NewAuthHandler(
 //	@Failure		500		{object}	response.SwaggerResponse
 //	@Router			/auth/register/send-email [post]
 func (h *authHandler) SendEmailRegister(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	sendEmailRegisterRequest := &SendEmailRegisterRequest{}
 	err := c.ShouldBind(sendEmailRegisterRequest)
 	if err != nil {
@@ -102,7 +104,7 @@ func (h *authHandler) SendEmailRegister(c *gin.Context) {
 		Password: sendEmailRegisterRequest.Password,
 	}
 
-	token, err := h.authService.SendEmailRegister(sendEmailRegisterDTO)
+	token, err := h.authService.SendEmailRegister(ctx, sendEmailRegisterDTO)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -130,6 +132,8 @@ func (h *authHandler) SendEmailRegister(c *gin.Context) {
 //	@Failure		500		{object}	response.SwaggerResponse
 //	@Router			/auth/forgot-password/send-email [post]
 func (h *authHandler) SendEmailForgotPassword(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	sendEmailForgotPasswordRequest := &SendEmailForgotPasswordRequest{}
 	err := c.ShouldBind(sendEmailForgotPasswordRequest)
 	if err != nil {
@@ -137,7 +141,7 @@ func (h *authHandler) SendEmailForgotPassword(c *gin.Context) {
 		return
 	}
 
-	token, err := h.authService.SendEmailForgotPassword(sendEmailForgotPasswordRequest.Email)
+	token, err := h.authService.SendEmailForgotPassword(ctx, sendEmailForgotPasswordRequest.Email)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -162,13 +166,19 @@ func (h *authHandler) SendEmailForgotPassword(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/register/resend-email [post]
 func (h *authHandler) ResendEmailRegister(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	email, ok := c.MustGet("email").(string)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
 	}
 
-	err := h.authService.ResendEmail(email, "register")
+	err := h.authService.ResendEmail(
+		ctx,
+		email,
+		"register",
+	)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -187,13 +197,19 @@ func (h *authHandler) ResendEmailRegister(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/forgot-password/resend-email [post]
 func (h *authHandler) ResendEmailForgotPassword(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	email, ok := c.MustGet("email").(string)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
 	}
 
-	err := h.authService.ResendEmail(email, "reset password")
+	err := h.authService.ResendEmail(
+		ctx,
+		email,
+		"reset password",
+	)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -215,6 +231,8 @@ func (h *authHandler) ResendEmailForgotPassword(c *gin.Context) {
 //	@Failure		500		{object}	response.SwaggerResponse
 //	@Router			/auth/register/verify-otp [post]
 func (h *authHandler) VerifyOTPRegister(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	verifyOTPRequest := &VerifyOTPRequest{}
 	err := c.ShouldBind(verifyOTPRequest)
 	if err != nil {
@@ -228,7 +246,11 @@ func (h *authHandler) VerifyOTPRegister(c *gin.Context) {
 		return
 	}
 
-	err = h.authService.VerifyOTPRegister(email, verifyOTPRequest.OTP)
+	err = h.authService.VerifyOTPRegister(
+		ctx,
+		email,
+		verifyOTPRequest.OTP,
+	)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -251,6 +273,8 @@ func (h *authHandler) VerifyOTPRegister(c *gin.Context) {
 //	@Failure		500		{object}	response.SwaggerResponse
 //	@Router			/auth/forgot-password/verify-otp [post]
 func (h *authHandler) VerifyOTPForgotPassword(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	verifyOTPRequest := &VerifyOTPRequest{}
 	err := c.ShouldBind(verifyOTPRequest)
 	if err != nil {
@@ -264,7 +288,11 @@ func (h *authHandler) VerifyOTPForgotPassword(c *gin.Context) {
 		return
 	}
 
-	token, err := h.authService.VerifyOTPForgotPassword(email, verifyOTPRequest.OTP)
+	token, err := h.authService.VerifyOTPForgotPassword(
+		ctx,
+		email,
+		verifyOTPRequest.OTP,
+	)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -388,6 +416,8 @@ func (h *authHandler) Logout(c *gin.Context) {
 //	@Failure		500		{object}	response.SwaggerResponse
 //	@Router			/auth/forgot-password/reset-password [patch]
 func (h *authHandler) ResetPassword(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	resetPasswordRequest := &ResetPasswordRequest{}
 	err := c.ShouldBind(resetPasswordRequest)
 	if err != nil {
@@ -401,7 +431,11 @@ func (h *authHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	err = h.userService.ResetPassword(email, resetPasswordRequest.ConfirmPassword)
+	err = h.userService.ResetPassword(
+		ctx,
+		email,
+		resetPasswordRequest.ConfirmPassword,
+	)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -421,7 +455,9 @@ func (h *authHandler) ResetPassword(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/google [get]
 func (h *authHandler) GoogleLogin(c *gin.Context) {
-	url, err := h.authService.SocialLogin(models.ProviderTypeGoogle)
+	ctx := c.Request.Context()
+
+	url, err := h.authService.SocialLogin(ctx, models.ProviderTypeGoogle)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -439,7 +475,9 @@ func (h *authHandler) GoogleLogin(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/facebook [get]
 func (h *authHandler) FacebookLogin(c *gin.Context) {
-	url, err := h.authService.SocialLogin(models.ProviderTypeFacebook)
+	ctx := c.Request.Context()
+
+	url, err := h.authService.SocialLogin(ctx, models.ProviderTypeFacebook)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -457,7 +495,9 @@ func (h *authHandler) FacebookLogin(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/github [get]
 func (h *authHandler) GithubLogin(c *gin.Context) {
-	url, err := h.authService.SocialLogin(models.ProviderTypeGithub)
+	ctx := c.Request.Context()
+
+	url, err := h.authService.SocialLogin(ctx, models.ProviderTypeGithub)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -476,13 +516,15 @@ func (h *authHandler) GithubLogin(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/google/callback [get]
 func (h *authHandler) GoogleCallback(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	socialUser, ok := c.MustGet("socialUser").(*SocialUserDTO)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
 	}
 
-	tokens, url, err := h.authService.SocialLoginCallback(socialUser)
+	tokens, url, err := h.authService.SocialLoginCallback(ctx, socialUser)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -516,13 +558,15 @@ func (h *authHandler) GoogleCallback(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/facebook/callback [get]
 func (h *authHandler) FacebookCallback(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	socialUser, ok := c.MustGet("socialUser").(*SocialUserDTO)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
 	}
 
-	tokens, url, err := h.authService.SocialLoginCallback(socialUser)
+	tokens, url, err := h.authService.SocialLoginCallback(ctx, socialUser)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -556,13 +600,15 @@ func (h *authHandler) FacebookCallback(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/github/callback [get]
 func (h *authHandler) GithubCallback(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	socialUser, ok := c.MustGet("socialUser").(*SocialUserDTO)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
 	}
 
-	tokens, url, err := h.authService.SocialLoginCallback(socialUser)
+	tokens, url, err := h.authService.SocialLoginCallback(ctx, socialUser)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return

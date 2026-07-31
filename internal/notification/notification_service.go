@@ -1,6 +1,8 @@
 package notification
 
 import (
+	"context"
+
 	"github.com/belllllx/social-media-go/internal/logs"
 	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/internal/user"
@@ -9,8 +11,16 @@ import (
 )
 
 type NotificationService interface {
-	CreateNotification(tx *gorm.DB, createNotificationDTO *models.Notification) error
-	CreateNotifications(tx *gorm.DB, createNotificationsDTO []models.Notification) error
+	CreateNotification(
+		ctx context.Context,
+		tx *gorm.DB,
+		createNotificationDTO *models.Notification,
+	) error
+	CreateNotifications(
+		ctx context.Context,
+		tx *gorm.DB,
+		createNotificationsDTO []models.Notification,
+	) error
 }
 
 type notificationService struct {
@@ -28,8 +38,16 @@ func NewNotificationService(
 	}
 }
 
-func (s *notificationService) CreateNotification(tx *gorm.DB, createNotificationDTO *models.Notification) error {
-	err := s.notificationRepository.Create(tx, createNotificationDTO)
+func (s *notificationService) CreateNotification(
+	ctx context.Context,
+	tx *gorm.DB,
+	createNotificationDTO *models.Notification,
+) error {
+	err := s.notificationRepository.Create(
+		ctx,
+		tx,
+		createNotificationDTO,
+	)
 	if err != nil {
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to create notification")
@@ -38,8 +56,16 @@ func (s *notificationService) CreateNotification(tx *gorm.DB, createNotification
 	return nil
 }
 
-func (s *notificationService) CreateNotifications(tx *gorm.DB, createNotificationsDTO []models.Notification) error {
-	err := s.notificationRepository.CreateMany(tx, createNotificationsDTO)
+func (s *notificationService) CreateNotifications(
+	ctx context.Context,
+	tx *gorm.DB,
+	createNotificationsDTO []models.Notification,
+) error {
+	err := s.notificationRepository.CreateMany(
+		ctx,
+		tx,
+		createNotificationsDTO,
+	)
 	if err != nil {
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to create notificaions")

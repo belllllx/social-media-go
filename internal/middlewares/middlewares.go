@@ -1,7 +1,6 @@
 package middlewares
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -96,6 +95,8 @@ func AuthRegister() gin.HandlerFunc {
 
 func AuthLogin(authService auth.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+
 		loginRequest := &auth.LoginRequest{}
 		err := c.ShouldBind(loginRequest)
 		if err != nil {
@@ -107,7 +108,7 @@ func AuthLogin(authService auth.AuthService) gin.HandlerFunc {
 			Username: loginRequest.Username,
 			Password: loginRequest.Password,
 		}
-		userID, err := authService.ValidateUserLogin(loginDTO)
+		userID, err := authService.ValidateUserLogin(ctx, loginDTO)
 		if err != nil {
 			helpers.HandleError(c, err)
 			return
@@ -120,6 +121,8 @@ func AuthLogin(authService auth.AuthService) gin.HandlerFunc {
 
 func RequireAuth(userService user.UserService) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+
 		accessToken, err := c.Cookie("access_token")
 		if err != nil {
 			response.AbortWithUnauthorized(c)
@@ -138,7 +141,7 @@ func RequireAuth(userService user.UserService) gin.HandlerFunc {
 			return
 		}
 
-		secureUser, err := userService.SecureFindWithID(claims.ID)
+		secureUser, err := userService.SecureFindWithID(ctx, claims.ID)
 		if err != nil {
 			helpers.HandleError(c, err)
 			return
@@ -243,12 +246,17 @@ func AuthForgotPassword() gin.HandlerFunc {
 
 func AuthGoogleCallback(redisClient *redis.Client, verifier *oidc.IDTokenVerifier) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+
 		state := c.Query("state")
 		code := c.Query("code")
 
-		ctx := context.Background()
 		key := fmt.Sprintf("auth:oauth2-state:%s", state)
-		oauth2State, err := helpers.RedisGet(redisClient, ctx, key)
+		oauth2State, err := helpers.RedisGet(
+			ctx,
+			redisClient,
+			key,
+		)
 		if err == redis.Nil {
 			response.AbortWithUnauthorized(c)
 			return
@@ -288,7 +296,11 @@ func AuthGoogleCallback(redisClient *redis.Client, verifier *oidc.IDTokenVerifie
 			return
 		}
 
-		err = helpers.RedisDelete(redisClient, ctx, key)
+		err = helpers.RedisDelete(
+			ctx,
+			redisClient,
+			key,
+		)
 		if err != nil {
 			response.AbortWithInternalServerError(c, err)
 			return
@@ -308,12 +320,17 @@ func AuthGoogleCallback(redisClient *redis.Client, verifier *oidc.IDTokenVerifie
 
 func AuthGithubCallback(redisClient *redis.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+
 		state := c.Query("state")
 		code := c.Query("code")
 
-		ctx := context.Background()
 		key := fmt.Sprintf("auth:oauth2-state:%s", state)
-		oauth2State, err := helpers.RedisGet(redisClient, ctx, key)
+		oauth2State, err := helpers.RedisGet(
+			ctx,
+			redisClient,
+			key,
+		)
 		if err == redis.Nil {
 			response.AbortWithUnauthorized(c)
 			return
@@ -389,7 +406,11 @@ func AuthGithubCallback(redisClient *redis.Client) gin.HandlerFunc {
 			}
 		}
 
-		err = helpers.RedisDelete(redisClient, ctx, key)
+		err = helpers.RedisDelete(
+			ctx,
+			redisClient,
+			key,
+		)
 		if err != nil {
 			response.AbortWithInternalServerError(c, err)
 			return
@@ -409,12 +430,17 @@ func AuthGithubCallback(redisClient *redis.Client) gin.HandlerFunc {
 
 func AuthFacebookCallback(redisClient *redis.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+
 		state := c.Query("state")
 		code := c.Query("code")
 
-		ctx := context.Background()
 		key := fmt.Sprintf("auth:oauth2-state:%s", state)
-		oauth2State, err := helpers.RedisGet(redisClient, ctx, key)
+		oauth2State, err := helpers.RedisGet(
+			ctx,
+			redisClient,
+			key,
+		)
 		if err == redis.Nil {
 			response.AbortWithUnauthorized(c)
 			return
@@ -460,7 +486,11 @@ func AuthFacebookCallback(redisClient *redis.Client) gin.HandlerFunc {
 			return
 		}
 
-		err = helpers.RedisDelete(redisClient, ctx, key)
+		err = helpers.RedisDelete(
+			ctx,
+			redisClient,
+			key,
+		)
 		if err != nil {
 			response.AbortWithInternalServerError(c, err)
 			return

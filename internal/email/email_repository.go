@@ -1,11 +1,18 @@
 package email
 
 import (
+	"context"
+
 	"github.com/belllllx/social-media-go/pkg/helpers"
 )
 
 type EmailRepository interface {
-	Send(email, otp, verifyEmailType string) error
+	Send(
+		ctx context.Context,
+		email,
+		otp,
+		verifyEmailType string,
+	) error
 }
 
 type emailRepositoryImpl struct {
@@ -16,11 +23,21 @@ func NewEmailRepositoryImpl() EmailRepository {
 }
 
 func (r *emailRepositoryImpl) Send(
+	ctx context.Context,
 	email,
 	otp,
 	verifyEmailType string,
 ) error {
-	err := helpers.SendEmail(email, otp, verifyEmailType)
+	err := ctx.Err()
+	if err != nil {
+		return err
+	}
+
+	err = helpers.SendEmail(
+		email,
+		otp,
+		verifyEmailType,
+	)
 	if err != nil {
 		return err
 	}

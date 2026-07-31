@@ -1,6 +1,7 @@
 package post
 
 import (
+	"context"
 	"time"
 
 	"github.com/belllllx/social-media-go/internal/models"
@@ -16,16 +17,60 @@ type Cursor struct {
 }
 
 type PostRepository interface {
-	Create(db *gorm.DB, post *models.Post) error
-	FindByID(db *gorm.DB, postID uuid.UUID) (*models.Post, error)
-	FindByIDWithUserRelation(db *gorm.DB, postID uuid.UUID) (*models.Post, error)
-	FindByIDWithParentRelation(db *gorm.DB, postID uuid.UUID) (*models.Post, error)
-	FindByIDWithPostRelations(db *gorm.DB, postID uuid.UUID) (*models.Post, error)
-	FindByIDCursor(db *gorm.DB, postID uuid.UUID) (*Cursor, error)
-	FindsCursorPaginationWithPostRelations(db *gorm.DB, cursor *Cursor, limit int) ([]models.Post, error)
-	FindsByUserIDCursorPaginationWithPostRelations(db *gorm.DB, userID uuid.UUID, cursor *Cursor, limit int) ([]models.Post, error)
-	Update(db *gorm.DB, postID uuid.UUID, updatePost *models.Post) error
-	Delete(db *gorm.DB, postID uuid.UUID) (*models.Post, error)
+	Create(
+		ctx context.Context,
+		db *gorm.DB,
+		post *models.Post,
+	) error
+	FindByID(
+		ctx context.Context,
+		db *gorm.DB,
+		postID uuid.UUID,
+	) (*models.Post, error)
+	FindByIDWithUserRelation(
+		ctx context.Context,
+		db *gorm.DB,
+		postID uuid.UUID,
+	) (*models.Post, error)
+	FindByIDWithParentRelation(
+		ctx context.Context,
+		db *gorm.DB,
+		postID uuid.UUID,
+	) (*models.Post, error)
+	FindByIDWithPostRelations(
+		ctx context.Context,
+		db *gorm.DB,
+		postID uuid.UUID,
+	) (*models.Post, error)
+	FindByIDCursor(
+		ctx context.Context,
+		db *gorm.DB,
+		postID uuid.UUID,
+	) (*Cursor, error)
+	FindsCursorPaginationWithPostRelations(
+		ctx context.Context,
+		db *gorm.DB,
+		cursor *Cursor,
+		limit int,
+	) ([]models.Post, error)
+	FindsByUserIDCursorPaginationWithPostRelations(
+		ctx context.Context,
+		db *gorm.DB,
+		userID uuid.UUID,
+		cursor *Cursor,
+		limit int,
+	) ([]models.Post, error)
+	Update(
+		ctx context.Context,
+		db *gorm.DB,
+		postID uuid.UUID,
+		updatePost *models.Post,
+	) error
+	Delete(
+		ctx context.Context,
+		db *gorm.DB,
+		postID uuid.UUID,
+	) (*models.Post, error)
 }
 
 type postRepositoryDB struct {
@@ -35,40 +80,72 @@ func NewPostRepositoryDB() PostRepository {
 	return &postRepositoryDB{}
 }
 
-func (r *postRepositoryDB) Create(db *gorm.DB, post *models.Post) error {
-	return db.Create(post).Error
+func (r *postRepositoryDB) Create(
+	ctx context.Context,
+	db *gorm.DB,
+	post *models.Post,
+) error {
+	return db.WithContext(ctx).Create(post).Error
 }
 
-func (r *postRepositoryDB) FindByID(db *gorm.DB, postID uuid.UUID) (*models.Post, error) {
-	post := &models.Post{}
-	err := db.Where("id = ?", postID).Take(post).Error
-	if err != nil {
-		return nil, err
-	}
-	return post, nil
-}
-
-func (r *postRepositoryDB) FindByIDWithUserRelation(db *gorm.DB, postID uuid.UUID) (*models.Post, error) {
-	post := &models.Post{}
-	err := db.Where("id = ?", postID).Preload("User", helpers.OmitUserPasswordHash).Take(post).Error
-	if err != nil {
-		return nil, err
-	}
-	return post, nil
-}
-
-func (r *postRepositoryDB) FindByIDWithParentRelation(db *gorm.DB, postID uuid.UUID) (*models.Post, error) {
-	post := &models.Post{}
-	err := db.Where("id = ?", postID).Preload("Parent").Take(post).Error
-	if err != nil {
-		return nil, err
-	}
-	return post, nil
-}
-
-func (r *postRepositoryDB) FindByIDWithPostRelations(db *gorm.DB, postID uuid.UUID) (*models.Post, error) {
+func (r *postRepositoryDB) FindByID(
+	ctx context.Context,
+	db *gorm.DB,
+	postID uuid.UUID,
+) (*models.Post, error) {
 	post := &models.Post{}
 	err := db.
+		WithContext(ctx).
+		Where("id = ?", postID).
+		Take(post).Error
+	if err != nil {
+		return nil, err
+	}
+	return post, nil
+}
+
+func (r *postRepositoryDB) FindByIDWithUserRelation(
+	ctx context.Context,
+	db *gorm.DB,
+	postID uuid.UUID,
+) (*models.Post, error) {
+	post := &models.Post{}
+	err := db.
+		WithContext(ctx).
+		Where("id = ?", postID).
+		Preload("User", helpers.OmitUserPasswordHash).
+		Take(post).Error
+	if err != nil {
+		return nil, err
+	}
+	return post, nil
+}
+
+func (r *postRepositoryDB) FindByIDWithParentRelation(
+	ctx context.Context,
+	db *gorm.DB,
+	postID uuid.UUID,
+) (*models.Post, error) {
+	post := &models.Post{}
+	err := db.
+		WithContext(ctx).
+		Where("id = ?", postID).
+		Preload("Parent").
+		Take(post).Error
+	if err != nil {
+		return nil, err
+	}
+	return post, nil
+}
+
+func (r *postRepositoryDB) FindByIDWithPostRelations(
+	ctx context.Context,
+	db *gorm.DB,
+	postID uuid.UUID,
+) (*models.Post, error) {
+	post := &models.Post{}
+	err := db.
+		WithContext(ctx).
 		Where("id = ?", postID).
 		Preload("User", helpers.OmitUserPasswordHash).
 		Preload("Parent.User", helpers.OmitUserPasswordHash).
@@ -84,9 +161,17 @@ func (r *postRepositoryDB) FindByIDWithPostRelations(db *gorm.DB, postID uuid.UU
 	return post, nil
 }
 
-func (r *postRepositoryDB) FindByIDCursor(db *gorm.DB, postID uuid.UUID) (*Cursor, error) {
+func (r *postRepositoryDB) FindByIDCursor(
+	ctx context.Context,
+	db *gorm.DB,
+	postID uuid.UUID,
+) (*Cursor, error) {
 	post := &models.Post{}
-	err := db.Where("id = ?", postID).Select("id", "created_at").Take(post).Error
+	err := db.
+		WithContext(ctx).
+		Where("id = ?", postID).
+		Select("id", "created_at").
+		Take(post).Error
 	if err != nil {
 		return nil, err
 	}
@@ -98,12 +183,14 @@ func (r *postRepositoryDB) FindByIDCursor(db *gorm.DB, postID uuid.UUID) (*Curso
 }
 
 func (r *postRepositoryDB) FindsCursorPaginationWithPostRelations(
+	ctx context.Context,
 	db *gorm.DB,
 	cursor *Cursor,
 	limit int,
 ) ([]models.Post, error) {
 	posts := &[]models.Post{}
 	db = db.
+		WithContext(ctx).
 		Preload("User", helpers.OmitUserPasswordHash).
 		Preload("Parent.User", helpers.OmitUserPasswordHash).
 		Preload("Likes", func(db *gorm.DB) *gorm.DB {
@@ -131,6 +218,7 @@ func (r *postRepositoryDB) FindsCursorPaginationWithPostRelations(
 }
 
 func (r *postRepositoryDB) FindsByUserIDCursorPaginationWithPostRelations(
+	ctx context.Context,
 	db *gorm.DB,
 	userID uuid.UUID,
 	cursor *Cursor,
@@ -138,6 +226,7 @@ func (r *postRepositoryDB) FindsByUserIDCursorPaginationWithPostRelations(
 ) ([]models.Post, error) {
 	posts := &[]models.Post{}
 	db = db.
+		WithContext(ctx).
 		Where("user_id = ?", userID).
 		Preload("User", helpers.OmitUserPasswordHash).
 		Preload("Parent.User", helpers.OmitUserPasswordHash).
@@ -165,18 +254,35 @@ func (r *postRepositoryDB) FindsByUserIDCursorPaginationWithPostRelations(
 	return *posts, nil
 }
 
-func (r *postRepositoryDB) Update(db *gorm.DB, postID uuid.UUID, updatePost *models.Post) error {
+func (r *postRepositoryDB) Update(
+	ctx context.Context,
+	db *gorm.DB,
+	postID uuid.UUID,
+	updatePost *models.Post,
+) error {
 	post := &models.Post{}
-	err := db.Model(post).Where("id = ?", postID).Updates(*updatePost).Error
+	err := db.
+		WithContext(ctx).
+		Model(post).
+		Where("id = ?", postID).
+		Updates(*updatePost).Error
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (r *postRepositoryDB) Delete(db *gorm.DB, postID uuid.UUID) (*models.Post, error) {
+func (r *postRepositoryDB) Delete(
+	ctx context.Context,
+	db *gorm.DB,
+	postID uuid.UUID,
+) (*models.Post, error) {
 	post := &models.Post{}
-	err := db.Clauses(clause.Returning{}).Where("id = ?", postID).Delete(post).Error
+	err := db.
+		WithContext(ctx).
+		Clauses(clause.Returning{}).
+		Where("id = ?", postID).
+		Delete(post).Error
 	if err != nil {
 		return nil, err
 	}

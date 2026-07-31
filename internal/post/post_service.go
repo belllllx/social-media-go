@@ -113,13 +113,22 @@ type CreatedPost struct {
 }
 
 type PostService interface {
-	CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, error)
-	CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*CreatedSharePost, error)
-	FindsCursorPagination(cursor, limit string) (*PostCursorPagination, error)
-	FindsWithUserIDCursorPagination(userID, cursor, limit string) (*PostCursorPagination, error)
-	FindWithID(postID string) (*Post, error)
-	UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error)
-	DeletePost(postID string) (*DeletedPost, error)
+	CreatePost(ctx context.Context, createPostDTO *CreatePostDTO) (*CreatedPost, error)
+	CreateSharePost(ctx context.Context, createSharePostDTO *CreateSharePostDTO) (*CreatedSharePost, error)
+	FindsCursorPagination(
+		ctx context.Context,
+		cursor,
+		limit string,
+	) (*PostCursorPagination, error)
+	FindsWithUserIDCursorPagination(
+		ctx context.Context,
+		userID,
+		cursor,
+		limit string,
+	) (*PostCursorPagination, error)
+	FindWithID(ctx context.Context, postID string) (*Post, error)
+	UpdatePost(ctx context.Context, updatePostDTO *UpdatePostDTO) (*Post, error)
+	DeletePost(ctx context.Context, postID string) (*DeletedPost, error)
 }
 
 type postService struct {
@@ -167,7 +176,7 @@ func NewPostService(
 	}
 }
 
-func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, error) {
+func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostDTO) (*CreatedPost, error) {
 	if createPostDTO.Message == "" && len(createPostDTO.FilesURL) == 0 {
 		return nil, errs.NewBadRequestErrorWithMessage("Create post must contains with message or files")
 	}
@@ -177,7 +186,11 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		UserID:  createPostDTO.UserID,
 	}
 
-	usersExcept, err := s.userRepository.FindsByIDExcept(s.db, createPostDTO.UserID)
+	usersExcept, err := s.userRepository.FindsByIDExcept(
+		ctx,
+		s.db,
+		createPostDTO.UserID,
+	)
 	if err != nil {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find users by id except")
@@ -186,7 +199,11 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 	createNotificationsDTO := []models.Notification{}
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
-		err := s.postRepository.Create(tx, createPost)
+		err := s.postRepository.Create(
+			ctx,
+			tx,
+			createPost,
+		)
 		if err != nil {
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to create post")
@@ -201,7 +218,13 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 					return errs.NewUnexpectedErrorWithMessage("Failed to split presigned url")
 				}
 				filePath := fmt.Sprintf("%s/%s", fileDIR, filename)
-				err = s.fileRepository.UpdateContentID(tx, createPost.ID, filePath, models.FileTypePost)
+				err = s.fileRepository.UpdateContentID(
+					ctx,
+					tx,
+					createPost.ID,
+					filePath,
+					models.FileTypePost,
+				)
 				if err != nil {
 					logs.Error(err)
 					return errs.NewInternalServerErrorWithMessage("Failed to update file of post")
@@ -221,7 +244,11 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 				})
 			}
 
-			err = s.notificationService.CreateNotifications(tx, createNotificationsDTO)
+			err = s.notificationService.CreateNotifications(
+				ctx,
+				tx,
+				createNotificationsDTO,
+			)
 			if err != nil {
 				return err
 			}
@@ -237,13 +264,17 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		return nil, err
 	}
 
-	post, err := s.postRepository.FindByIDWithUserRelation(s.db, createPost.ID)
+	post, err := s.postRepository.FindByIDWithUserRelation(
+		ctx,
+		s.db,
+		createPost.ID,
+	)
 	if err != nil {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post with user relation")
 	}
 
-	err = s.userService.GetUserImage(&post.User)
+	err = s.userService.GetUserImage(ctx, &post.User)
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +283,7 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 
 	// กรณีมี files
 	if len(createPostDTO.FilesURL) > 0 {
-		filesURL, err = s.fileService.PresignGetFiles(createPost.ID)
+		filesURL, err = s.fileService.PresignGetFiles(ctx, createPost.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -279,14 +310,18 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 		for _, createNotificationDTO := range createNotificationsDTO {
 			notificationsID = append(notificationsID, createNotificationDTO.ID)
 		}
-		notifications, err := s.notificationRepository.FindsWithSenderRelation(s.db, notificationsID)
+		notifications, err := s.notificationRepository.FindsWithSenderRelation(
+			ctx,
+			s.db,
+			notificationsID,
+		)
 		if err != nil {
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notifications with sender relation")
 		}
 
 		for i := range notifications {
-			err = s.userService.GetUserImage(&notifications[i].Sender)
+			err = s.userService.GetUserImage(ctx, &notifications[i].Sender)
 			if err != nil {
 				return nil, err
 			}
@@ -357,7 +392,7 @@ func (s *postService) CreatePost(createPostDTO *CreatePostDTO) (*CreatedPost, er
 	return respPost, nil
 }
 
-func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*CreatedSharePost, error) {
+func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *CreateSharePostDTO) (*CreatedSharePost, error) {
 	err := helpers.ValidateUUID(createSharePostDTO.ParentID)
 	if err != nil {
 		logs.Warn(err)
@@ -370,7 +405,11 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 		return nil, err
 	}
 
-	post, err := s.postRepository.FindByIDWithUserRelation(s.db, *parentID)
+	post, err := s.postRepository.FindByIDWithUserRelation(
+		ctx,
+		s.db,
+		*parentID,
+	)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id")
@@ -390,7 +429,11 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 	var notificationID uuid.UUID
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
-		err = s.postRepository.Create(tx, createSharePost)
+		err = s.postRepository.Create(
+			ctx,
+			tx,
+			createSharePost,
+		)
 		if err != nil {
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to create share post")
@@ -405,7 +448,11 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 				ReceiverID: post.UserID,
 				PostID:     &createSharePost.ID,
 			}
-			err = s.notificationService.CreateNotification(tx, createNotificationDTO)
+			err = s.notificationService.CreateNotification(
+				ctx,
+				tx,
+				createNotificationDTO,
+			)
 			if err != nil {
 				return err
 			}
@@ -423,31 +470,39 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 		return nil, err
 	}
 
-	sharePost, err := s.postRepository.FindByIDWithUserRelation(s.db, createSharePost.ID)
+	sharePost, err := s.postRepository.FindByIDWithUserRelation(
+		ctx,
+		s.db,
+		createSharePost.ID,
+	)
 	if err != nil {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post with user relation")
 	}
 
-	err = s.userService.GetUserImage(&sharePost.User)
+	err = s.userService.GetUserImage(ctx, &sharePost.User)
 	if err != nil {
 		return nil, err
 	}
 
-	err = s.userService.GetUserImage(&post.User)
+	err = s.userService.GetUserImage(ctx, &post.User)
 	if err != nil {
 		return nil, err
 	}
 
 	// ต้องไม่แชร์โพสต์ตัวเองถึง emit notification
 	if createSharePostDTO.UserID != post.UserID {
-		notification, err := s.notificationRepository.FindWithSenderRelation(s.db, notificationID)
+		notification, err := s.notificationRepository.FindWithSenderRelation(
+			ctx,
+			s.db,
+			notificationID,
+		)
 		if err != nil {
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification with sender relation")
 		}
 
-		err = s.userService.GetUserImage(&notification.Sender)
+		err = s.userService.GetUserImage(ctx, &notification.Sender)
 		if err != nil {
 			return nil, err
 		}
@@ -482,7 +537,7 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 		go s.notificationSocket.EmitNotification(emitNotificationsDTO)
 	}
 
-	filesURL, err := s.fileService.PresignGetFiles(post.ID)
+	filesURL, err := s.fileService.PresignGetFiles(ctx, post.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -560,7 +615,11 @@ func (s *postService) CreateSharePost(createSharePostDTO *CreateSharePostDTO) (*
 	return createdSharePost, nil
 }
 
-func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPagination, error) {
+func (s *postService) FindsCursorPagination(
+	ctx context.Context,
+	cursor,
+	limit string,
+) (*PostCursorPagination, error) {
 	var nextCursor *uuid.UUID
 	var cursorID *uuid.UUID
 
@@ -590,13 +649,22 @@ func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPa
 	posts := []models.Post{}
 	postsCursorPagination := []Post{}
 	if cursor == "" {
-		posts, err = s.postRepository.FindsCursorPaginationWithPostRelations(s.db, nil, limitInt)
+		posts, err = s.postRepository.FindsCursorPaginationWithPostRelations(
+			ctx,
+			s.db,
+			nil,
+			limitInt,
+		)
 		if err != nil {
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts cursor pagination with relations")
 		}
 	} else {
-		postCursor, err := s.postRepository.FindByIDCursor(s.db, *cursorID)
+		postCursor, err := s.postRepository.FindByIDCursor(
+			ctx,
+			s.db,
+			*cursorID,
+		)
 		if err != nil && !helpers.IsErrRecordNotFound(err) {
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find post cursor by post id")
@@ -607,7 +675,12 @@ func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPa
 			return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Cursor by post id %v is not found", *cursorID))
 		}
 
-		posts, err = s.postRepository.FindsCursorPaginationWithPostRelations(s.db, postCursor, limitInt)
+		posts, err = s.postRepository.FindsCursorPaginationWithPostRelations(
+			ctx,
+			s.db,
+			postCursor,
+			limitInt,
+		)
 		if err != nil {
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts cursor pagination with relations")
@@ -616,7 +689,7 @@ func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPa
 
 	if len(posts) > 0 {
 		for _, post := range posts {
-			err = s.userService.GetUserImage(&post.User)
+			err = s.userService.GetUserImage(ctx, &post.User)
 			if err != nil {
 				return nil, err
 			}
@@ -629,14 +702,14 @@ func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPa
 			}
 			commentsCount := len(comments)
 
-			filesURL, err := s.fileService.PresignGetFiles(post.ID)
+			filesURL, err := s.fileService.PresignGetFiles(ctx, post.ID)
 			if err != nil {
 				return nil, err
 			}
 
 			updateLikes := []Like{}
 			for _, like := range post.Likes {
-				err = s.userService.GetUserImage(&like.User)
+				err = s.userService.GetUserImage(ctx, &like.User)
 				if err != nil {
 					return nil, err
 				}
@@ -694,12 +767,12 @@ func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPa
 			}
 
 			if post.ParentID != nil {
-				err = s.userService.GetUserImage(&post.Parent.User)
+				err = s.userService.GetUserImage(ctx, &post.Parent.User)
 				if err != nil {
 					return nil, err
 				}
 
-				filesURL, err = s.fileService.PresignGetFiles(*post.ParentID)
+				filesURL, err = s.fileService.PresignGetFiles(ctx, *post.ParentID)
 				if err != nil {
 					return nil, err
 				}
@@ -745,7 +818,12 @@ func (s *postService) FindsCursorPagination(cursor, limit string) (*PostCursorPa
 	return postCursorPagination, nil
 }
 
-func (s *postService) FindsWithUserIDCursorPagination(userID, cursor, limit string) (*PostCursorPagination, error) {
+func (s *postService) FindsWithUserIDCursorPagination(
+	ctx context.Context,
+	userID,
+	cursor,
+	limit string,
+) (*PostCursorPagination, error) {
 	var nextCursor *uuid.UUID
 	var cursorID *uuid.UUID
 
@@ -761,7 +839,7 @@ func (s *postService) FindsWithUserIDCursorPagination(userID, cursor, limit stri
 		return nil, err
 	}
 
-	userByID, err := s.userService.SecureFindWithID(*userIDParse)
+	userByID, err := s.userService.SecureFindWithID(ctx, *userIDParse)
 	if err != nil {
 		return nil, err
 	}
@@ -792,13 +870,23 @@ func (s *postService) FindsWithUserIDCursorPagination(userID, cursor, limit stri
 	posts := []models.Post{}
 	postsCursorPagination := []Post{}
 	if cursor == "" {
-		posts, err = s.postRepository.FindsByUserIDCursorPaginationWithPostRelations(s.db, userByID.ID, nil, limitInt)
+		posts, err = s.postRepository.FindsByUserIDCursorPaginationWithPostRelations(
+			ctx,
+			s.db,
+			userByID.ID,
+			nil,
+			limitInt,
+		)
 		if err != nil {
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts by user id cursor pagination with relations")
 		}
 	} else {
-		postCursor, err := s.postRepository.FindByIDCursor(s.db, *cursorID)
+		postCursor, err := s.postRepository.FindByIDCursor(
+			ctx,
+			s.db,
+			*cursorID,
+		)
 		if err != nil && !helpers.IsErrRecordNotFound(err) {
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find post cursor by post id")
@@ -809,7 +897,13 @@ func (s *postService) FindsWithUserIDCursorPagination(userID, cursor, limit stri
 			return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Cursor by post id %v is not found", *cursorID))
 		}
 
-		posts, err = s.postRepository.FindsByUserIDCursorPaginationWithPostRelations(s.db, userByID.ID, postCursor, limitInt)
+		posts, err = s.postRepository.FindsByUserIDCursorPaginationWithPostRelations(
+			ctx,
+			s.db,
+			userByID.ID,
+			postCursor,
+			limitInt,
+		)
 		if err != nil {
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts by user id cursor pagination with relations")
@@ -818,7 +912,7 @@ func (s *postService) FindsWithUserIDCursorPagination(userID, cursor, limit stri
 
 	if len(posts) > 0 {
 		for _, post := range posts {
-			err = s.userService.GetUserImage(&post.User)
+			err = s.userService.GetUserImage(ctx, &post.User)
 			if err != nil {
 				return nil, err
 			}
@@ -831,14 +925,14 @@ func (s *postService) FindsWithUserIDCursorPagination(userID, cursor, limit stri
 			}
 			commentsCount := len(comments)
 
-			filesURL, err := s.fileService.PresignGetFiles(post.ID)
+			filesURL, err := s.fileService.PresignGetFiles(ctx, post.ID)
 			if err != nil {
 				return nil, err
 			}
 
 			updateLikes := []Like{}
 			for _, like := range post.Likes {
-				err = s.userService.GetUserImage(&like.User)
+				err = s.userService.GetUserImage(ctx, &like.User)
 				if err != nil {
 					return nil, err
 				}
@@ -896,12 +990,12 @@ func (s *postService) FindsWithUserIDCursorPagination(userID, cursor, limit stri
 			}
 
 			if post.ParentID != nil {
-				err = s.userService.GetUserImage(&post.Parent.User)
+				err = s.userService.GetUserImage(ctx, &post.Parent.User)
 				if err != nil {
 					return nil, err
 				}
 
-				filesURL, err = s.fileService.PresignGetFiles(*post.ParentID)
+				filesURL, err = s.fileService.PresignGetFiles(ctx, *post.ParentID)
 				if err != nil {
 					return nil, err
 				}
@@ -947,7 +1041,7 @@ func (s *postService) FindsWithUserIDCursorPagination(userID, cursor, limit stri
 	return postCursorPagination, nil
 }
 
-func (s *postService) FindWithID(postID string) (*Post, error) {
+func (s *postService) FindWithID(ctx context.Context, postID string) (*Post, error) {
 	err := helpers.ValidateUUID(postID)
 	if err != nil {
 		logs.Warn(err)
@@ -960,9 +1054,12 @@ func (s *postService) FindWithID(postID string) (*Post, error) {
 		return nil, err
 	}
 
-	ctx := context.Background()
 	key := fmt.Sprintf("post:find:%v", *postIDParse)
-	value, err := helpers.RedisGet(s.redisClient, ctx, key)
+	value, err := helpers.RedisGet(
+		ctx,
+		s.redisClient,
+		key,
+	)
 	if err != nil && err != redis.Nil {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to get post from redis")
@@ -979,7 +1076,11 @@ func (s *postService) FindWithID(postID string) (*Post, error) {
 		return post, nil
 	}
 
-	post, err := s.postRepository.FindByIDWithPostRelations(s.db, *postIDParse)
+	post, err := s.postRepository.FindByIDWithPostRelations(
+		ctx,
+		s.db,
+		*postIDParse,
+	)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post with relations")
@@ -990,7 +1091,7 @@ func (s *postService) FindWithID(postID string) (*Post, error) {
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", *postIDParse))
 	}
 
-	err = s.userService.GetUserImage(&post.User)
+	err = s.userService.GetUserImage(ctx, &post.User)
 	if err != nil {
 		return nil, err
 	}
@@ -1003,14 +1104,14 @@ func (s *postService) FindWithID(postID string) (*Post, error) {
 	}
 	commentsCount := len(comments)
 
-	filesURL, err := s.fileService.PresignGetFiles(post.ID)
+	filesURL, err := s.fileService.PresignGetFiles(ctx, post.ID)
 	if err != nil {
 		return nil, err
 	}
 
 	updateLikes := []Like{}
 	for _, like := range post.Likes {
-		err = s.userService.GetUserImage(&like.User)
+		err = s.userService.GetUserImage(ctx, &like.User)
 		if err != nil {
 			return nil, err
 		}
@@ -1068,12 +1169,12 @@ func (s *postService) FindWithID(postID string) (*Post, error) {
 	}
 
 	if post.ParentID != nil {
-		err = s.userService.GetUserImage(&post.Parent.User)
+		err = s.userService.GetUserImage(ctx, &post.Parent.User)
 		if err != nil {
 			return nil, err
 		}
 
-		filesURL, err = s.fileService.PresignGetFiles(*post.ParentID)
+		filesURL, err = s.fileService.PresignGetFiles(ctx, *post.ParentID)
 		if err != nil {
 			return nil, err
 		}
@@ -1111,7 +1212,13 @@ func (s *postService) FindWithID(postID string) (*Post, error) {
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to marshal json post")
 	}
 
-	err = helpers.RedisSet(s.redisClient, ctx, key, data, time.Minute*10)
+	err = helpers.RedisSet(
+		ctx,
+		s.redisClient,
+		key,
+		data,
+		time.Minute*10,
+	)
 	if err != nil {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to set post from redis")
@@ -1120,7 +1227,7 @@ func (s *postService) FindWithID(postID string) (*Post, error) {
 	return postResp, nil
 }
 
-func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
+func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostDTO) (*Post, error) {
 	if updatePostDTO.Message == nil && len(updatePostDTO.FilesURL) == 0 && !updatePostDTO.IsSharePost {
 		return nil, errs.NewBadRequestErrorWithMessage("Update post must contains with message or files")
 	}
@@ -1137,7 +1244,11 @@ func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
 		return nil, err
 	}
 
-	postByID, err := s.postRepository.FindByID(s.db, *postID)
+	postByID, err := s.postRepository.FindByID(
+		ctx,
+		s.db,
+		*postID,
+	)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id")
@@ -1155,6 +1266,7 @@ func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
 	files := []models.File{}
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		err = s.postRepository.Update(
+			ctx,
 			tx,
 			postByID.ID,
 			updatePost,
@@ -1166,14 +1278,22 @@ func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
 
 		// กรณีมีไฟล์และลบรูปปัจจุบัน
 		if len(updatePostDTO.FilesURL) > 0 && updatePostDTO.ShouldDeleteCurrentFiles {
-			files, err = s.fileRepository.FindsByContentID(tx, postByID.ID)
+			files, err = s.fileRepository.FindsByContentID(
+				ctx,
+				tx,
+				postByID.ID,
+			)
 			if err != nil {
 				logs.Error(err)
 				return errs.NewInternalServerErrorWithMessage("Failed to find files of post")
 			}
 
 			if len(files) > 0 {
-				err = s.fileRepository.DeleteMany(tx, files)
+				err = s.fileRepository.DeleteMany(
+					ctx,
+					tx,
+					files,
+				)
 				if err != nil {
 					logs.Error(err)
 					return errs.NewInternalServerErrorWithMessage("Failed to delete files of post")
@@ -1187,7 +1307,13 @@ func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
 					return errs.NewUnexpectedErrorWithMessage("Failed to split presigned url")
 				}
 				filePath := fmt.Sprintf("%s/%s", fileDIR, filename)
-				err = s.fileRepository.UpdateContentID(tx, postByID.ID, filePath, models.FileTypePost)
+				err = s.fileRepository.UpdateContentID(
+					ctx,
+					tx,
+					postByID.ID,
+					filePath,
+					models.FileTypePost,
+				)
 				if err != nil {
 					logs.Error(err)
 					return errs.NewInternalServerErrorWithMessage("Failed to update file of post")
@@ -1205,7 +1331,11 @@ func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
 		return nil, err
 	}
 
-	post, err := s.postRepository.FindByIDWithPostRelations(s.db, postByID.ID)
+	post, err := s.postRepository.FindByIDWithPostRelations(
+		ctx,
+		s.db,
+		postByID.ID,
+	)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id with relations")
@@ -1224,7 +1354,7 @@ func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
 	}
 	commentsCount := len(comments)
 
-	err = s.userService.GetUserImage(&post.User)
+	err = s.userService.GetUserImage(ctx, &post.User)
 	if err != nil {
 		return nil, err
 	}
@@ -1232,7 +1362,7 @@ func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
 	likesDTO := []socket.LikeDTO{}
 	updateLikes := []Like{}
 	for _, like := range post.Likes {
-		err = s.userService.GetUserImage(&like.User)
+		err = s.userService.GetUserImage(ctx, &like.User)
 		if err != nil {
 			return nil, err
 		}
@@ -1309,7 +1439,7 @@ func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
 	}
 
 	if post.ParentID != nil {
-		err = s.userService.GetUserImage(&post.Parent.User)
+		err = s.userService.GetUserImage(ctx, &post.Parent.User)
 		if err != nil {
 			return nil, err
 		}
@@ -1365,8 +1495,8 @@ func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
 		}
 
 		_, err = helpers.DeleteObjects(
-			s.s3Client,
 			ctx,
+			s.s3Client,
 			keys,
 		)
 		if err != nil {
@@ -1375,7 +1505,7 @@ func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
 		}
 	}
 
-	filesURL, err := s.fileService.PresignGetFiles(post.ID)
+	filesURL, err := s.fileService.PresignGetFiles(ctx, post.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -1387,7 +1517,7 @@ func (s *postService) UpdatePost(updatePostDTO *UpdatePostDTO) (*Post, error) {
 	return postResp, nil
 }
 
-func (s *postService) DeletePost(postID string) (*DeletedPost, error) {
+func (s *postService) DeletePost(ctx context.Context, postID string) (*DeletedPost, error) {
 	err := helpers.ValidateUUID(postID)
 	if err != nil {
 		logs.Warn(err)
@@ -1400,7 +1530,11 @@ func (s *postService) DeletePost(postID string) (*DeletedPost, error) {
 		return nil, err
 	}
 
-	post, err := s.postRepository.FindByIDWithParentRelation(s.db, *postIDParse)
+	post, err := s.postRepository.FindByIDWithParentRelation(
+		ctx,
+		s.db,
+		*postIDParse,
+	)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id with parent relation")
@@ -1414,6 +1548,7 @@ func (s *postService) DeletePost(postID string) (*DeletedPost, error) {
 	// กรณีแชร์โพส
 	if post.ParentID != nil {
 		notification, err := s.notificationRepository.FindOfPost(
+			ctx,
 			s.db,
 			post.UserID,
 			post.Parent.UserID,
@@ -1442,10 +1577,15 @@ func (s *postService) DeletePost(postID string) (*DeletedPost, error) {
 	}
 
 	// กรณีโพสปกติ
-	usersExcept, err := s.userRepository.FindsByIDExcept(s.db, post.UserID)
+	usersExcept, err := s.userRepository.FindsByIDExcept(
+		ctx,
+		s.db,
+		post.UserID,
+	)
 	if len(usersExcept) > 0 {
 		for _, userExcept := range usersExcept {
 			notifications, err := s.notificationRepository.FindsOfPost(
+				ctx,
 				s.db,
 				post.UserID,
 				userExcept.ID,
@@ -1478,7 +1618,11 @@ func (s *postService) DeletePost(postID string) (*DeletedPost, error) {
 		}
 	}
 
-	files, err := s.fileRepository.FindsByContentID(s.db, post.ID)
+	files, err := s.fileRepository.FindsByContentID(
+		ctx,
+		s.db,
+		post.ID,
+	)
 	if err != nil {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find files of post")
@@ -1491,8 +1635,8 @@ func (s *postService) DeletePost(postID string) (*DeletedPost, error) {
 		}
 
 		_, err = helpers.DeleteObjects(
+			ctx,
 			s.s3Client,
-			context.Background(),
 			keys,
 		)
 		if err != nil {
@@ -1504,14 +1648,22 @@ func (s *postService) DeletePost(postID string) (*DeletedPost, error) {
 	deletedPost := &models.Post{}
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		if len(files) > 0 {
-			err = s.fileRepository.DeleteMany(tx, files)
+			err = s.fileRepository.DeleteMany(
+				ctx,
+				tx,
+				files,
+			)
 			if err != nil {
 				logs.Error(err)
 				return errs.NewInternalServerErrorWithMessage("Failed to delete files of post")
 			}
 		}
 
-		deletedPost, err = s.postRepository.Delete(tx, post.ID)
+		deletedPost, err = s.postRepository.Delete(
+			ctx,
+			tx,
+			post.ID,
+		)
 		if err != nil {
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to delete post")

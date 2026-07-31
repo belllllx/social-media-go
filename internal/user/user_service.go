@@ -74,9 +74,13 @@ type SecureUser struct {
 }
 
 type UserService interface {
-	SecureFindWithID(ID uuid.UUID) (*SecureUser, error)
-	ResetPassword(email, password string) error
-	GetUserImage(user *models.User) error
+	SecureFindWithID(ctx context.Context, ID uuid.UUID) (*SecureUser, error)
+	ResetPassword(
+		ctx context.Context,
+		email,
+		password string,
+	) error
+	GetUserImage(ctx context.Context, user *models.User) error
 }
 
 type userService struct {
@@ -97,8 +101,12 @@ func NewUserService(
 	}
 }
 
-func (s *userService) SecureFindWithID(ID uuid.UUID) (*SecureUser, error) {
-	user, err := s.userRepository.FindByIDWithFollowRelations(s.db, ID)
+func (s *userService) SecureFindWithID(ctx context.Context, ID uuid.UUID) (*SecureUser, error) {
+	user, err := s.userRepository.FindByIDWithFollowRelations(
+		ctx,
+		s.db,
+		ID,
+	)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find user by id with follow relations")
@@ -109,14 +117,14 @@ func (s *userService) SecureFindWithID(ID uuid.UUID) (*SecureUser, error) {
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("User id %v is not found", ID))
 	}
 
-	err = s.GetUserImage(user)
+	err = s.GetUserImage(ctx, user)
 	if err != nil {
 		return nil, err
 	}
 
 	followings := []Following{}
 	for _, following := range user.Followings {
-		err = s.GetUserImage(&following.Following)
+		err = s.GetUserImage(ctx, &following.Following)
 		if err != nil {
 			return nil, err
 		}
@@ -159,7 +167,7 @@ func (s *userService) SecureFindWithID(ID uuid.UUID) (*SecureUser, error) {
 
 	followers := []Follower{}
 	for _, follower := range user.Followers {
-		err = s.GetUserImage(&follower.Follower)
+		err = s.GetUserImage(ctx, &follower.Follower)
 		if err != nil {
 			return nil, err
 		}
@@ -219,14 +227,23 @@ func (s *userService) SecureFindWithID(ID uuid.UUID) (*SecureUser, error) {
 	return secureUser, nil
 }
 
-func (s *userService) ResetPassword(email, password string) error {
+func (s *userService) ResetPassword(
+	ctx context.Context,
+	email,
+	password string,
+) error {
 	passwordHash, err := helpers.HashSecret(password)
 	if err != nil {
 		logs.Error(err)
 		return errs.NewUnexpectedErrorWithMessage("Failed to hash password")
 	}
 
-	err = s.userRepository.UpdatePassword(s.db, email, passwordHash)
+	err = s.userRepository.UpdatePassword(
+		ctx,
+		s.db,
+		email,
+		passwordHash,
+	)
 	if err != nil {
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to update user password")
@@ -235,13 +252,15 @@ func (s *userService) ResetPassword(email, password string) error {
 	return nil
 }
 
-func (s *userService) GetUserImage(user *models.User) error {
-	ctx := context.Background()
-
+func (s *userService) GetUserImage(ctx context.Context, user *models.User) error {
 	// ไม่ใช่ avater ของ social login
 	// อัพเดต profile url
 	if user.ProfileUrl != nil && !helpers.IsExternalURL(*user.ProfileUrl) {
-		req, err := helpers.PresignGetObject(s.presignClient, ctx, *user.ProfileUrl)
+		req, err := helpers.PresignGetObject(
+			ctx,
+			s.presignClient,
+			*user.ProfileUrl,
+		)
 		if err != nil {
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to presign get user profile url object")

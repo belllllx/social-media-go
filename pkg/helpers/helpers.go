@@ -56,7 +56,11 @@ func IsErrRecordNotFound(err error) bool {
 	return errors.Is(err, gorm.ErrRecordNotFound)
 }
 
-func SendEmail(email, otp, verifyEmailType string) error {
+func SendEmail(
+	email,
+	otp,
+	verifyEmailType string,
+) error {
 	m := gomail.NewMessage()
 	m.SetHeader("From", viper.GetString("email.from"))
 	m.SetHeader("To", email)
@@ -80,7 +84,11 @@ func NewJWT(claims jwt.Claims, secret string) (string, error) {
 	return token.SignedString([]byte(secret))
 }
 
-func VerifyJWT(token string, claims jwt.Claims, secret string) (*jwt.Token, error) {
+func VerifyJWT(
+	token string,
+	claims jwt.Claims,
+	secret string,
+) (*jwt.Token, error) {
 	return jwt.ParseWithClaims(
 		token,
 		claims,
@@ -92,8 +100,8 @@ func VerifyJWT(token string, claims jwt.Claims, secret string) (*jwt.Token, erro
 }
 
 func RedisSet(
-	redisClient *redis.Client,
 	ctx context.Context,
+	redisClient *redis.Client,
 	key string,
 	value []byte,
 	expiration time.Duration,
@@ -102,16 +110,16 @@ func RedisSet(
 }
 
 func RedisGet(
-	redisClient *redis.Client,
 	ctx context.Context,
+	redisClient *redis.Client,
 	key string,
 ) (string, error) {
 	return redisClient.Get(ctx, key).Result()
 }
 
 func RedisDelete(
-	redisClient *redis.Client,
 	ctx context.Context,
+	redisClient *redis.Client,
 	key string,
 ) error {
 	return redisClient.Del(ctx, key).Err()
@@ -180,8 +188,8 @@ func IsExternalURL(url string) bool {
 }
 
 func PutObject(
-	s3Client *s3.Client,
 	ctx context.Context,
+	s3Client *s3.Client,
 	key string,
 	body io.Reader,
 	contentType string,
@@ -195,8 +203,8 @@ func PutObject(
 }
 
 func PresignGetObject(
-	presignClient *s3.PresignClient,
 	ctx context.Context,
+	presignClient *s3.PresignClient,
 	key string,
 ) (*v4.PresignedHTTPRequest, error) {
 	return presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
@@ -208,8 +216,8 @@ func PresignGetObject(
 }
 
 func DeleteObject(
-	s3Client *s3.Client,
 	ctx context.Context,
+	s3Client *s3.Client,
 	key string,
 ) (*s3.DeleteObjectOutput, error) {
 	return s3Client.DeleteObject(ctx, &s3.DeleteObjectInput{
@@ -219,8 +227,8 @@ func DeleteObject(
 }
 
 func DeleteObjects(
-	s3Client *s3.Client,
 	ctx context.Context,
+	s3Client *s3.Client,
 	keys []string,
 ) (*s3.DeleteObjectsOutput, error) {
 	objectsIdentifier := []types.ObjectIdentifier{}
