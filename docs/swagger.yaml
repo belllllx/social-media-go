@@ -172,8 +172,6 @@ definitions:
     type: object
   post.Like:
     properties:
-      commentId:
-        type: string
       createdAt:
         type: string
       id:
@@ -1087,6 +1085,46 @@ paths:
             - properties:
                 data:
                   $ref: '#/definitions/post.CreatedSharePost'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - post
+  /post/toggle-like/{postID}:
+    post:
+      description: authentication toggle like or unlike post and socket emit like
+        or unlike post, notification to client
+      parameters:
+      - description: uuid for post id
+        in: path
+        name: postID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SwaggerResponseWithData'
+            - properties:
+                data:
+                  $ref: '#/definitions/post.Like'
               type: object
         "400":
           description: Bad Request

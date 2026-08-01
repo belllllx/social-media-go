@@ -1116,6 +1116,70 @@ const docTemplate = `{
                 }
             }
         },
+        "/post/toggle-like/{postID}": {
+            "post": {
+                "description": "authentication toggle like or unlike post and socket emit like or unlike post, notification to client",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "post"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "uuid for post id",
+                        "name": "postID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SwaggerResponseWithData"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/post.Like"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/post/update/{postID}": {
             "patch": {
                 "description": "authentication update post and socket emit to clients",
@@ -1507,9 +1571,6 @@ const docTemplate = `{
         "post.Like": {
             "type": "object",
             "properties": {
-                "commentId": {
-                    "type": "string"
-                },
                 "createdAt": {
                     "type": "string"
                 },

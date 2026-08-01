@@ -141,7 +141,7 @@ func RequireAuth(userService user.UserService) gin.HandlerFunc {
 			return
 		}
 
-		secureUser, err := userService.SecureFindWithID(ctx, claims.ID)
+		secureUser, err := userService.SecureFindWithIDAndFollowRelations(ctx, claims.ID)
 		if err != nil {
 			helpers.HandleError(c, err)
 			return

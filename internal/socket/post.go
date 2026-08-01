@@ -22,9 +22,8 @@ type PostParentDTO struct {
 type LikeDTO struct {
 	ID        int64            `json:"id"`
 	UserID    uuid.UUID        `json:"userId"`
-	User      *user.SecureUser `json:"user"`
+	User      *user.SecureUser `json:"user,omitempty"`
 	PostID    *uuid.UUID       `json:"postId"`
-	CommentID *uuid.UUID       `json:"commentId"`
 	CreatedAt time.Time        `json:"createdAt"`
 	UpdatedAt time.Time        `json:"updatedAt"`
 }
@@ -47,6 +46,7 @@ type PostSocket interface {
 	EmitCreate(postDTO *PostDTO)
 	EmitUpdate(postDTO *PostDTO)
 	EmitDelete(postDTO *PostDTO)
+	EmitLikeOrUnlike(likeDTO *LikeDTO)
 }
 
 type postSocket struct {
@@ -67,4 +67,8 @@ func (s *postSocket) EmitUpdate(postDTO *PostDTO) {
 
 func (s *postSocket) EmitDelete(postDTO *PostDTO) {
 	s.socket.Emit("deletePost", postDTO)
+}
+
+func (s *postSocket) EmitLikeOrUnlike(likeDTO *LikeDTO) {
+	s.socket.Emit("newLike", likeDTO)
 }

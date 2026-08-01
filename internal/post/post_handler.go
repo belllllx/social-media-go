@@ -35,6 +35,7 @@ type PostHandler interface {
 	FindWithID(c *gin.Context)
 	UpdatePost(c *gin.Context)
 	DeletePost(c *gin.Context)
+	ToggleLike(c *gin.Context)
 }
 
 type postHandler struct {
@@ -389,4 +390,39 @@ func (h *postHandler) DeletePost(c *gin.Context) {
 	}
 
 	response.Ok(c, "Post delete successfully", deletedPost)
+}
+
+// ToggleLike godoc
+//
+//	@Description	authentication toggle like or unlike post and socket emit like or unlike post, notification to client
+//	@Tags			post
+//	@Produce		json
+//	@Param			postID	path		string	true	"uuid for post id"
+//	@Success		200		{object}	response.SwaggerResponseWithData{data=Like}
+//	@Failure		400		{object}	response.SwaggerBadRequestResponse
+//	@Failure		401		{object}	response.SwaggerResponse
+//	@Failure		404		{object}	response.SwaggerResponse
+//	@Failure		500		{object}	response.SwaggerResponse
+//	@Router			/post/toggle-like/{postID} [post]
+func (h *postHandler) ToggleLike(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	user, ok := c.MustGet("user").(*user.SecureUser)
+	if !ok {
+		response.AbortWithUnauthorized(c)
+		return
+	}
+
+	postID := c.Param("postID")
+	message, like, err := h.postService.ToggleLike(
+		ctx,
+		user.ID,
+		postID,
+	)
+	if err != nil {
+		helpers.HandleError(c, err)
+		return
+	}
+
+	response.Ok(c, message, like)
 }

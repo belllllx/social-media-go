@@ -385,6 +385,17 @@ func (h *authHandler) Refresh(c *gin.Context) {
 		return
 	}
 
+	response.SetSecureCookie(c, response.CookieOptions{
+		Key:    "access_token",
+		Value:  tokens.AccessToken,
+		MaxAge: time.Minute * 10,
+	})
+	response.SetSecureCookie(c, response.CookieOptions{
+		Key:    "refresh_token",
+		Value:  tokens.RefreshToken,
+		MaxAge: time.Hour * 72,
+	})
+
 	response.Ok(c, "Refresh token successfully", tokens)
 }
 

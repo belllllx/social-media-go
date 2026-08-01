@@ -16,10 +16,10 @@ type EmitNotificationDTO struct {
 	Message    string                  `json:"message"`
 	IsRead     bool                    `json:"isRead"`
 	SenderID   uuid.UUID               `json:"senderId"`
-	Sender     *user.SecureUser        `json:"sender"`
+	Sender     *user.SecureUser        `json:"sender,omitempty"`
 	ReceiverID uuid.UUID               `json:"receiverId"`
-	PostID     *uuid.UUID              `json:"postId"`
-	CommentID  *uuid.UUID              `json:"commentId"`
+	PostID     *uuid.UUID              `json:"postId,omitempty"`
+	CommentID  *uuid.UUID              `json:"commentId,omitempty"`
 	CreatedAt  time.Time               `json:"createdAt"`
 	UpdatedAt  time.Time               `json:"updatedAt"`
 }

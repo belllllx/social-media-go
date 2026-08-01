@@ -10,6 +10,7 @@ import (
 	"github.com/belllllx/social-media-go/internal/configs"
 	"github.com/belllllx/social-media-go/internal/email"
 	"github.com/belllllx/social-media-go/internal/file"
+	"github.com/belllllx/social-media-go/internal/like"
 	"github.com/belllllx/social-media-go/internal/logs"
 	"github.com/belllllx/social-media-go/internal/middlewares"
 	"github.com/belllllx/social-media-go/internal/notification"
@@ -58,6 +59,7 @@ func main() {
 	fileRepositoryDB := file.NewFileRepositoryDB()
 	postRepositoryDB := post.NewPostRepositoryDB()
 	notificationRepositoryDB := notification.NewNotificationRepositoryDB()
+	likeRepositoryDB := like.NewLikeRepositoryDB()
 
 	notificationSocket := socket.NewNotificationSocket(app.Socket)
 	postSocket := socket.NewPostSocket(app.Socket)
@@ -95,6 +97,7 @@ func main() {
 		userRepositoryDB,
 		fileRepositoryDB,
 		notificationRepositoryDB,
+		likeRepositoryDB,
 		userService,
 		notificationService,
 		fileService,
@@ -201,6 +204,7 @@ func main() {
 		post.GET("/find/:postID", postHandler.FindWithID)
 		post.PATCH("/update/:postID", postHandler.UpdatePost)
 		post.DELETE("/delete/:postID", postHandler.DeletePost)
+		post.POST("/toggle-like/:postID", postHandler.ToggleLike)
 	}
 
 	app.Run()

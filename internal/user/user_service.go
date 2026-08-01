@@ -67,14 +67,14 @@ type SecureUser struct {
 	Info                 *string             `json:"info"`
 	Role                 models.Role         `json:"role"`
 	ProviderType         models.ProviderType `json:"providerType"`
-	Followings           []Following         `json:"followings"`
-	Followers            []Follower          `json:"followers"`
+	Followings           []Following         `json:"followings,omitempty"`
+	Followers            []Follower          `json:"followers,omitempty"`
 	CreatedAt            time.Time           `json:"createdAt"`
 	UpdatedAt            time.Time           `json:"updatedAt"`
 }
 
 type UserService interface {
-	SecureFindWithID(ctx context.Context, ID uuid.UUID) (*SecureUser, error)
+	SecureFindWithIDAndFollowRelations(ctx context.Context, ID uuid.UUID) (*SecureUser, error)
 	ResetPassword(
 		ctx context.Context,
 		email,
@@ -101,7 +101,7 @@ func NewUserService(
 	}
 }
 
-func (s *userService) SecureFindWithID(ctx context.Context, ID uuid.UUID) (*SecureUser, error) {
+func (s *userService) SecureFindWithIDAndFollowRelations(ctx context.Context, ID uuid.UUID) (*SecureUser, error) {
 	user, err := s.userRepository.FindByIDWithFollowRelations(
 		ctx,
 		s.db,

@@ -35,6 +35,11 @@ type UserRepository interface {
 		db *gorm.DB,
 		userID uuid.UUID,
 	) ([]models.User, error)
+	FindByID(
+		ctx context.Context,
+		db *gorm.DB,
+		userID uuid.UUID,
+	) (*models.User, error)
 	UpdatePassword(
 		ctx context.Context,
 		db *gorm.DB,
@@ -138,6 +143,22 @@ func (r *userRepositoryDB) FindsByIDExcept(
 		return nil, err
 	}
 	return *users, nil
+}
+
+func (r *userRepositoryDB) FindByID(
+	ctx context.Context,
+	db *gorm.DB,
+	userID uuid.UUID,
+) (*models.User, error) {
+	user := &models.User{}
+	err := db.
+		WithContext(ctx).
+		Where("id = ?", userID).
+		Take(user).Error
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
 }
 
 func (r *userRepositoryDB) UpdatePassword(

@@ -20,12 +20,12 @@ type NotificationRepository interface {
 		db *gorm.DB,
 		notifications []models.Notification,
 	) error
-	FindWithSenderRelation(
+	FindByIDWithSenderRelation(
 		ctx context.Context,
 		db *gorm.DB,
 		notificationID uuid.UUID,
 	) (*models.Notification, error)
-	FindsWithSenderRelation(
+	FindsByIDWithSenderRelation(
 		ctx context.Context,
 		db *gorm.DB,
 		notificationsID []uuid.UUID,
@@ -44,6 +44,18 @@ type NotificationRepository interface {
 		receiverID,
 		postID uuid.UUID,
 	) ([]models.Notification, error)
+	FindOfLikePost(
+		ctx context.Context,
+		db *gorm.DB,
+		senderID,
+		receiverID,
+		postID uuid.UUID,
+	) (*models.Notification, error)
+	DeleteByID(
+		ctx context.Context,
+		db *gorm.DB,
+		notificationID uuid.UUID,
+	) error
 }
 
 type notificationRepositoryDB struct {
@@ -69,7 +81,7 @@ func (r *notificationRepositoryDB) CreateMany(
 	return db.WithContext(ctx).Create(&notifications).Error
 }
 
-func (r *notificationRepositoryDB) FindWithSenderRelation(
+func (r *notificationRepositoryDB) FindByIDWithSenderRelation(
 	ctx context.Context,
 	db *gorm.DB,
 	notificationID uuid.UUID,
@@ -86,7 +98,7 @@ func (r *notificationRepositoryDB) FindWithSenderRelation(
 	return notification, nil
 }
 
-func (r *notificationRepositoryDB) FindsWithSenderRelation(
+func (r *notificationRepositoryDB) FindsByIDWithSenderRelation(
 	ctx context.Context,
 	db *gorm.DB,
 	notificationsID []uuid.UUID,
@@ -113,7 +125,12 @@ func (r *notificationRepositoryDB) FindOfPost(
 	notification := &models.Notification{}
 	err := db.
 		WithContext(ctx).
-		Where("sender_id = ? AND receiver_id = ? AND post_id = ?", senderID, receiverID, postID).
+		Where(
+			"sender_id = ? AND receiver_id = ? AND post_id = ?",
+			senderID,
+			receiverID,
+			postID,
+		).
 		Take(notification).Error
 	if err != nil {
 		return nil, err
@@ -131,10 +148,51 @@ func (r *notificationRepositoryDB) FindsOfPost(
 	notifications := &[]models.Notification{}
 	err := db.
 		WithContext(ctx).
-		Where("sender_id = ? AND receiver_id = ? AND post_id = ?", senderID, receiverID, postID).
+		Where(
+			"sender_id = ? AND receiver_id = ? AND post_id = ?",
+			senderID,
+			receiverID,
+			postID,
+		).
 		Find(notifications).Error
 	if err != nil {
 		return nil, err
 	}
 	return *notifications, nil
+}
+
+func (r *notificationRepositoryDB) FindOfLikePost(
+	ctx context.Context,
+	db *gorm.DB,
+	senderID,
+	receiverID,
+	postID uuid.UUID,
+) (*models.Notification, error) {
+	notification := &models.Notification{}
+	err := db.
+		WithContext(ctx).
+		Where(
+			"type = ? AND sender_id = ? AND receiver_id = ? AND post_id = ?",
+			models.NotificationTypeLike,
+			senderID,
+			receiverID,
+			postID,
+		).
+		Take(notification).Error
+	if err != nil {
+		return nil, err
+	}
+	return notification, nil
+}
+
+func (r *notificationRepositoryDB) DeleteByID(
+	ctx context.Context,
+	db *gorm.DB,
+	notificationID uuid.UUID,
+) error {
+	notification := &models.Notification{}
+	return db.
+		WithContext(ctx).
+		Where("id = ?", notificationID).
+		Delete(notification).Error
 }
