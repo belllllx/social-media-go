@@ -635,6 +635,124 @@
                 }
             }
         },
+        "/comment/delete/file": {
+            "delete": {
+                "description": "authentication and delete file",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "comment"
+                ],
+                "parameters": [
+                    {
+                        "description": "delete file payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/file.DeleteFileRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/comment/upload-file": {
+            "post": {
+                "description": "authentication and upload file",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "comment"
+                ],
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "single image file",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SwaggerResponseWithData"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/file.FileURL"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/post/create": {
             "post": {
                 "description": "authentication create post, notifications and socket emit post, notifications to client",
@@ -1264,7 +1382,7 @@
                 "parameters": [
                     {
                         "type": "file",
-                        "description": "Multiple image files",
+                        "description": "multiple image files",
                         "name": "files",
                         "in": "formData",
                         "required": true
@@ -1413,6 +1531,14 @@
             "required": [
                 "fileUrl"
             ],
+            "properties": {
+                "fileUrl": {
+                    "type": "string"
+                }
+            }
+        },
+        "file.FileURL": {
+            "type": "object",
             "properties": {
                 "fileUrl": {
                     "type": "string"

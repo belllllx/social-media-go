@@ -314,6 +314,20 @@ func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostD
 
 	// มี user ถึง emit notifications กับ post
 	if len(usersExcept) > 0 {
+		postDTO := &socket.PostDTO{
+			ID:        post.ID,
+			Message:   post.Message,
+			UserID:    post.UserID,
+			User:      secureUser,
+			ParentID:  post.ParentID,
+			CreatedAt: post.CreatedAt,
+			UpdatedAt: post.UpdatedAt,
+		}
+		if len(createPostDTO.FilesURL) > 0 {
+			postDTO.FilesURL = filesURL
+		}
+		go s.postSocket.EmitCreate(postDTO)
+
 		notificationsID := []uuid.UUID{}
 		for _, createNotificationDTO := range createNotificationsDTO {
 			notificationsID = append(notificationsID, createNotificationDTO.ID)
@@ -367,20 +381,6 @@ func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostD
 			})
 		}
 		go s.notificationSocket.EmitNotifications(emitNotificationsDTO)
-
-		postDTO := &socket.PostDTO{
-			ID:        post.ID,
-			Message:   post.Message,
-			UserID:    post.UserID,
-			User:      secureUser,
-			ParentID:  post.ParentID,
-			CreatedAt: post.CreatedAt,
-			UpdatedAt: post.UpdatedAt,
-		}
-		if len(createPostDTO.FilesURL) > 0 {
-			postDTO.FilesURL = filesURL
-		}
-		go s.postSocket.EmitCreate(postDTO)
 	}
 
 	respPost := &CreatedPost{
@@ -498,53 +498,6 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 		return nil, err
 	}
 
-	// ต้องไม่แชร์โพสต์ตัวเองถึง emit notification
-	if createSharePostDTO.UserID != post.UserID {
-		notification, err := s.notificationRepository.FindByIDWithSenderRelation(
-			ctx,
-			s.db,
-			notificationID,
-		)
-		if err != nil {
-			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification by id with sender relation")
-		}
-
-		err = s.userService.GetUserImage(ctx, &notification.Sender)
-		if err != nil {
-			return nil, err
-		}
-
-		notificationSender := &user.SecureUser{
-			ID:                   notification.SenderID,
-			Fullname:             notification.Sender.Fullname,
-			Username:             notification.Sender.Username,
-			Email:                notification.Sender.Email,
-			DateOfBirth:          notification.Sender.DateOfBirth,
-			ProfileUrl:           notification.Sender.ProfileUrl,
-			ProfileBackgroundUrl: notification.Sender.ProfileBackgroundUrl,
-			Info:                 notification.Sender.Info,
-			Role:                 notification.Sender.Role,
-			ProviderType:         notification.Sender.ProviderType,
-			CreatedAt:            notification.Sender.CreatedAt,
-			UpdatedAt:            notification.Sender.UpdatedAt,
-		}
-		emitNotificationsDTO := &socket.EmitNotificationDTO{
-			ID:         notification.ID,
-			Type:       notification.Type,
-			Message:    notification.Message,
-			IsRead:     notification.IsRead,
-			SenderID:   notification.SenderID,
-			Sender:     notificationSender,
-			ReceiverID: notification.ReceiverID,
-			PostID:     notification.PostID,
-			CommentID:  notification.CommentID,
-			CreatedAt:  notification.CreatedAt,
-			UpdatedAt:  notification.UpdatedAt,
-		}
-		go s.notificationSocket.EmitNotification(emitNotificationsDTO)
-	}
-
 	filesURL, err := s.fileService.PresignGetFiles(ctx, post.ID)
 	if err != nil {
 		return nil, err
@@ -598,7 +551,55 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 		CreatedAt: sharePost.CreatedAt,
 		UpdatedAt: sharePost.UpdatedAt,
 	}
+
 	go s.postSocket.EmitCreate(postDTO)
+
+	// ต้องไม่แชร์โพสต์ตัวเองถึง emit notification
+	if createSharePostDTO.UserID != post.UserID {
+		notification, err := s.notificationRepository.FindByIDWithSenderRelation(
+			ctx,
+			s.db,
+			notificationID,
+		)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification by id with sender relation")
+		}
+
+		err = s.userService.GetUserImage(ctx, &notification.Sender)
+		if err != nil {
+			return nil, err
+		}
+
+		notificationSender := &user.SecureUser{
+			ID:                   notification.SenderID,
+			Fullname:             notification.Sender.Fullname,
+			Username:             notification.Sender.Username,
+			Email:                notification.Sender.Email,
+			DateOfBirth:          notification.Sender.DateOfBirth,
+			ProfileUrl:           notification.Sender.ProfileUrl,
+			ProfileBackgroundUrl: notification.Sender.ProfileBackgroundUrl,
+			Info:                 notification.Sender.Info,
+			Role:                 notification.Sender.Role,
+			ProviderType:         notification.Sender.ProviderType,
+			CreatedAt:            notification.Sender.CreatedAt,
+			UpdatedAt:            notification.Sender.UpdatedAt,
+		}
+		emitNotificationsDTO := &socket.EmitNotificationDTO{
+			ID:         notification.ID,
+			Type:       notification.Type,
+			Message:    notification.Message,
+			IsRead:     notification.IsRead,
+			SenderID:   notification.SenderID,
+			Sender:     notificationSender,
+			ReceiverID: notification.ReceiverID,
+			PostID:     notification.PostID,
+			CommentID:  notification.CommentID,
+			CreatedAt:  notification.CreatedAt,
+			UpdatedAt:  notification.UpdatedAt,
+		}
+		go s.notificationSocket.EmitNotification(emitNotificationsDTO)
+	}
 
 	postParent := &PostParent{
 		ID:        post.ID,
@@ -620,6 +621,7 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 		CreatedAt: sharePost.CreatedAt,
 		UpdatedAt: sharePost.UpdatedAt,
 	}
+
 	return createdSharePost, nil
 }
 
@@ -1356,11 +1358,6 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id with relations")
 	}
 
-	if helpers.IsErrRecordNotFound(err) {
-		logs.Warn(err)
-		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", postByID.ID))
-	}
-
 	comments := []models.Comment{}
 	for _, comment := range post.Comments {
 		if comment.ParentID == nil {
@@ -1501,7 +1498,6 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 	}
 
 	if len(files) > 0 {
-		ctx := context.Background()
 		keys := []string{}
 		for _, file := range files {
 			keys = append(keys, file.Filename)
@@ -1557,6 +1553,77 @@ func (s *postService) DeletePost(ctx context.Context, postID string) (*DeletedPo
 		logs.Warn(err)
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", *postIDParse))
 	}
+
+	files, err := s.fileRepository.FindsByContentID(
+		ctx,
+		s.db,
+		post.ID,
+	)
+	if err != nil {
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find files of post")
+	}
+
+	deletedPost := &models.Post{}
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		if len(files) > 0 {
+			err = s.fileRepository.DeleteMany(
+				ctx,
+				tx,
+				files,
+			)
+			if err != nil {
+				logs.Error(err)
+				return errs.NewInternalServerErrorWithMessage("Failed to delete files of post")
+			}
+		}
+
+		deletedPost, err = s.postRepository.Delete(
+			ctx,
+			tx,
+			post.ID,
+		)
+		if err != nil {
+			logs.Error(err)
+			return errs.NewInternalServerErrorWithMessage("Failed to delete post")
+		}
+
+		return nil
+	})
+	if err != nil {
+		_, ok := err.(*errs.AppError)
+		if !ok {
+			logs.Error(err)
+		}
+		return nil, err
+	}
+
+	if len(files) > 0 {
+		keys := []string{}
+		for _, file := range files {
+			keys = append(keys, file.Filename)
+		}
+
+		_, err = helpers.DeleteObjects(
+			ctx,
+			s.s3Client,
+			keys,
+		)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to delete files from bucket")
+		}
+	}
+
+	postDTO := &socket.PostDTO{
+		ID:        deletedPost.ID,
+		Message:   deletedPost.Message,
+		UserID:    deletedPost.UserID,
+		ParentID:  deletedPost.ParentID,
+		CreatedAt: deletedPost.CreatedAt,
+		UpdatedAt: deletedPost.UpdatedAt,
+	}
+	go s.postSocket.EmitDelete(postDTO)
 
 	// กรณีแชร์โพส
 	if post.ParentID != nil {
@@ -1631,77 +1698,6 @@ func (s *postService) DeletePost(ctx context.Context, postID string) (*DeletedPo
 		}
 	}
 
-	files, err := s.fileRepository.FindsByContentID(
-		ctx,
-		s.db,
-		post.ID,
-	)
-	if err != nil {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find files of post")
-	}
-
-	if len(files) > 0 {
-		keys := []string{}
-		for _, file := range files {
-			keys = append(keys, file.Filename)
-		}
-
-		_, err = helpers.DeleteObjects(
-			ctx,
-			s.s3Client,
-			keys,
-		)
-		if err != nil {
-			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to delete files from bucket")
-		}
-	}
-
-	deletedPost := &models.Post{}
-	err = s.db.Transaction(func(tx *gorm.DB) error {
-		if len(files) > 0 {
-			err = s.fileRepository.DeleteMany(
-				ctx,
-				tx,
-				files,
-			)
-			if err != nil {
-				logs.Error(err)
-				return errs.NewInternalServerErrorWithMessage("Failed to delete files of post")
-			}
-		}
-
-		deletedPost, err = s.postRepository.Delete(
-			ctx,
-			tx,
-			post.ID,
-		)
-		if err != nil {
-			logs.Error(err)
-			return errs.NewInternalServerErrorWithMessage("Failed to delete post")
-		}
-
-		return nil
-	})
-	if err != nil {
-		_, ok := err.(*errs.AppError)
-		if !ok {
-			logs.Error(err)
-		}
-		return nil, err
-	}
-
-	postDTO := &socket.PostDTO{
-		ID:        deletedPost.ID,
-		Message:   deletedPost.Message,
-		UserID:    deletedPost.UserID,
-		ParentID:  deletedPost.ParentID,
-		CreatedAt: deletedPost.CreatedAt,
-		UpdatedAt: deletedPost.UpdatedAt,
-	}
-	go s.postSocket.EmitDelete(postDTO)
-
 	deletedPostResp := &DeletedPost{
 		ID:        deletedPost.ID,
 		Message:   deletedPost.Message,
@@ -1730,21 +1726,6 @@ func (s *postService) ToggleLike(
 		return "", nil, err
 	}
 
-	userByID, err := s.userRepository.FindByID(
-		ctx,
-		s.db,
-		userID,
-	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find user by id")
-	}
-
-	if helpers.IsErrRecordNotFound(err) {
-		logs.Warn(err)
-		return "", nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("User by id %v is not found", userID))
-	}
-
 	postByID, err := s.postRepository.FindByID(
 		ctx,
 		s.db,
@@ -1763,7 +1744,7 @@ func (s *postService) ToggleLike(
 	_, err = s.likeRepository.FindOfPost(
 		ctx,
 		s.db,
-		userByID.ID,
+		userID,
 		postByID.ID,
 	)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
@@ -1775,7 +1756,7 @@ func (s *postService) ToggleLike(
 	if helpers.IsErrRecordNotFound(err) {
 		createNotificationDTO := &models.Notification{
 			Type:       models.NotificationTypeLike,
-			SenderID:   userByID.ID,
+			SenderID:   userID,
 			ReceiverID: postByID.UserID,
 			PostID:     &postByID.ID,
 			Message:    "Like your post",
@@ -1783,7 +1764,7 @@ func (s *postService) ToggleLike(
 
 		err = s.db.Transaction(func(tx *gorm.DB) error {
 			createLike := &models.Like{
-				UserID: userByID.ID,
+				UserID: userID,
 				PostID: &postByID.ID,
 			}
 			err = s.likeRepository.Create(
@@ -1818,12 +1799,17 @@ func (s *postService) ToggleLike(
 		createdLike, err := s.likeRepository.FindOfPostWithUserRelation(
 			ctx,
 			s.db,
-			userByID.ID,
+			userID,
 			postByID.ID,
 		)
 		if err != nil {
 			logs.Error(err)
 			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find like of post with user relation")
+		}
+
+		err = s.userService.GetUserImage(ctx, &createdLike.User)
+		if err != nil {
+			return "", nil, err
 		}
 
 		createdNotification, err := s.notificationRepository.FindByIDWithSenderRelation(
@@ -1836,7 +1822,7 @@ func (s *postService) ToggleLike(
 			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find notification by id with sender relation")
 		}
 
-		err = s.userService.GetUserImage(ctx, &createdLike.User)
+		err = s.userService.GetUserImage(ctx, &createdNotification.Sender)
 		if err != nil {
 			return "", nil, err
 		}
@@ -1911,7 +1897,7 @@ func (s *postService) ToggleLike(
 		deletedLike, err = s.likeRepository.DeleteOfPost(
 			ctx,
 			tx,
-			userByID.ID,
+			userID,
 			postByID.ID,
 		)
 		if err != nil {
@@ -1922,7 +1908,7 @@ func (s *postService) ToggleLike(
 		notification, err = s.notificationRepository.FindOfLikePost(
 			ctx,
 			tx,
-			userByID.ID,
+			userID,
 			postByID.UserID,
 			postByID.ID,
 		)

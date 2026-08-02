@@ -56,7 +56,7 @@ func NewPostHandler(fileService file.FileService, postService PostService) PostH
 //	@Tags			post
 //	@Accept			multipart/form-data
 //	@Produce		json
-//	@Param			files	formData	file	true	"Multiple image files"
+//	@Param			files	formData	file	true	"multiple image files"
 //	@Success		201		{object}	response.SwaggerResponseWithData{data=file.FilesURL}
 //	@Failure		400		{object}	response.SwaggerBadRequestResponse
 //	@Failure		401		{object}	response.SwaggerResponse

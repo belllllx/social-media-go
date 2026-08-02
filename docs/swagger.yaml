@@ -74,6 +74,11 @@ definitions:
     required:
     - fileUrl
     type: object
+  file.FileURL:
+    properties:
+      fileUrl:
+        type: string
+    type: object
   file.FilesURL:
     properties:
       filesUrl:
@@ -809,6 +814,80 @@ paths:
             $ref: '#/definitions/response.SwaggerResponse'
       tags:
       - auth
+  /comment/delete/file:
+    delete:
+      consumes:
+      - application/json
+      description: authentication and delete file
+      parameters:
+      - description: delete file payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/file.DeleteFileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - comment
+  /comment/upload-file:
+    post:
+      consumes:
+      - multipart/form-data
+      description: authentication and upload file
+      parameters:
+      - description: single image file
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SwaggerResponseWithData'
+            - properties:
+                data:
+                  $ref: '#/definitions/file.FileURL'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - comment
   /post/create:
     post:
       consumes:
@@ -1196,7 +1275,7 @@ paths:
       - multipart/form-data
       description: authentication and upload files
       parameters:
-      - description: Multiple image files
+      - description: multiple image files
         in: formData
         name: files
         required: true

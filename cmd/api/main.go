@@ -7,6 +7,7 @@ import (
 
 	"github.com/belllllx/social-media-go/internal/auth"
 	"github.com/belllllx/social-media-go/internal/bootstrap"
+	"github.com/belllllx/social-media-go/internal/comment"
 	"github.com/belllllx/social-media-go/internal/configs"
 	"github.com/belllllx/social-media-go/internal/email"
 	"github.com/belllllx/social-media-go/internal/file"
@@ -111,6 +112,7 @@ func main() {
 		userService,
 	)
 	postHandler := post.NewPostHandler(fileService, postService)
+	commentHandler := comment.NewCommentHandler(fileService)
 
 	app.Cron.AddFunc("*/30 * * * *", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -191,10 +193,11 @@ func main() {
 		register.POST("/verify-otp", authHandler.VerifyOTPRegister)
 	}
 
+	api.Use(middlewares.RequireAuth(userService))
+
 	{
 		post := api.Group("/post")
 
-		post.Use(middlewares.RequireAuth(userService))
 		post.POST("/upload-files", postHandler.UploadFiles)
 		post.DELETE("/delete/file", postHandler.DeleteFile)
 		post.POST("/create", postHandler.CreatePost)
@@ -205,6 +208,13 @@ func main() {
 		post.PATCH("/update/:postID", postHandler.UpdatePost)
 		post.DELETE("/delete/:postID", postHandler.DeletePost)
 		post.POST("/toggle-like/:postID", postHandler.ToggleLike)
+	}
+
+	{
+		comment := api.Group("/comment")
+
+		comment.POST("/upload-file", commentHandler.UploadFile)
+		comment.DELETE("/delete/file", commentHandler.DeleteFile)
 	}
 
 	app.Run()
