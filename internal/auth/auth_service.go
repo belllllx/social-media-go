@@ -75,13 +75,13 @@ type SocialAuthErrorTokenClaims struct {
 }
 
 type UserAccessTokenClaims struct {
-	ID           uuid.UUID `json:"id"`
+	UserID       uuid.UUID `json:"userId"`
 	AuthVerified bool      `json:"authVerified"`
 	jwt.RegisteredClaims
 }
 
 type UserRefreshTokenClaims struct {
-	ID uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"userId"`
 	jwt.RegisteredClaims
 }
 
@@ -485,7 +485,7 @@ func (s *authService) ValidateUserLogin(ctx context.Context, loginDTO *LoginDTO)
 func (s *authService) CreateTokens(userID uuid.UUID) (*Tokens, error) {
 	accessToken, err := helpers.NewJWT(
 		&UserAccessTokenClaims{
-			ID:           userID,
+			UserID:       userID,
 			AuthVerified: true,
 			RegisteredClaims: jwt.RegisteredClaims{
 				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 10)),
@@ -501,7 +501,7 @@ func (s *authService) CreateTokens(userID uuid.UUID) (*Tokens, error) {
 
 	refreshToken, err := helpers.NewJWT(
 		&UserRefreshTokenClaims{
-			ID: userID,
+			UserID: userID,
 			RegisteredClaims: jwt.RegisteredClaims{
 				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 72)),
 				IssuedAt:  jwt.NewNumericDate(time.Now()),

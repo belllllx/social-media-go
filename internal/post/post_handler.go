@@ -124,7 +124,7 @@ func (h *postHandler) UploadFiles(c *gin.Context) {
 //	@Failure		401		{object}	response.SwaggerResponse
 //	@Failure		404		{object}	response.SwaggerResponse
 //	@Failure		500		{object}	response.SwaggerResponse
-//	@Router			/post/delete/file [delete]
+//	@Router			/post/delete-file [delete]
 func (h *postHandler) DeleteFile(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -164,7 +164,7 @@ func (h *postHandler) DeleteFile(c *gin.Context) {
 func (h *postHandler) CreatePost(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	user, ok := c.MustGet("user").(*user.SecureUser)
+	user, ok := c.MustGet("user").(*user.SecureUserWithFollowRelations)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
@@ -208,7 +208,7 @@ func (h *postHandler) CreatePost(c *gin.Context) {
 func (h *postHandler) CreateSharePost(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	user, ok := c.MustGet("user").(*user.SecureUser)
+	user, ok := c.MustGet("user").(*user.SecureUserWithFollowRelations)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
@@ -407,7 +407,7 @@ func (h *postHandler) DeletePost(c *gin.Context) {
 func (h *postHandler) ToggleLike(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	user, ok := c.MustGet("user").(*user.SecureUser)
+	user, ok := c.MustGet("user").(*user.SecureUserWithFollowRelations)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return

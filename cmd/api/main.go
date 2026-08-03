@@ -61,9 +61,11 @@ func main() {
 	postRepositoryDB := post.NewPostRepositoryDB()
 	notificationRepositoryDB := notification.NewNotificationRepositoryDB()
 	likeRepositoryDB := like.NewLikeRepositoryDB()
+	commentRepositoryDB := comment.NewCommentRepositoryDB()
 
 	notificationSocket := socket.NewNotificationSocket(app.Socket)
 	postSocket := socket.NewPostSocket(app.Socket)
+	commentSocket := socket.NewCommentSocket(app.Socket)
 
 	emailService := email.NewEmailService(emailRepositoryImpl, otpRepositoryDB)
 	otpService := otp.NewOTPService(otpRepositoryDB)
@@ -105,6 +107,21 @@ func main() {
 		notificationSocket,
 		postSocket,
 	)
+	commentService := comment.NewCommentService(
+		app.DB,
+		app.RedisClient,
+		app.S3Client,
+		commentRepositoryDB,
+		userRepositoryDB,
+		postRepositoryDB,
+		fileRepositoryDB,
+		notificationRepositoryDB,
+		notificationService,
+		userService,
+		fileService,
+		commentSocket,
+		notificationSocket,
+	)
 
 	authHandler := auth.NewAuthHandler(
 		authService,
@@ -112,7 +129,7 @@ func main() {
 		userService,
 	)
 	postHandler := post.NewPostHandler(fileService, postService)
-	commentHandler := comment.NewCommentHandler(fileService)
+	commentHandler := comment.NewCommentHandler(commentService, fileService)
 
 	app.Cron.AddFunc("*/30 * * * *", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -199,7 +216,7 @@ func main() {
 		post := api.Group("/post")
 
 		post.POST("/upload-files", postHandler.UploadFiles)
-		post.DELETE("/delete/file", postHandler.DeleteFile)
+		post.DELETE("/delete-file", postHandler.DeleteFile)
 		post.POST("/create", postHandler.CreatePost)
 		post.POST("/share/create/:parentID", postHandler.CreateSharePost)
 		post.GET("/finds", postHandler.FindsCursorPagination)
@@ -214,7 +231,8 @@ func main() {
 		comment := api.Group("/comment")
 
 		comment.POST("/upload-file", commentHandler.UploadFile)
-		comment.DELETE("/delete/file", commentHandler.DeleteFile)
+		comment.DELETE("/delete-file", commentHandler.DeleteFile)
+		comment.POST("/create/:postID", commentHandler.CreateComment)
 	}
 
 	app.Run()

@@ -354,13 +354,13 @@ func (h *authHandler) Login(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/profile [get]
 func (h *authHandler) Profile(c *gin.Context) {
-	secureUser, ok := c.MustGet("user").(*user.SecureUser)
+	secureUserWithFollowRelations, ok := c.MustGet("user").(*user.SecureUserWithFollowRelations)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
 	}
 
-	response.Ok(c, "User retrive successfully", secureUser)
+	response.Ok(c, "User retrive successfully", secureUserWithFollowRelations)
 }
 
 // Refresh godoc

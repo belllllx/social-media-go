@@ -87,7 +87,7 @@ func (r *fileRepositoryDB) FindByContentID(
 	file := &models.File{}
 	err := db.
 		WithContext(ctx).
-		Where("id = ?", contentID).
+		Where("content_id = ?", contentID).
 		Take(file).Error
 	if err != nil {
 		return nil, err

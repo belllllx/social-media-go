@@ -4,22 +4,31 @@ import (
 	"github.com/belllllx/social-media-go/internal/file"
 	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/internal/response"
+	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/gin-gonic/gin"
 )
 
+type CreateCommentRequest struct {
+	Message string `json:"message"`
+	FileURL string `json:"fileUrl" binding:"omitempty,presignedurl"`
+}
+
 type CommentHandler interface {
 	UploadFile(c *gin.Context)
 	DeleteFile(c *gin.Context)
+	CreateComment(c *gin.Context)
 }
 
 type commentHandler struct {
-	fileService file.FileService
+	commentService CommentService
+	fileService    file.FileService
 }
 
-func NewCommentHandler(fileService file.FileService) CommentHandler {
+func NewCommentHandler(commentService CommentService, fileService file.FileService) CommentHandler {
 	return &commentHandler{
-		fileService: fileService,
+		commentService: commentService,
+		fileService:    fileService,
 	}
 }
 
@@ -83,7 +92,7 @@ func (h *commentHandler) UploadFile(c *gin.Context) {
 //	@Failure		401		{object}	response.SwaggerResponse
 //	@Failure		404		{object}	response.SwaggerResponse
 //	@Failure		500		{object}	response.SwaggerResponse
-//	@Router			/comment/delete/file [delete]
+//	@Router			/comment/delete-file [delete]
 func (h *commentHandler) DeleteFile(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -105,4 +114,50 @@ func (h *commentHandler) DeleteFile(c *gin.Context) {
 	}
 
 	response.Ok(c, "Delete file successfully", nil)
+}
+
+// CreateComment godoc
+//
+//	@Description	authentication create comment and socket emit comment and notification to client
+//	@Tags			comment
+//	@Accept			json
+//	@Produce		json
+//	@Param			postID	path		string					true	"uuid for post id"
+//	@Param			payload	body		CreateCommentRequest	false	"create comment payload"
+//	@Success		201		{object}	response.SwaggerResponseWithData{data=CreatedComment}
+//	@Failure		400		{object}	response.SwaggerBadRequestResponse
+//	@Failure		401		{object}	response.SwaggerResponse
+//	@Failure		404		{object}	response.SwaggerResponse
+//	@Failure		500		{object}	response.SwaggerResponse
+//	@Router			/comment/create/{postID} [post]
+func (h *commentHandler) CreateComment(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	user, ok := c.MustGet("user").(*user.SecureUserWithFollowRelations)
+	if !ok {
+		response.AbortWithUnauthorized(c)
+		return
+	}
+
+	createCommentRequest := &CreateCommentRequest{}
+	err := c.ShouldBind(createCommentRequest)
+	if err != nil {
+		response.AbortWithError(c, err)
+		return
+	}
+
+	postID := c.Param("postID")
+	createCommentDTO := &CreateCommentDTO{
+		Message: createCommentRequest.Message,
+		FileURL: createCommentRequest.FileURL,
+		PostID:  postID,
+		UserID:  user.ID,
+	}
+	createdComment, err := h.commentService.CreateComment(ctx, createCommentDTO)
+	if err != nil {
+		helpers.HandleError(c, err)
+		return
+	}
+
+	response.Created(c, "Create comment successfully", createdComment)
 }

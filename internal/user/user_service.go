@@ -67,6 +67,21 @@ type SecureUser struct {
 	Info                 *string             `json:"info"`
 	Role                 models.Role         `json:"role"`
 	ProviderType         models.ProviderType `json:"providerType"`
+	CreatedAt            time.Time           `json:"createdAt"`
+	UpdatedAt            time.Time           `json:"updatedAt"`
+}
+
+type SecureUserWithFollowRelations struct {
+	ID                   uuid.UUID           `json:"id"`
+	Fullname             string              `json:"fullname"`
+	Username             *string             `json:"username"`
+	Email                string              `json:"email"`
+	DateOfBirth          *time.Time          `json:"dateOfBirth"`
+	ProfileUrl           *string             `json:"profileUrl"`
+	ProfileBackgroundUrl *string             `json:"profileBackgroundUrl"`
+	Info                 *string             `json:"info"`
+	Role                 models.Role         `json:"role"`
+	ProviderType         models.ProviderType `json:"providerType"`
 	Followings           []Following         `json:"followings,omitempty"`
 	Followers            []Follower          `json:"followers,omitempty"`
 	CreatedAt            time.Time           `json:"createdAt"`
@@ -74,7 +89,7 @@ type SecureUser struct {
 }
 
 type UserService interface {
-	SecureFindWithIDAndFollowRelations(ctx context.Context, ID uuid.UUID) (*SecureUser, error)
+	FindByIDWithFollowRelations(ctx context.Context, userID uuid.UUID) (*SecureUserWithFollowRelations, error)
 	ResetPassword(
 		ctx context.Context,
 		email,
@@ -101,11 +116,11 @@ func NewUserService(
 	}
 }
 
-func (s *userService) SecureFindWithIDAndFollowRelations(ctx context.Context, ID uuid.UUID) (*SecureUser, error) {
+func (s *userService) FindByIDWithFollowRelations(ctx context.Context, userID uuid.UUID) (*SecureUserWithFollowRelations, error) {
 	user, err := s.userRepository.FindByIDWithFollowRelations(
 		ctx,
 		s.db,
-		ID,
+		userID,
 	)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
@@ -114,7 +129,7 @@ func (s *userService) SecureFindWithIDAndFollowRelations(ctx context.Context, ID
 
 	if helpers.IsErrRecordNotFound(err) {
 		logs.Warn(err)
-		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("User id %v is not found", ID))
+		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("User by id %v is not found", userID))
 	}
 
 	err = s.GetUserImage(ctx, user)
@@ -208,7 +223,7 @@ func (s *userService) SecureFindWithIDAndFollowRelations(ctx context.Context, ID
 		})
 	}
 
-	secureUser := &SecureUser{
+	secureUserWithFollowRelations := &SecureUserWithFollowRelations{
 		ID:                   user.ID,
 		Fullname:             user.Fullname,
 		Username:             user.Username,
@@ -224,7 +239,7 @@ func (s *userService) SecureFindWithIDAndFollowRelations(ctx context.Context, ID
 		CreatedAt:            user.CreatedAt,
 		UpdatedAt:            user.UpdatedAt,
 	}
-	return secureUser, nil
+	return secureUserWithFollowRelations, nil
 }
 
 func (s *userService) ResetPassword(

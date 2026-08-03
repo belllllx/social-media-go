@@ -641,7 +641,82 @@ const docTemplate = `{
                 }
             }
         },
-        "/comment/delete/file": {
+        "/comment/create/{postID}": {
+            "post": {
+                "description": "authentication create comment and socket emit comment and notification to client",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "comment"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "uuid for post id",
+                        "name": "postID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "create comment payload",
+                        "name": "payload",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/comment.CreateCommentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SwaggerResponseWithData"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/comment.CreatedComment"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/comment/delete-file": {
             "delete": {
                 "description": "authentication and delete file",
                 "consumes": [
@@ -827,7 +902,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/post/delete/file": {
+        "/post/delete-file": {
             "delete": {
                 "description": "authentication and delete file",
                 "consumes": [
@@ -1532,6 +1607,46 @@ const docTemplate = `{
                 }
             }
         },
+        "comment.CreateCommentRequest": {
+            "type": "object",
+            "properties": {
+                "fileUrl": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "comment.CreatedComment": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "fileUrl": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "postId": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/user.SecureUser"
+                },
+                "userId": {
+                    "type": "string"
+                }
+            }
+        },
         "file.DeleteFileRequest": {
             "type": "object",
             "required": [
@@ -1876,72 +1991,6 @@ const docTemplate = `{
                 }
             }
         },
-        "user.Follower": {
-            "type": "object",
-            "properties": {
-                "createdAt": {
-                    "type": "string"
-                },
-                "follower": {
-                    "$ref": "#/definitions/user.SecureUserFollow"
-                },
-                "followerId": {
-                    "type": "string"
-                },
-                "followingId": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "updatedAt": {
-                    "type": "string"
-                }
-            }
-        },
-        "user.FollowerData": {
-            "type": "object",
-            "properties": {
-                "createdAt": {
-                    "type": "string"
-                },
-                "followerId": {
-                    "type": "string"
-                },
-                "followingId": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "updatedAt": {
-                    "type": "string"
-                }
-            }
-        },
-        "user.Following": {
-            "type": "object",
-            "properties": {
-                "createdAt": {
-                    "type": "string"
-                },
-                "followerId": {
-                    "type": "string"
-                },
-                "following": {
-                    "$ref": "#/definitions/user.SecureUserFollow"
-                },
-                "followingId": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "updatedAt": {
-                    "type": "string"
-                }
-            }
-        },
         "user.SecureUser": {
             "type": "object",
             "properties": {
@@ -1953,65 +2002,6 @@ const docTemplate = `{
                 },
                 "email": {
                     "type": "string"
-                },
-                "followers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/user.Follower"
-                    }
-                },
-                "followings": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/user.Following"
-                    }
-                },
-                "fullname": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "info": {
-                    "type": "string"
-                },
-                "profileBackgroundUrl": {
-                    "type": "string"
-                },
-                "profileUrl": {
-                    "type": "string"
-                },
-                "providerType": {
-                    "$ref": "#/definitions/models.ProviderType"
-                },
-                "role": {
-                    "$ref": "#/definitions/models.Role"
-                },
-                "updatedAt": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "user.SecureUserFollow": {
-            "type": "object",
-            "properties": {
-                "createdAt": {
-                    "type": "string"
-                },
-                "dateOfBirth": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "followers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/user.FollowerData"
-                    }
                 },
                 "fullname": {
                     "type": "string"

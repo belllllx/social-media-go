@@ -141,13 +141,13 @@ func RequireAuth(userService user.UserService) gin.HandlerFunc {
 			return
 		}
 
-		secureUser, err := userService.SecureFindWithIDAndFollowRelations(ctx, claims.ID)
+		secureUserWithFollowRelations, err := userService.FindByIDWithFollowRelations(ctx, claims.UserID)
 		if err != nil {
 			helpers.HandleError(c, err)
 			return
 		}
 
-		c.Set("user", secureUser)
+		c.Set("user", secureUserWithFollowRelations)
 		c.Next()
 	}
 }
@@ -190,7 +190,7 @@ func SocketRequireAuth(socket *server.Socket, next func(*server.ExtendedError)) 
 		return
 	}
 
-	socket.SetData(claims.ID)
+	socket.SetData(claims.UserID)
 	next(nil)
 }
 
@@ -214,7 +214,7 @@ func AuthRefresh() gin.HandlerFunc {
 			return
 		}
 
-		c.Set("userID", claims.ID)
+		c.Set("userID", claims.UserID)
 		c.Next()
 	}
 }
