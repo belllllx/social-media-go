@@ -13,6 +13,7 @@ type CommentDTO struct {
 	Message   *string          `json:"message"`
 	PostID    uuid.UUID        `json:"postId"`
 	UserID    uuid.UUID        `json:"userId"`
+	ParentID  *uuid.UUID       `json:"parentId,omitempty"`
 	User      *user.SecureUser `json:"user"`
 	FileURL   string           `json:"fileUrl,omitempty"`
 	CreatedAt time.Time        `json:"createdAt"`

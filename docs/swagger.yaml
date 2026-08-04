@@ -84,6 +84,8 @@ definitions:
         type: string
       message:
         type: string
+      parentId:
+        type: string
       postId:
         type: string
       updatedAt:
@@ -824,6 +826,58 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/response.SwaggerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - comment
+  /comment/reply/create/{postID}/{parentID}:
+    post:
+      consumes:
+      - application/json
+      description: authentication create reply comment and socket emit reply and notification
+        to client
+      parameters:
+      - description: uuid for post id
+        in: path
+        name: postID
+        required: true
+        type: string
+      - description: uuid for comment id
+        in: path
+        name: parentID
+        required: true
+        type: string
+      - description: create reply comment payload
+        in: body
+        name: payload
+        schema:
+          $ref: '#/definitions/comment.CreateCommentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SwaggerResponseWithData'
+            - properties:
+                data:
+                  $ref: '#/definitions/comment.CreatedComment'
+              type: object
         "400":
           description: Bad Request
           schema:

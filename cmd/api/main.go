@@ -233,6 +233,7 @@ func main() {
 		comment.POST("/upload-file", commentHandler.UploadFile)
 		comment.DELETE("/delete-file", commentHandler.DeleteFile)
 		comment.POST("/create/:postID", commentHandler.CreateComment)
+		comment.POST("/reply/create/:postID/:parentID", commentHandler.CreateReplyComment)
 	}
 
 	app.Run()

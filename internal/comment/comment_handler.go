@@ -18,6 +18,7 @@ type CommentHandler interface {
 	UploadFile(c *gin.Context)
 	DeleteFile(c *gin.Context)
 	CreateComment(c *gin.Context)
+	CreateReplyComment(c *gin.Context)
 }
 
 type commentHandler struct {
@@ -160,4 +161,53 @@ func (h *commentHandler) CreateComment(c *gin.Context) {
 	}
 
 	response.Created(c, "Create comment successfully", createdComment)
+}
+
+// CreateReplyComment godoc
+//
+//	@Description	authentication create reply comment and socket emit reply and notification to client
+//	@Tags			comment
+//	@Accept			json
+//	@Produce		json
+//	@Param			postID		path		string					true	"uuid for post id"
+//	@Param			parentID	path		string					true	"uuid for comment id"
+//	@Param			payload		body		CreateCommentRequest	false	"create reply comment payload"
+//	@Success		201			{object}	response.SwaggerResponseWithData{data=CreatedComment}
+//	@Failure		400			{object}	response.SwaggerBadRequestResponse
+//	@Failure		401			{object}	response.SwaggerResponse
+//	@Failure		404			{object}	response.SwaggerResponse
+//	@Failure		500			{object}	response.SwaggerResponse
+//	@Router			/comment/reply/create/{postID}/{parentID} [post]
+func (h *commentHandler) CreateReplyComment(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	user, ok := c.MustGet("user").(*user.SecureUserWithFollowRelations)
+	if !ok {
+		response.AbortWithUnauthorized(c)
+		return
+	}
+
+	createCommentRequest := &CreateCommentRequest{}
+	err := c.ShouldBind(createCommentRequest)
+	if err != nil {
+		response.AbortWithError(c, err)
+		return
+	}
+
+	postID := c.Param("postID")
+	parentID := c.Param("parentID")
+	createReplyCommentDTO := &CreateReplyCommentDTO{
+		Message:  createCommentRequest.Message,
+		FileURL:  createCommentRequest.FileURL,
+		PostID:   postID,
+		UserID:   user.ID,
+		ParentID: parentID,
+	}
+	createdReply, err := h.commentService.CreateReplyComment(ctx, createReplyCommentDTO)
+	if err != nil {
+		helpers.HandleError(c, err)
+		return
+	}
+
+	response.Created(c, "Create reply comment successfully", createdReply)
 }

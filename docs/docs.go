@@ -773,6 +773,88 @@ const docTemplate = `{
                 }
             }
         },
+        "/comment/reply/create/{postID}/{parentID}": {
+            "post": {
+                "description": "authentication create reply comment and socket emit reply and notification to client",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "comment"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "uuid for post id",
+                        "name": "postID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "uuid for comment id",
+                        "name": "parentID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "create reply comment payload",
+                        "name": "payload",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/comment.CreateCommentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SwaggerResponseWithData"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/comment.CreatedComment"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/comment/upload-file": {
             "post": {
                 "description": "authentication and upload file",
@@ -1631,6 +1713,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "message": {
+                    "type": "string"
+                },
+                "parentId": {
                     "type": "string"
                 },
                 "postId": {

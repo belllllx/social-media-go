@@ -15,6 +15,11 @@ type CommentRepository interface {
 		db *gorm.DB,
 		comment *models.Comment,
 	) error
+	FindByID(
+		ctx context.Context,
+		db *gorm.DB,
+		commentID uuid.UUID,
+	) (*models.Comment, error)
 	FindByIDWithUserRelation(
 		ctx context.Context,
 		db *gorm.DB,
@@ -35,6 +40,22 @@ func (r *commentRepositoryDB) Create(
 	comment *models.Comment,
 ) error {
 	return db.WithContext(ctx).Create(comment).Error
+}
+
+func (r *commentRepositoryDB) FindByID(
+	ctx context.Context,
+	db *gorm.DB,
+	commentID uuid.UUID,
+) (*models.Comment, error) {
+	comment := &models.Comment{}
+	err := db.
+		WithContext(ctx).
+		Where("id = ?", commentID).
+		Take(comment).Error
+	if err != nil {
+		return nil, err
+	}
+	return comment, nil
 }
 
 func (r *commentRepositoryDB) FindByIDWithUserRelation(
