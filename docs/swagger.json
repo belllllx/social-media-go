@@ -849,6 +849,95 @@
                 }
             }
         },
+        "/comment/tag/create/{postID}/{parentID}/{replyID}": {
+            "post": {
+                "description": "authentication create tag reply and socket emit tag and notification to client",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "comment"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "uuid for post id",
+                        "name": "postID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "uuid for comment id",
+                        "name": "parentID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "uuid for reply id",
+                        "name": "replyID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "create tag reply payload",
+                        "name": "payload",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/comment.CreateCommentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SwaggerResponseWithData"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/comment.CreatedComment"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/comment/upload-file": {
             "post": {
                 "description": "authentication and upload file",
@@ -1713,6 +1802,15 @@
                     "type": "string"
                 },
                 "postId": {
+                    "type": "string"
+                },
+                "replyId": {
+                    "type": "string"
+                },
+                "replyToUser": {
+                    "$ref": "#/definitions/user.SecureUser"
+                },
+                "replyToUserId": {
                     "type": "string"
                 },
                 "updatedAt": {

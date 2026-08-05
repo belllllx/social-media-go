@@ -9,15 +9,18 @@ import (
 )
 
 type CommentDTO struct {
-	ID        uuid.UUID        `json:"id"`
-	Message   *string          `json:"message"`
-	PostID    uuid.UUID        `json:"postId"`
-	UserID    uuid.UUID        `json:"userId"`
-	ParentID  *uuid.UUID       `json:"parentId,omitempty"`
-	User      *user.SecureUser `json:"user"`
-	FileURL   string           `json:"fileUrl,omitempty"`
-	CreatedAt time.Time        `json:"createdAt"`
-	UpdatedAt time.Time        `json:"updatedAt"`
+	ID            uuid.UUID        `json:"id"`
+	Message       *string          `json:"message"`
+	PostID        uuid.UUID        `json:"postId"`
+	UserID        uuid.UUID        `json:"userId"`
+	ParentID      *uuid.UUID       `json:"parentId,omitempty"`
+	ReplyID       *uuid.UUID       `json:"replyId,omitempty"`
+	ReplyToUserID *uuid.UUID       `json:"replyToUserId,omitempty"`
+	ReplyToUser   *user.SecureUser `json:"replyToUser,omitempty"`
+	User          *user.SecureUser `json:"user"`
+	FileURL       string           `json:"fileUrl,omitempty"`
+	CreatedAt     time.Time        `json:"createdAt"`
+	UpdatedAt     time.Time        `json:"updatedAt"`
 }
 
 type CommentSocket interface {

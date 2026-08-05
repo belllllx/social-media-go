@@ -25,6 +25,11 @@ type CommentRepository interface {
 		db *gorm.DB,
 		commentID uuid.UUID,
 	) (*models.Comment, error)
+	FindByIDWithUserAndReplyToUserRelations(
+		ctx context.Context,
+		db *gorm.DB,
+		commentID uuid.UUID,
+	) (*models.Comment, error)
 }
 
 type commentRepositoryDB struct {
@@ -68,6 +73,24 @@ func (r *commentRepositoryDB) FindByIDWithUserRelation(
 		WithContext(ctx).
 		Where("id = ?", commentID).
 		Preload("User", helpers.OmitUserPasswordHash).
+		Take(comment).Error
+	if err != nil {
+		return nil, err
+	}
+	return comment, nil
+}
+
+func (r *commentRepositoryDB) FindByIDWithUserAndReplyToUserRelations(
+	ctx context.Context,
+	db *gorm.DB,
+	commentID uuid.UUID,
+) (*models.Comment, error) {
+	comment := &models.Comment{}
+	err := db.
+		WithContext(ctx).
+		Where("id = ?", commentID).
+		Preload("User", helpers.OmitUserPasswordHash).
+		Preload("ReplyToUser", helpers.OmitUserPasswordHash).
 		Take(comment).Error
 	if err != nil {
 		return nil, err

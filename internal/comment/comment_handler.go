@@ -19,6 +19,7 @@ type CommentHandler interface {
 	DeleteFile(c *gin.Context)
 	CreateComment(c *gin.Context)
 	CreateReplyComment(c *gin.Context)
+	CreateTagReply(c *gin.Context)
 }
 
 type commentHandler struct {
@@ -210,4 +211,56 @@ func (h *commentHandler) CreateReplyComment(c *gin.Context) {
 	}
 
 	response.Created(c, "Create reply comment successfully", createdReply)
+}
+
+// CreateTagReply godoc
+//
+//	@Description	authentication create tag reply and socket emit tag and notification to client
+//	@Tags			comment
+//	@Accept			json
+//	@Produce		json
+//	@Param			postID		path		string					true	"uuid for post id"
+//	@Param			parentID	path		string					true	"uuid for comment id"
+//	@Param			replyID		path		string					true	"uuid for reply id"
+//	@Param			payload		body		CreateCommentRequest	false	"create tag reply payload"
+//	@Success		201			{object}	response.SwaggerResponseWithData{data=CreatedComment}
+//	@Failure		400			{object}	response.SwaggerBadRequestResponse
+//	@Failure		401			{object}	response.SwaggerResponse
+//	@Failure		404			{object}	response.SwaggerResponse
+//	@Failure		500			{object}	response.SwaggerResponse
+//	@Router			/comment/tag/create/{postID}/{parentID}/{replyID} [post]
+func (h *commentHandler) CreateTagReply(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	user, ok := c.MustGet("user").(*user.SecureUserWithFollowRelations)
+	if !ok {
+		response.AbortWithUnauthorized(c)
+		return
+	}
+
+	createCommentRequest := &CreateCommentRequest{}
+	err := c.ShouldBind(createCommentRequest)
+	if err != nil {
+		response.AbortWithError(c, err)
+		return
+	}
+
+	postID := c.Param("postID")
+	parentID := c.Param("parentID")
+	replyID := c.Param("replyID")
+	createTagReplyDTO := &CreateTagReplyDTO{
+		Message:  createCommentRequest.Message,
+		FileURL:  createCommentRequest.FileURL,
+		PostID:   postID,
+		UserID:   user.ID,
+		ParentID: parentID,
+		ReplyID:  replyID,
+	}
+	createdTag, err := h.commentService.CreateTagReply(ctx, createTagReplyDTO)
+	if err != nil {
+		helpers.HandleError(c, err)
+		return
+	}
+
+	response.Created(c, "Create tag reply successfully", createdTag)
 }

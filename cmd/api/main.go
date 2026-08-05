@@ -234,6 +234,7 @@ func main() {
 		comment.DELETE("/delete-file", commentHandler.DeleteFile)
 		comment.POST("/create/:postID", commentHandler.CreateComment)
 		comment.POST("/reply/create/:postID/:parentID", commentHandler.CreateReplyComment)
+		comment.POST("/tag/create/:postID/:parentID/:replyID", commentHandler.CreateTagReply)
 	}
 
 	app.Run()
