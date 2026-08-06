@@ -349,7 +349,7 @@ func (h *authHandler) Login(c *gin.Context) {
 //	@Description	authentication and set cookie
 //	@Tags			auth
 //	@Produce		json
-//	@Success		200	{object}	response.SwaggerResponseWithData{data=user.SecureUser}
+//	@Success		200	{object}	response.SwaggerResponseWithData{data=user.SecureUserWithFollowRelations}
 //	@Failure		401	{object}	response.SwaggerResponse
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/profile [get]

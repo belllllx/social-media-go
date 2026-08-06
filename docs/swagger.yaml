@@ -412,6 +412,49 @@ definitions:
       success:
         type: boolean
     type: object
+  user.Follower:
+    properties:
+      createdAt:
+        type: string
+      follower:
+        $ref: '#/definitions/user.SecureUserFollow'
+      followerId:
+        type: string
+      followingId:
+        type: string
+      id:
+        type: integer
+      updatedAt:
+        type: string
+    type: object
+  user.FollowerData:
+    properties:
+      createdAt:
+        type: string
+      followerId:
+        type: string
+      followingId:
+        type: string
+      id:
+        type: integer
+      updatedAt:
+        type: string
+    type: object
+  user.Following:
+    properties:
+      createdAt:
+        type: string
+      followerId:
+        type: string
+      following:
+        $ref: '#/definitions/user.SecureUserFollow'
+      followingId:
+        type: string
+      id:
+        type: integer
+      updatedAt:
+        type: string
+    type: object
   user.SecureUser:
     properties:
       createdAt:
@@ -420,6 +463,72 @@ definitions:
         type: string
       email:
         type: string
+      fullname:
+        type: string
+      id:
+        type: string
+      info:
+        type: string
+      profileBackgroundUrl:
+        type: string
+      profileUrl:
+        type: string
+      providerType:
+        $ref: '#/definitions/models.ProviderType'
+      role:
+        $ref: '#/definitions/models.Role'
+      updatedAt:
+        type: string
+      username:
+        type: string
+    type: object
+  user.SecureUserFollow:
+    properties:
+      createdAt:
+        type: string
+      dateOfBirth:
+        type: string
+      email:
+        type: string
+      followers:
+        items:
+          $ref: '#/definitions/user.FollowerData'
+        type: array
+      fullname:
+        type: string
+      id:
+        type: string
+      info:
+        type: string
+      profileBackgroundUrl:
+        type: string
+      profileUrl:
+        type: string
+      providerType:
+        $ref: '#/definitions/models.ProviderType'
+      role:
+        $ref: '#/definitions/models.Role'
+      updatedAt:
+        type: string
+      username:
+        type: string
+    type: object
+  user.SecureUserWithFollowRelations:
+    properties:
+      createdAt:
+        type: string
+      dateOfBirth:
+        type: string
+      email:
+        type: string
+      followers:
+        items:
+          $ref: '#/definitions/user.Follower'
+        type: array
+      followings:
+        items:
+          $ref: '#/definitions/user.Following'
+        type: array
       fullname:
         type: string
       id:
@@ -731,7 +840,7 @@ paths:
             - $ref: '#/definitions/response.SwaggerResponseWithData'
             - properties:
                 data:
-                  $ref: '#/definitions/user.SecureUser'
+                  $ref: '#/definitions/user.SecureUserWithFollowRelations'
               type: object
         "401":
           description: Unauthorized

@@ -82,8 +82,8 @@ type SecureUserWithFollowRelations struct {
 	Info                 *string             `json:"info"`
 	Role                 models.Role         `json:"role"`
 	ProviderType         models.ProviderType `json:"providerType"`
-	Followings           []Following         `json:"followings,omitempty"`
-	Followers            []Follower          `json:"followers,omitempty"`
+	Followings           []Following         `json:"followings"`
+	Followers            []Follower          `json:"followers"`
 	CreatedAt            time.Time           `json:"createdAt"`
 	UpdatedAt            time.Time           `json:"updatedAt"`
 }

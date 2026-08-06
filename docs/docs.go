@@ -449,7 +449,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/user.SecureUser"
+                                            "$ref": "#/definitions/user.SecureUserWithFollowRelations"
                                         }
                                     }
                                 }
@@ -2379,6 +2379,72 @@ const docTemplate = `{
                 }
             }
         },
+        "user.Follower": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "follower": {
+                    "$ref": "#/definitions/user.SecureUserFollow"
+                },
+                "followerId": {
+                    "type": "string"
+                },
+                "followingId": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "updatedAt": {
+                    "type": "string"
+                }
+            }
+        },
+        "user.FollowerData": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "followerId": {
+                    "type": "string"
+                },
+                "followingId": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "updatedAt": {
+                    "type": "string"
+                }
+            }
+        },
+        "user.Following": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "followerId": {
+                    "type": "string"
+                },
+                "following": {
+                    "$ref": "#/definitions/user.SecureUserFollow"
+                },
+                "followingId": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "updatedAt": {
+                    "type": "string"
+                }
+            }
+        },
         "user.SecureUser": {
             "type": "object",
             "properties": {
@@ -2390,6 +2456,106 @@ const docTemplate = `{
                 },
                 "email": {
                     "type": "string"
+                },
+                "fullname": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "info": {
+                    "type": "string"
+                },
+                "profileBackgroundUrl": {
+                    "type": "string"
+                },
+                "profileUrl": {
+                    "type": "string"
+                },
+                "providerType": {
+                    "$ref": "#/definitions/models.ProviderType"
+                },
+                "role": {
+                    "$ref": "#/definitions/models.Role"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "user.SecureUserFollow": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "dateOfBirth": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "followers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/user.FollowerData"
+                    }
+                },
+                "fullname": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "info": {
+                    "type": "string"
+                },
+                "profileBackgroundUrl": {
+                    "type": "string"
+                },
+                "profileUrl": {
+                    "type": "string"
+                },
+                "providerType": {
+                    "$ref": "#/definitions/models.ProviderType"
+                },
+                "role": {
+                    "$ref": "#/definitions/models.Role"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "user.SecureUserWithFollowRelations": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "dateOfBirth": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "followers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/user.Follower"
+                    }
+                },
+                "followings": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/user.Following"
+                    }
                 },
                 "fullname": {
                     "type": "string"
