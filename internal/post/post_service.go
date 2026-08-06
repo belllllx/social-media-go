@@ -55,7 +55,7 @@ type Like struct {
 	ID        int64            `json:"id"`
 	UserID    uuid.UUID        `json:"userId"`
 	User      *user.SecureUser `json:"user,omitempty"`
-	PostID    *uuid.UUID       `json:"postId"`
+	PostID    uuid.UUID        `json:"postId"`
 	CreatedAt time.Time        `json:"createdAt"`
 	UpdatedAt time.Time        `json:"updatedAt"`
 }
@@ -279,7 +279,7 @@ func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostD
 	)
 	if err != nil {
 		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post with user relation")
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id with user relation")
 	}
 
 	err = s.userService.GetUserImage(ctx, &post.User)
@@ -420,7 +420,7 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 	)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id")
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id with user relation")
 	}
 
 	if helpers.IsErrRecordNotFound(err) {
@@ -485,7 +485,7 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 	)
 	if err != nil {
 		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post with user relation")
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id with user relation")
 	}
 
 	err = s.userService.GetUserImage(ctx, &sharePost.User)
@@ -667,7 +667,7 @@ func (s *postService) FindsCursorPagination(
 		)
 		if err != nil {
 			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts cursor pagination with relations")
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts cursor pagination with post relations")
 		}
 	} else {
 		postCursor, err := s.postRepository.FindByIDCursor(
@@ -693,128 +693,126 @@ func (s *postService) FindsCursorPagination(
 		)
 		if err != nil {
 			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts cursor pagination with relations")
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts cursor pagination with post relations")
 		}
 	}
 
-	if len(posts) > 0 {
-		for _, post := range posts {
-			err = s.userService.GetUserImage(ctx, &post.User)
+	for _, post := range posts {
+		err = s.userService.GetUserImage(ctx, &post.User)
+		if err != nil {
+			return nil, err
+		}
+
+		comments := []models.Comment{}
+		for _, comment := range post.Comments {
+			if comment.ParentID == nil {
+				comments = append(comments, comment)
+			}
+		}
+		commentsCount := len(comments)
+
+		filesURL, err := s.fileService.PresignGetFiles(ctx, post.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		updateLikes := []Like{}
+		for _, like := range post.Likes {
+			err = s.userService.GetUserImage(ctx, &like.User)
 			if err != nil {
 				return nil, err
-			}
-
-			comments := []models.Comment{}
-			for _, comment := range post.Comments {
-				if comment.ParentID == nil {
-					comments = append(comments, comment)
-				}
-			}
-			commentsCount := len(comments)
-
-			filesURL, err := s.fileService.PresignGetFiles(ctx, post.ID)
-			if err != nil {
-				return nil, err
-			}
-
-			updateLikes := []Like{}
-			for _, like := range post.Likes {
-				err = s.userService.GetUserImage(ctx, &like.User)
-				if err != nil {
-					return nil, err
-				}
-
-				secureUser := &user.SecureUser{
-					ID:                   like.UserID,
-					Fullname:             like.User.Fullname,
-					Username:             like.User.Username,
-					Email:                like.User.Email,
-					DateOfBirth:          like.User.DateOfBirth,
-					ProfileUrl:           like.User.ProfileUrl,
-					ProfileBackgroundUrl: like.User.ProfileBackgroundUrl,
-					Info:                 like.User.Info,
-					Role:                 like.User.Role,
-					ProviderType:         like.User.ProviderType,
-					CreatedAt:            like.User.CreatedAt,
-					UpdatedAt:            like.User.UpdatedAt,
-				}
-				updateLikes = append(updateLikes, Like{
-					ID:        like.ID,
-					UserID:    like.UserID,
-					User:      secureUser,
-					PostID:    like.PostID,
-					CreatedAt: like.CreatedAt,
-					UpdatedAt: like.UpdatedAt,
-				})
 			}
 
 			secureUser := &user.SecureUser{
-				ID:                   post.UserID,
-				Fullname:             post.User.Fullname,
-				Username:             post.User.Username,
-				Email:                post.User.Email,
-				DateOfBirth:          post.User.DateOfBirth,
-				ProfileUrl:           post.User.ProfileUrl,
-				ProfileBackgroundUrl: post.User.ProfileBackgroundUrl,
-				Info:                 post.User.Info,
-				Role:                 post.User.Role,
-				ProviderType:         post.User.ProviderType,
-				CreatedAt:            post.User.CreatedAt,
-				UpdatedAt:            post.User.UpdatedAt,
+				ID:                   like.UserID,
+				Fullname:             like.User.Fullname,
+				Username:             like.User.Username,
+				Email:                like.User.Email,
+				DateOfBirth:          like.User.DateOfBirth,
+				ProfileUrl:           like.User.ProfileUrl,
+				ProfileBackgroundUrl: like.User.ProfileBackgroundUrl,
+				Info:                 like.User.Info,
+				Role:                 like.User.Role,
+				ProviderType:         like.User.ProviderType,
+				CreatedAt:            like.User.CreatedAt,
+				UpdatedAt:            like.User.UpdatedAt,
 			}
-			postCursorPagination := Post{
-				ID:            post.ID,
-				Message:       post.Message,
-				UserID:        post.UserID,
-				User:          secureUser,
-				ParentID:      post.ParentID,
-				Likes:         updateLikes,
-				FilesURL:      filesURL,
-				CommentsCount: commentsCount,
-				CreatedAt:     post.CreatedAt,
-				UpdatedAt:     post.UpdatedAt,
-			}
-
-			if post.ParentID != nil {
-				err = s.userService.GetUserImage(ctx, &post.Parent.User)
-				if err != nil {
-					return nil, err
-				}
-
-				filesURL, err = s.fileService.PresignGetFiles(ctx, *post.ParentID)
-				if err != nil {
-					return nil, err
-				}
-
-				postParentSecureUser := &user.SecureUser{
-					ID:                   post.Parent.UserID,
-					Fullname:             post.Parent.User.Fullname,
-					Username:             post.Parent.User.Username,
-					Email:                post.Parent.User.Email,
-					DateOfBirth:          post.Parent.User.DateOfBirth,
-					ProfileUrl:           post.Parent.User.ProfileUrl,
-					ProfileBackgroundUrl: post.Parent.User.ProfileBackgroundUrl,
-					Info:                 post.Parent.User.Info,
-					Role:                 post.Parent.User.Role,
-					ProviderType:         post.Parent.User.ProviderType,
-					CreatedAt:            post.Parent.User.CreatedAt,
-					UpdatedAt:            post.Parent.User.UpdatedAt,
-				}
-				postParent := &PostParent{
-					ID:        *post.ParentID,
-					Message:   post.Parent.Message,
-					UserID:    post.Parent.UserID,
-					User:      postParentSecureUser,
-					ParentID:  post.ParentID,
-					FilesURL:  filesURL,
-					CreatedAt: post.Parent.CreatedAt,
-					UpdatedAt: post.Parent.UpdatedAt,
-				}
-				postCursorPagination.Parent = postParent
-			}
-
-			postsCursorPagination = append(postsCursorPagination, postCursorPagination)
+			updateLikes = append(updateLikes, Like{
+				ID:        like.ID,
+				UserID:    like.UserID,
+				User:      secureUser,
+				PostID:    *like.PostID,
+				CreatedAt: like.CreatedAt,
+				UpdatedAt: like.UpdatedAt,
+			})
 		}
+
+		secureUser := &user.SecureUser{
+			ID:                   post.UserID,
+			Fullname:             post.User.Fullname,
+			Username:             post.User.Username,
+			Email:                post.User.Email,
+			DateOfBirth:          post.User.DateOfBirth,
+			ProfileUrl:           post.User.ProfileUrl,
+			ProfileBackgroundUrl: post.User.ProfileBackgroundUrl,
+			Info:                 post.User.Info,
+			Role:                 post.User.Role,
+			ProviderType:         post.User.ProviderType,
+			CreatedAt:            post.User.CreatedAt,
+			UpdatedAt:            post.User.UpdatedAt,
+		}
+		postCursorPagination := Post{
+			ID:            post.ID,
+			Message:       post.Message,
+			UserID:        post.UserID,
+			User:          secureUser,
+			ParentID:      post.ParentID,
+			Likes:         updateLikes,
+			FilesURL:      filesURL,
+			CommentsCount: commentsCount,
+			CreatedAt:     post.CreatedAt,
+			UpdatedAt:     post.UpdatedAt,
+		}
+
+		if post.ParentID != nil {
+			err = s.userService.GetUserImage(ctx, &post.Parent.User)
+			if err != nil {
+				return nil, err
+			}
+
+			filesURL, err = s.fileService.PresignGetFiles(ctx, *post.ParentID)
+			if err != nil {
+				return nil, err
+			}
+
+			postParentSecureUser := &user.SecureUser{
+				ID:                   post.Parent.UserID,
+				Fullname:             post.Parent.User.Fullname,
+				Username:             post.Parent.User.Username,
+				Email:                post.Parent.User.Email,
+				DateOfBirth:          post.Parent.User.DateOfBirth,
+				ProfileUrl:           post.Parent.User.ProfileUrl,
+				ProfileBackgroundUrl: post.Parent.User.ProfileBackgroundUrl,
+				Info:                 post.Parent.User.Info,
+				Role:                 post.Parent.User.Role,
+				ProviderType:         post.Parent.User.ProviderType,
+				CreatedAt:            post.Parent.User.CreatedAt,
+				UpdatedAt:            post.Parent.User.UpdatedAt,
+			}
+			postParent := &PostParent{
+				ID:        *post.ParentID,
+				Message:   post.Parent.Message,
+				UserID:    post.Parent.UserID,
+				User:      postParentSecureUser,
+				ParentID:  post.ParentID,
+				FilesURL:  filesURL,
+				CreatedAt: post.Parent.CreatedAt,
+				UpdatedAt: post.Parent.UpdatedAt,
+			}
+			postCursorPagination.Parent = postParent
+		}
+
+		postsCursorPagination = append(postsCursorPagination, postCursorPagination)
 	}
 
 	if len(postsCursorPagination) > 0 {
@@ -898,7 +896,7 @@ func (s *postService) FindsWithUserIDCursorPagination(
 		)
 		if err != nil {
 			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts by user id cursor pagination with relations")
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts by user id cursor pagination with post relations")
 		}
 	} else {
 		postCursor, err := s.postRepository.FindByIDCursor(
@@ -925,128 +923,126 @@ func (s *postService) FindsWithUserIDCursorPagination(
 		)
 		if err != nil {
 			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts by user id cursor pagination with relations")
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts by user id cursor pagination with post relations")
 		}
 	}
 
-	if len(posts) > 0 {
-		for _, post := range posts {
-			err = s.userService.GetUserImage(ctx, &post.User)
+	for _, post := range posts {
+		err = s.userService.GetUserImage(ctx, &post.User)
+		if err != nil {
+			return nil, err
+		}
+
+		comments := []models.Comment{}
+		for _, comment := range post.Comments {
+			if comment.ParentID == nil {
+				comments = append(comments, comment)
+			}
+		}
+		commentsCount := len(comments)
+
+		filesURL, err := s.fileService.PresignGetFiles(ctx, post.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		updateLikes := []Like{}
+		for _, like := range post.Likes {
+			err = s.userService.GetUserImage(ctx, &like.User)
 			if err != nil {
 				return nil, err
-			}
-
-			comments := []models.Comment{}
-			for _, comment := range post.Comments {
-				if comment.ParentID == nil {
-					comments = append(comments, comment)
-				}
-			}
-			commentsCount := len(comments)
-
-			filesURL, err := s.fileService.PresignGetFiles(ctx, post.ID)
-			if err != nil {
-				return nil, err
-			}
-
-			updateLikes := []Like{}
-			for _, like := range post.Likes {
-				err = s.userService.GetUserImage(ctx, &like.User)
-				if err != nil {
-					return nil, err
-				}
-
-				secureUser := &user.SecureUser{
-					ID:                   like.UserID,
-					Fullname:             like.User.Fullname,
-					Username:             like.User.Username,
-					Email:                like.User.Email,
-					DateOfBirth:          like.User.DateOfBirth,
-					ProfileUrl:           like.User.ProfileUrl,
-					ProfileBackgroundUrl: like.User.ProfileBackgroundUrl,
-					Info:                 like.User.Info,
-					Role:                 like.User.Role,
-					ProviderType:         like.User.ProviderType,
-					CreatedAt:            like.User.CreatedAt,
-					UpdatedAt:            like.User.UpdatedAt,
-				}
-				updateLikes = append(updateLikes, Like{
-					ID:        like.ID,
-					UserID:    like.UserID,
-					User:      secureUser,
-					PostID:    like.PostID,
-					CreatedAt: like.CreatedAt,
-					UpdatedAt: like.UpdatedAt,
-				})
 			}
 
 			secureUser := &user.SecureUser{
-				ID:                   post.UserID,
-				Fullname:             post.User.Fullname,
-				Username:             post.User.Username,
-				Email:                post.User.Email,
-				DateOfBirth:          post.User.DateOfBirth,
-				ProfileUrl:           post.User.ProfileUrl,
-				ProfileBackgroundUrl: post.User.ProfileBackgroundUrl,
-				Info:                 post.User.Info,
-				Role:                 post.User.Role,
-				ProviderType:         post.User.ProviderType,
-				CreatedAt:            post.User.CreatedAt,
-				UpdatedAt:            post.User.UpdatedAt,
+				ID:                   like.UserID,
+				Fullname:             like.User.Fullname,
+				Username:             like.User.Username,
+				Email:                like.User.Email,
+				DateOfBirth:          like.User.DateOfBirth,
+				ProfileUrl:           like.User.ProfileUrl,
+				ProfileBackgroundUrl: like.User.ProfileBackgroundUrl,
+				Info:                 like.User.Info,
+				Role:                 like.User.Role,
+				ProviderType:         like.User.ProviderType,
+				CreatedAt:            like.User.CreatedAt,
+				UpdatedAt:            like.User.UpdatedAt,
 			}
-			postCursorPagination := Post{
-				ID:            post.ID,
-				Message:       post.Message,
-				UserID:        post.UserID,
-				User:          secureUser,
-				ParentID:      post.ParentID,
-				Likes:         updateLikes,
-				FilesURL:      filesURL,
-				CommentsCount: commentsCount,
-				CreatedAt:     post.CreatedAt,
-				UpdatedAt:     post.UpdatedAt,
-			}
-
-			if post.ParentID != nil {
-				err = s.userService.GetUserImage(ctx, &post.Parent.User)
-				if err != nil {
-					return nil, err
-				}
-
-				filesURL, err = s.fileService.PresignGetFiles(ctx, *post.ParentID)
-				if err != nil {
-					return nil, err
-				}
-
-				postParentSecureUser := &user.SecureUser{
-					ID:                   post.Parent.UserID,
-					Fullname:             post.Parent.User.Fullname,
-					Username:             post.Parent.User.Username,
-					Email:                post.Parent.User.Email,
-					DateOfBirth:          post.Parent.User.DateOfBirth,
-					ProfileUrl:           post.Parent.User.ProfileUrl,
-					ProfileBackgroundUrl: post.Parent.User.ProfileBackgroundUrl,
-					Info:                 post.Parent.User.Info,
-					Role:                 post.Parent.User.Role,
-					ProviderType:         post.Parent.User.ProviderType,
-					CreatedAt:            post.Parent.User.CreatedAt,
-					UpdatedAt:            post.Parent.User.UpdatedAt,
-				}
-				postParent := &PostParent{
-					ID:        *post.ParentID,
-					Message:   post.Parent.Message,
-					UserID:    post.Parent.UserID,
-					User:      postParentSecureUser,
-					ParentID:  post.ParentID,
-					FilesURL:  filesURL,
-					CreatedAt: post.Parent.CreatedAt,
-					UpdatedAt: post.Parent.UpdatedAt,
-				}
-				postCursorPagination.Parent = postParent
-			}
-
-			postsCursorPagination = append(postsCursorPagination, postCursorPagination)
+			updateLikes = append(updateLikes, Like{
+				ID:        like.ID,
+				UserID:    like.UserID,
+				User:      secureUser,
+				PostID:    *like.PostID,
+				CreatedAt: like.CreatedAt,
+				UpdatedAt: like.UpdatedAt,
+			})
 		}
+
+		secureUser := &user.SecureUser{
+			ID:                   post.UserID,
+			Fullname:             post.User.Fullname,
+			Username:             post.User.Username,
+			Email:                post.User.Email,
+			DateOfBirth:          post.User.DateOfBirth,
+			ProfileUrl:           post.User.ProfileUrl,
+			ProfileBackgroundUrl: post.User.ProfileBackgroundUrl,
+			Info:                 post.User.Info,
+			Role:                 post.User.Role,
+			ProviderType:         post.User.ProviderType,
+			CreatedAt:            post.User.CreatedAt,
+			UpdatedAt:            post.User.UpdatedAt,
+		}
+		postCursorPagination := Post{
+			ID:            post.ID,
+			Message:       post.Message,
+			UserID:        post.UserID,
+			User:          secureUser,
+			ParentID:      post.ParentID,
+			Likes:         updateLikes,
+			FilesURL:      filesURL,
+			CommentsCount: commentsCount,
+			CreatedAt:     post.CreatedAt,
+			UpdatedAt:     post.UpdatedAt,
+		}
+
+		if post.ParentID != nil {
+			err = s.userService.GetUserImage(ctx, &post.Parent.User)
+			if err != nil {
+				return nil, err
+			}
+
+			filesURL, err = s.fileService.PresignGetFiles(ctx, *post.ParentID)
+			if err != nil {
+				return nil, err
+			}
+
+			postParentSecureUser := &user.SecureUser{
+				ID:                   post.Parent.UserID,
+				Fullname:             post.Parent.User.Fullname,
+				Username:             post.Parent.User.Username,
+				Email:                post.Parent.User.Email,
+				DateOfBirth:          post.Parent.User.DateOfBirth,
+				ProfileUrl:           post.Parent.User.ProfileUrl,
+				ProfileBackgroundUrl: post.Parent.User.ProfileBackgroundUrl,
+				Info:                 post.Parent.User.Info,
+				Role:                 post.Parent.User.Role,
+				ProviderType:         post.Parent.User.ProviderType,
+				CreatedAt:            post.Parent.User.CreatedAt,
+				UpdatedAt:            post.Parent.User.UpdatedAt,
+			}
+			postParent := &PostParent{
+				ID:        *post.ParentID,
+				Message:   post.Parent.Message,
+				UserID:    post.Parent.UserID,
+				User:      postParentSecureUser,
+				ParentID:  post.ParentID,
+				FilesURL:  filesURL,
+				CreatedAt: post.Parent.CreatedAt,
+				UpdatedAt: post.Parent.UpdatedAt,
+			}
+			postCursorPagination.Parent = postParent
+		}
+
+		postsCursorPagination = append(postsCursorPagination, postCursorPagination)
 	}
 
 	if len(postsCursorPagination) > 0 {
@@ -1101,7 +1097,7 @@ func (s *postService) FindWithID(ctx context.Context, postID string) (*Post, err
 	)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post with relations")
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id with post relations")
 	}
 
 	if helpers.IsErrRecordNotFound(err) {
@@ -1152,7 +1148,7 @@ func (s *postService) FindWithID(ctx context.Context, postID string) (*Post, err
 			ID:        like.ID,
 			UserID:    like.UserID,
 			User:      secureUser,
-			PostID:    like.PostID,
+			PostID:    *like.PostID,
 			CreatedAt: like.CreatedAt,
 			UpdatedAt: like.UpdatedAt,
 		})
@@ -1355,7 +1351,7 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 	)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id with relations")
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id with post relations")
 	}
 
 	comments := []models.Comment{}
@@ -1371,7 +1367,7 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 		return nil, err
 	}
 
-	likesDTO := []socket.LikeDTO{}
+	postLikesDTO := []socket.PostLikeDTO{}
 	updateLikes := []Like{}
 	for _, like := range post.Likes {
 		err = s.userService.GetUserImage(ctx, &like.User)
@@ -1397,15 +1393,15 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 			ID:        like.ID,
 			UserID:    like.UserID,
 			User:      secureUser,
-			PostID:    like.PostID,
+			PostID:    *like.PostID,
 			CreatedAt: like.CreatedAt,
 			UpdatedAt: like.UpdatedAt,
 		})
-		likesDTO = append(likesDTO, socket.LikeDTO{
+		postLikesDTO = append(postLikesDTO, socket.PostLikeDTO{
 			ID:        like.ID,
 			UserID:    like.UserID,
 			User:      secureUser,
-			PostID:    like.PostID,
+			PostID:    *like.PostID,
 			CreatedAt: like.CreatedAt,
 			UpdatedAt: like.UpdatedAt,
 		})
@@ -1431,7 +1427,7 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 		UserID:        post.UserID,
 		User:          secureUser,
 		ParentID:      post.ParentID,
-		Likes:         likesDTO,
+		Likes:         postLikesDTO,
 		CommentsCount: commentsCount,
 		CreatedAt:     post.CreatedAt,
 		UpdatedAt:     post.UpdatedAt,
@@ -1841,15 +1837,15 @@ func (s *postService) ToggleLike(
 			CreatedAt:            createdLike.User.CreatedAt,
 			UpdatedAt:            createdLike.User.UpdatedAt,
 		}
-		likeDTO := &socket.LikeDTO{
+		postLikeDTO := &socket.PostLikeDTO{
 			ID:        createdLike.ID,
 			UserID:    createdLike.UserID,
 			User:      secureUserLike,
-			PostID:    createdLike.PostID,
+			PostID:    *createdLike.PostID,
 			CreatedAt: createdLike.CreatedAt,
 			UpdatedAt: createdLike.UpdatedAt,
 		}
-		go s.postSocket.EmitLikeOrUnlike(likeDTO)
+		go s.postSocket.EmitLikeOrUnlike(postLikeDTO)
 
 		secureUserNotification := &user.SecureUser{
 			ID:                   createdNotification.SenderID,
@@ -1883,7 +1879,7 @@ func (s *postService) ToggleLike(
 			ID:        createdLike.ID,
 			UserID:    createdLike.UserID,
 			User:      secureUserLike,
-			PostID:    createdLike.PostID,
+			PostID:    *createdLike.PostID,
 			CreatedAt: createdLike.CreatedAt,
 			UpdatedAt: createdLike.UpdatedAt,
 		}
@@ -1937,14 +1933,14 @@ func (s *postService) ToggleLike(
 		return "", nil, err
 	}
 
-	likeDTO := &socket.LikeDTO{
+	postLikeDTO := &socket.PostLikeDTO{
 		ID:        deletedLike.ID,
 		UserID:    deletedLike.UserID,
-		PostID:    deletedLike.PostID,
+		PostID:    *deletedLike.PostID,
 		CreatedAt: deletedLike.CreatedAt,
 		UpdatedAt: deletedLike.UpdatedAt,
 	}
-	go s.postSocket.EmitLikeOrUnlike(likeDTO)
+	go s.postSocket.EmitLikeOrUnlike(postLikeDTO)
 
 	emitNotificationDTO := &socket.EmitNotificationDTO{
 		ID:         notification.ID,
@@ -1962,7 +1958,7 @@ func (s *postService) ToggleLike(
 	likeResp := &Like{
 		ID:        deletedLike.ID,
 		UserID:    deletedLike.UserID,
-		PostID:    deletedLike.PostID,
+		PostID:    *deletedLike.PostID,
 		CreatedAt: deletedLike.CreatedAt,
 		UpdatedAt: deletedLike.UpdatedAt,
 	}

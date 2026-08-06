@@ -318,22 +318,21 @@ func (s *fileService) PresignGetFile(ctx context.Context, contentID uuid.UUID) (
 		return "", errs.NewInternalServerErrorWithMessage("Failed to find file")
 	}
 
-	if helpers.IsErrRecordNotFound(err) {
-		logs.Warn(err)
-		return "", errs.NewNotFoundErrorWithMessage(fmt.Sprintf("File by content id %v not found", contentID))
+	if file != nil {
+		req, err := helpers.PresignGetObject(
+			ctx,
+			s.presignClient,
+			file.Filename,
+		)
+		if err != nil {
+			logs.Error(err)
+			return "", errs.NewInternalServerErrorWithMessage("Failed to presign get file object")
+		}
+
+		return req.URL, nil
 	}
 
-	req, err := helpers.PresignGetObject(
-		ctx,
-		s.presignClient,
-		file.Filename,
-	)
-	if err != nil {
-		logs.Error(err)
-		return "", errs.NewInternalServerErrorWithMessage("Failed to presign get file object")
-	}
-
-	return req.URL, nil
+	return "", nil
 }
 
 func (s *fileService) PresignGetFiles(ctx context.Context, contentID uuid.UUID) ([]string, error) {

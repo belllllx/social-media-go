@@ -20,6 +20,7 @@ type CommentHandler interface {
 	CreateComment(c *gin.Context)
 	CreateReplyComment(c *gin.Context)
 	CreateTagReply(c *gin.Context)
+	FindsWithPostIDCursorPagination(c *gin.Context)
 }
 
 type commentHandler struct {
@@ -263,4 +264,38 @@ func (h *commentHandler) CreateTagReply(c *gin.Context) {
 	}
 
 	response.Created(c, "Create tag reply successfully", createdTag)
+}
+
+// FindsWithPostIDCursorPagination godoc
+//
+//	@Description	authentication and find comments cursor pagination
+//	@Tags			comment
+//	@Produce		json
+//	@Param			postID	path		string	true	"uuid for post id"
+//	@Param			cursor	query		string	false	"cursor uuid for comment id"
+//	@Param			limit	query		int		true	"limit for comments cursor pagination"
+//	@Success		200		{object}	response.SwaggerResponseWithData{data=CommentCursorPagination}
+//	@Failure		400		{object}	response.SwaggerBadRequestResponse
+//	@Failure		401		{object}	response.SwaggerResponse
+//	@Failure		404		{object}	response.SwaggerResponse
+//	@Failure		500		{object}	response.SwaggerResponse
+//	@Router			/comment/finds/{postID} [get]
+func (h *commentHandler) FindsWithPostIDCursorPagination(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	postID := c.Param("postID")
+	cursor := c.Query("cursor")
+	limit := c.Query("limit")
+	commentCursorPagination, err := h.commentService.FindsWithPostIDCursorPagination(
+		ctx,
+		postID,
+		cursor,
+		limit,
+	)
+	if err != nil {
+		helpers.HandleError(c, err)
+		return
+	}
+
+	response.Ok(c, "Comments retrive successfully", commentCursorPagination)
 }

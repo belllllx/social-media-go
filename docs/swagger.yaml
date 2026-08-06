@@ -67,6 +67,44 @@ definitions:
     required:
     - otp
     type: object
+  comment.Comment:
+    properties:
+      createdAt:
+        type: string
+      fileUrl:
+        type: string
+      id:
+        type: string
+      likes:
+        items:
+          $ref: '#/definitions/comment.Like'
+        type: array
+      message:
+        type: string
+      postId:
+        type: string
+      replies:
+        items:
+          $ref: '#/definitions/comment.ReplyOrTag'
+        type: array
+      repliesCount:
+        type: integer
+      updatedAt:
+        type: string
+      user:
+        $ref: '#/definitions/user.SecureUser'
+      userId:
+        type: string
+    type: object
+  comment.CommentCursorPagination:
+    properties:
+      comments:
+        items:
+          $ref: '#/definitions/comment.Comment'
+        type: array
+      nextCursor:
+        type: string
+    type: object
   comment.CreateCommentRequest:
     properties:
       fileUrl:
@@ -82,6 +120,52 @@ definitions:
         type: string
       id:
         type: string
+      message:
+        type: string
+      parentId:
+        type: string
+      postId:
+        type: string
+      replyId:
+        type: string
+      replyToUser:
+        $ref: '#/definitions/user.SecureUser'
+      replyToUserId:
+        type: string
+      updatedAt:
+        type: string
+      user:
+        $ref: '#/definitions/user.SecureUser'
+      userId:
+        type: string
+    type: object
+  comment.Like:
+    properties:
+      commentId:
+        type: string
+      createdAt:
+        type: string
+      id:
+        type: integer
+      updatedAt:
+        type: string
+      user:
+        $ref: '#/definitions/user.SecureUser'
+      userId:
+        type: string
+    type: object
+  comment.ReplyOrTag:
+    properties:
+      createdAt:
+        type: string
+      fileUrl:
+        type: string
+      id:
+        type: string
+      likes:
+        items:
+          $ref: '#/definitions/comment.Like'
+        type: array
       message:
         type: string
       parentId:
@@ -832,6 +916,54 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/response.SwaggerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - comment
+  /comment/finds/{postID}:
+    get:
+      description: authentication and find comments cursor pagination
+      parameters:
+      - description: uuid for post id
+        in: path
+        name: postID
+        required: true
+        type: string
+      - description: cursor uuid for comment id
+        in: query
+        name: cursor
+        type: string
+      - description: limit for comments cursor pagination
+        in: query
+        name: limit
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SwaggerResponseWithData'
+            - properties:
+                data:
+                  $ref: '#/definitions/comment.CommentCursorPagination'
+              type: object
         "400":
           description: Bad Request
           schema:

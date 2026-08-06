@@ -235,6 +235,7 @@ func main() {
 		comment.POST("/create/:postID", commentHandler.CreateComment)
 		comment.POST("/reply/create/:postID/:parentID", commentHandler.CreateReplyComment)
 		comment.POST("/tag/create/:postID/:parentID/:replyID", commentHandler.CreateTagReply)
+		comment.GET("/finds/:postID", commentHandler.FindsWithPostIDCursorPagination)
 	}
 
 	app.Run()

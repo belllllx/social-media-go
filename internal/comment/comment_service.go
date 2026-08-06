@@ -3,6 +3,7 @@ package comment
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -44,6 +45,50 @@ type CreateCommentDTO struct {
 	UserID  uuid.UUID
 }
 
+type Like struct {
+	ID        int64            `json:"id"`
+	UserID    uuid.UUID        `json:"userId"`
+	User      *user.SecureUser `json:"user,omitempty"`
+	CommentID uuid.UUID        `json:"commentId"`
+	CreatedAt time.Time        `json:"createdAt"`
+	UpdatedAt time.Time        `json:"updatedAt"`
+}
+
+type ReplyOrTag struct {
+	ID            uuid.UUID        `json:"id"`
+	Message       *string          `json:"message"`
+	PostID        uuid.UUID        `json:"postId"`
+	UserID        uuid.UUID        `json:"userId"`
+	User          *user.SecureUser `json:"user"`
+	ParentID      uuid.UUID        `json:"parentId"`
+	ReplyID       *uuid.UUID       `json:"replyId,omitempty"`
+	ReplyToUserID *uuid.UUID       `json:"replyToUserId,omitempty"`
+	ReplyToUser   *user.SecureUser `json:"replyToUser,omitempty"`
+	Likes         []Like           `json:"likes"`
+	FileURL       string           `json:"fileUrl,omitempty"`
+	CreatedAt     time.Time        `json:"createdAt"`
+	UpdatedAt     time.Time        `json:"updatedAt"`
+}
+
+type Comment struct {
+	ID           uuid.UUID        `json:"id"`
+	Message      *string          `json:"message"`
+	PostID       uuid.UUID        `json:"postId"`
+	UserID       uuid.UUID        `json:"userId"`
+	User         *user.SecureUser `json:"user"`
+	Likes        []Like           `json:"likes"`
+	Replies      []ReplyOrTag     `json:"replies"`
+	FileURL      string           `json:"fileUrl,omitempty"`
+	RepliesCount int              `json:"repliesCount"`
+	CreatedAt    time.Time        `json:"createdAt"`
+	UpdatedAt    time.Time        `json:"updatedAt"`
+}
+
+type CommentCursorPagination struct {
+	Comments   []Comment  `json:"comments"`
+	NextCursor *uuid.UUID `json:"nextCursor"`
+}
+
 type CreatedComment struct {
 	ID            uuid.UUID        `json:"id"`
 	Message       *string          `json:"message"`
@@ -63,6 +108,12 @@ type CommentService interface {
 	CreateComment(ctx context.Context, createCommentDTO *CreateCommentDTO) (*CreatedComment, error)
 	CreateReplyComment(ctx context.Context, createReplyCommentDTO *CreateReplyCommentDTO) (*CreatedComment, error)
 	CreateTagReply(ctx context.Context, createTagReplyDTO *CreateTagReplyDTO) (*CreatedComment, error)
+	FindsWithPostIDCursorPagination(
+		ctx context.Context,
+		postID,
+		cursor,
+		limit string,
+	) (*CommentCursorPagination, error)
 }
 
 type commentService struct {
@@ -873,4 +924,287 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 	}
 
 	return tagResp, nil
+}
+
+func (s *commentService) FindsWithPostIDCursorPagination(
+	ctx context.Context,
+	postID,
+	cursor,
+	limit string,
+) (*CommentCursorPagination, error) {
+	var nextCursor *uuid.UUID
+	var cursorID *uuid.UUID
+
+	err := helpers.ValidateUUID(postID)
+	if err != nil {
+		logs.Warn(err)
+		return nil, err
+	}
+
+	postIDParse, err := helpers.ParseUUID(postID)
+	if err != nil {
+		logs.Error(err)
+		return nil, err
+	}
+
+	if cursor != "" {
+		err := helpers.ValidateUUID(cursor)
+		if err != nil {
+			logs.Warn(err)
+			return nil, err
+		}
+
+		cursorID, err = helpers.ParseUUID(cursor)
+		if err != nil {
+			logs.Error(err)
+			return nil, err
+		}
+	}
+
+	limitInt, err := strconv.Atoi(limit)
+	if err != nil {
+		return nil, errs.NewBadRequestErrorWithMessage("Invalid limit must be string integer")
+	}
+
+	if limitInt <= 0 {
+		return nil, errs.NewBadRequestErrorWithMessage("Invalid limit must be greater than 0")
+	}
+
+	postByID, err := s.postRepository.FindByID(
+		ctx,
+		s.db,
+		*postIDParse,
+	)
+	if err != nil && !helpers.IsErrRecordNotFound(err) {
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id")
+	}
+
+	if helpers.IsErrRecordNotFound(err) {
+		logs.Warn(err)
+		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", *postIDParse))
+	}
+
+	comments := []models.Comment{}
+	commentsCursorPagination := []Comment{}
+	if cursor == "" {
+		comments, err = s.commentRepository.FindsByPostIDCursorPaginationWithCommentRelations(
+			ctx,
+			s.db,
+			postByID.ID,
+			nil,
+			limitInt,
+		)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find comments cursor pagination with comment relations")
+		}
+	} else {
+		cursor, err := s.commentRepository.FindByIDCursor(
+			ctx,
+			s.db,
+			*cursorID,
+		)
+		if err != nil && !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find comment cursor by comment id")
+		}
+
+		if helpers.IsErrRecordNotFound(err) {
+			logs.Warn(err)
+			return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Cursor by comment id %v is not found", *cursorID))
+		}
+
+		comments, err = s.commentRepository.FindsByPostIDCursorPaginationWithCommentRelations(
+			ctx,
+			s.db,
+			postByID.ID,
+			cursor,
+			limitInt,
+		)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find comments cursor pagination with comment relations")
+		}
+	}
+
+	for _, comment := range comments {
+		err = s.userService.GetUserImage(ctx, &comment.User)
+		if err != nil {
+			return nil, err
+		}
+
+		updateUserLikes := []Like{}
+		for _, like := range comment.Likes {
+			err = s.userService.GetUserImage(ctx, &like.User)
+			if err != nil {
+				return nil, err
+			}
+
+			secureUserLike := &user.SecureUser{
+				ID:                   like.UserID,
+				Fullname:             like.User.Fullname,
+				Username:             like.User.Username,
+				Email:                like.User.Email,
+				DateOfBirth:          like.User.DateOfBirth,
+				ProfileUrl:           like.User.ProfileUrl,
+				ProfileBackgroundUrl: like.User.ProfileBackgroundUrl,
+				Info:                 like.User.Info,
+				Role:                 like.User.Role,
+				ProviderType:         like.User.ProviderType,
+				CreatedAt:            like.User.CreatedAt,
+				UpdatedAt:            like.User.UpdatedAt,
+			}
+			updateUserLikes = append(updateUserLikes, Like{
+				ID:        like.ID,
+				UserID:    like.UserID,
+				User:      secureUserLike,
+				CommentID: *like.CommentID,
+				CreatedAt: like.CreatedAt,
+				UpdatedAt: like.UpdatedAt,
+			})
+		}
+
+		fileURL, err := s.fileService.PresignGetFile(ctx, comment.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		secureUserComment := &user.SecureUser{
+			ID:                   comment.UserID,
+			Fullname:             comment.User.Fullname,
+			Username:             comment.User.Username,
+			Email:                comment.User.Email,
+			DateOfBirth:          comment.User.DateOfBirth,
+			ProfileUrl:           comment.User.ProfileUrl,
+			ProfileBackgroundUrl: comment.User.ProfileBackgroundUrl,
+			Info:                 comment.User.Info,
+			Role:                 comment.User.Role,
+			ProviderType:         comment.User.ProviderType,
+			CreatedAt:            comment.User.CreatedAt,
+			UpdatedAt:            comment.User.UpdatedAt,
+		}
+
+		replyOrTags := []ReplyOrTag{}
+		for _, replyOrTag := range comment.Replies {
+			err = s.userService.GetUserImage(ctx, &replyOrTag.User)
+			if err != nil {
+				return nil, err
+			}
+
+			updateUserLikes := []Like{}
+			for _, like := range replyOrTag.Likes {
+				err = s.userService.GetUserImage(ctx, &like.User)
+				if err != nil {
+					return nil, err
+				}
+
+				secureUserLike := &user.SecureUser{
+					ID:                   like.UserID,
+					Fullname:             like.User.Fullname,
+					Username:             like.User.Username,
+					Email:                like.User.Email,
+					DateOfBirth:          like.User.DateOfBirth,
+					ProfileUrl:           like.User.ProfileUrl,
+					ProfileBackgroundUrl: like.User.ProfileBackgroundUrl,
+					Info:                 like.User.Info,
+					Role:                 like.User.Role,
+					ProviderType:         like.User.ProviderType,
+					CreatedAt:            like.User.CreatedAt,
+					UpdatedAt:            like.User.UpdatedAt,
+				}
+				updateUserLikes = append(updateUserLikes, Like{
+					ID:        like.ID,
+					UserID:    like.UserID,
+					User:      secureUserLike,
+					CommentID: *like.CommentID,
+					CreatedAt: like.CreatedAt,
+					UpdatedAt: like.UpdatedAt,
+				})
+			}
+
+			fileURL, err := s.fileService.PresignGetFile(ctx, replyOrTag.ID)
+			if err != nil {
+				return nil, err
+			}
+
+			secureUserReplyOrTag := &user.SecureUser{
+				ID:                   replyOrTag.UserID,
+				Fullname:             replyOrTag.User.Fullname,
+				Username:             replyOrTag.User.Username,
+				Email:                replyOrTag.User.Email,
+				DateOfBirth:          replyOrTag.User.DateOfBirth,
+				ProfileUrl:           replyOrTag.User.ProfileUrl,
+				ProfileBackgroundUrl: replyOrTag.User.ProfileBackgroundUrl,
+				Info:                 replyOrTag.User.Info,
+				Role:                 replyOrTag.User.Role,
+				ProviderType:         replyOrTag.User.ProviderType,
+				CreatedAt:            replyOrTag.User.CreatedAt,
+				UpdatedAt:            replyOrTag.User.UpdatedAt,
+			}
+			updateReplyOrTag := ReplyOrTag{
+				ID:            replyOrTag.ID,
+				Message:       replyOrTag.Message,
+				PostID:        replyOrTag.PostID,
+				UserID:        replyOrTag.UserID,
+				User:          secureUserReplyOrTag,
+				ParentID:      *replyOrTag.ParentID,
+				ReplyID:       replyOrTag.ReplyID,
+				ReplyToUserID: replyOrTag.ReplyToUserID,
+				Likes:         updateUserLikes,
+				FileURL:       fileURL,
+				CreatedAt:     replyOrTag.CreatedAt,
+				UpdatedAt:     replyOrTag.UpdatedAt,
+			}
+			if replyOrTag.ReplyToUserID != nil {
+				err = s.userService.GetUserImage(ctx, replyOrTag.ReplyToUser)
+				if err != nil {
+					return nil, err
+				}
+
+				secureReplyToUser := &user.SecureUser{
+					ID:                   *replyOrTag.ReplyToUserID,
+					Fullname:             replyOrTag.ReplyToUser.Fullname,
+					Username:             replyOrTag.ReplyToUser.Username,
+					Email:                replyOrTag.ReplyToUser.Email,
+					DateOfBirth:          replyOrTag.ReplyToUser.DateOfBirth,
+					ProfileUrl:           replyOrTag.ReplyToUser.ProfileUrl,
+					ProfileBackgroundUrl: replyOrTag.ReplyToUser.ProfileBackgroundUrl,
+					Info:                 replyOrTag.ReplyToUser.Info,
+					Role:                 replyOrTag.ReplyToUser.Role,
+					ProviderType:         replyOrTag.ReplyToUser.ProviderType,
+					CreatedAt:            replyOrTag.ReplyToUser.CreatedAt,
+					UpdatedAt:            replyOrTag.ReplyToUser.UpdatedAt,
+				}
+				updateReplyOrTag.ReplyToUser = secureReplyToUser
+			}
+			replyOrTags = append(replyOrTags, updateReplyOrTag)
+		}
+
+		commentCursorPagination := Comment{
+			ID:           comment.ID,
+			Message:      comment.Message,
+			PostID:       comment.PostID,
+			UserID:       comment.UserID,
+			User:         secureUserComment,
+			Likes:        updateUserLikes,
+			Replies:      replyOrTags,
+			FileURL:      fileURL,
+			RepliesCount: len(comment.Replies),
+			CreatedAt:    comment.CreatedAt,
+			UpdatedAt:    comment.UpdatedAt,
+		}
+		commentsCursorPagination = append(commentsCursorPagination, commentCursorPagination)
+	}
+
+	if len(commentsCursorPagination) > 0 {
+		nextCursor = &commentsCursorPagination[len(commentsCursorPagination)-1].ID
+	}
+
+	commentCursorPagination := &CommentCursorPagination{
+		Comments:   commentsCursorPagination,
+		NextCursor: nextCursor,
+	}
+
+	return commentCursorPagination, nil
 }

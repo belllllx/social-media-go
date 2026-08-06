@@ -8,6 +8,15 @@ import (
 	server "github.com/zishang520/socket.io/servers/socket/v3"
 )
 
+type CommentLikeDTO struct {
+	ID        int64            `json:"id"`
+	UserID    uuid.UUID        `json:"userId"`
+	User      *user.SecureUser `json:"user,omitempty"`
+	CommentID uuid.UUID        `json:"commentId"`
+	CreatedAt time.Time        `json:"createdAt"`
+	UpdatedAt time.Time        `json:"updatedAt"`
+}
+
 type CommentDTO struct {
 	ID            uuid.UUID        `json:"id"`
 	Message       *string          `json:"message"`

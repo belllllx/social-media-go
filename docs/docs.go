@@ -773,6 +773,83 @@ const docTemplate = `{
                 }
             }
         },
+        "/comment/finds/{postID}": {
+            "get": {
+                "description": "authentication and find comments cursor pagination",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "comment"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "uuid for post id",
+                        "name": "postID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "cursor uuid for comment id",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "limit for comments cursor pagination",
+                        "name": "limit",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SwaggerResponseWithData"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/comment.CommentCursorPagination"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/comment/reply/create/{postID}/{parentID}": {
             "post": {
                 "description": "authentication create reply comment and socket emit reply and notification to client",
@@ -1778,6 +1855,64 @@ const docTemplate = `{
                 }
             }
         },
+        "comment.Comment": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "fileUrl": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "likes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/comment.Like"
+                    }
+                },
+                "message": {
+                    "type": "string"
+                },
+                "postId": {
+                    "type": "string"
+                },
+                "replies": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/comment.ReplyOrTag"
+                    }
+                },
+                "repliesCount": {
+                    "type": "integer"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/user.SecureUser"
+                },
+                "userId": {
+                    "type": "string"
+                }
+            }
+        },
+        "comment.CommentCursorPagination": {
+            "type": "object",
+            "properties": {
+                "comments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/comment.Comment"
+                    }
+                },
+                "nextCursor": {
+                    "type": "string"
+                }
+            }
+        },
         "comment.CreateCommentRequest": {
             "type": "object",
             "properties": {
@@ -1800,6 +1935,76 @@ const docTemplate = `{
                 },
                 "id": {
                     "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "parentId": {
+                    "type": "string"
+                },
+                "postId": {
+                    "type": "string"
+                },
+                "replyId": {
+                    "type": "string"
+                },
+                "replyToUser": {
+                    "$ref": "#/definitions/user.SecureUser"
+                },
+                "replyToUserId": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/user.SecureUser"
+                },
+                "userId": {
+                    "type": "string"
+                }
+            }
+        },
+        "comment.Like": {
+            "type": "object",
+            "properties": {
+                "commentId": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/user.SecureUser"
+                },
+                "userId": {
+                    "type": "string"
+                }
+            }
+        },
+        "comment.ReplyOrTag": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "fileUrl": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "likes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/comment.Like"
+                    }
                 },
                 "message": {
                     "type": "string"
