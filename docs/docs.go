@@ -1662,7 +1662,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/post.Post"
+                                            "$ref": "#/definitions/post.UpdatedPost"
                                         }
                                     }
                                 }
@@ -2131,9 +2131,6 @@ const docTemplate = `{
                 "message": {
                     "type": "string"
                 },
-                "parentId": {
-                    "type": "string"
-                },
                 "updatedAt": {
                     "type": "string"
                 },
@@ -2177,22 +2174,7 @@ const docTemplate = `{
         "post.DeletedPost": {
             "type": "object",
             "properties": {
-                "createdAt": {
-                    "type": "string"
-                },
                 "id": {
-                    "type": "string"
-                },
-                "message": {
-                    "type": "string"
-                },
-                "parentId": {
-                    "type": "string"
-                },
-                "updatedAt": {
-                    "type": "string"
-                },
-                "userId": {
                     "type": "string"
                 }
             }
@@ -2296,9 +2278,6 @@ const docTemplate = `{
                 "message": {
                     "type": "string"
                 },
-                "parentId": {
-                    "type": "string"
-                },
                 "updatedAt": {
                     "type": "string"
                 },
@@ -2327,6 +2306,23 @@ const docTemplate = `{
                 },
                 "shouldDeleteCurrentFiles": {
                     "type": "boolean"
+                }
+            }
+        },
+        "post.UpdatedPost": {
+            "type": "object",
+            "properties": {
+                "filesUrl": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
                 }
             }
         },

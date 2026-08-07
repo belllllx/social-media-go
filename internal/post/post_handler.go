@@ -334,7 +334,7 @@ func (h *postHandler) FindWithID(c *gin.Context) {
 //	@Produce		json
 //	@Param			postID	path		string				true	"uuid for post id"
 //	@Param			payload	body		UpdatePostRequest	false	"update post payload"
-//	@Success		200		{object}	response.SwaggerResponseWithData{data=Post}
+//	@Success		200		{object}	response.SwaggerResponseWithData{data=UpdatedPost}
 //	@Failure		400		{object}	response.SwaggerBadRequestResponse
 //	@Failure		401		{object}	response.SwaggerResponse
 //	@Failure		404		{object}	response.SwaggerResponse

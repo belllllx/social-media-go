@@ -8,17 +8,6 @@ import (
 	server "github.com/zishang520/socket.io/servers/socket/v3"
 )
 
-type PostParentDTO struct {
-	ID        uuid.UUID        `json:"id"`
-	Message   *string          `json:"message"`
-	UserID    uuid.UUID        `json:"userId"`
-	User      *user.SecureUser `json:"user"`
-	ParentID  *uuid.UUID       `json:"parentId"`
-	FilesURL  []string         `json:"filesUrl"`
-	CreatedAt time.Time        `json:"createdAt"`
-	UpdatedAt time.Time        `json:"updatedAt"`
-}
-
 type PostLikeDTO struct {
 	ID        int64            `json:"id"`
 	UserID    uuid.UUID        `json:"userId"`
@@ -28,24 +17,42 @@ type PostLikeDTO struct {
 	UpdatedAt time.Time        `json:"updatedAt"`
 }
 
-type PostDTO struct {
-	ID            uuid.UUID        `json:"id"`
-	Message       *string          `json:"message"`
-	UserID        uuid.UUID        `json:"userId"`
-	User          *user.SecureUser `json:"user,omitempty"`
-	ParentID      *uuid.UUID       `json:"parentId"`
-	Parent        *PostParentDTO   `json:"parent,omitempty"`
-	Likes         []PostLikeDTO    `json:"likes,omitempty"`
-	FilesURL      []string         `json:"filesUrl,omitempty"`
-	CommentsCount int              `json:"commentsCount,omitempty"`
-	CreatedAt     time.Time        `json:"createdAt"`
-	UpdatedAt     time.Time        `json:"updatedAt"`
+type DeletePostDTO struct {
+	ID uuid.UUID `json:"id"`
+}
+
+type UpdatePostDTO struct {
+	ID       uuid.UUID `json:"id"`
+	Message  *string   `json:"message"`
+	FilesURL []string  `json:"filesUrl"`
+}
+
+type PostParentDTO struct {
+	ID        uuid.UUID        `json:"id"`
+	Message   *string          `json:"message"`
+	UserID    uuid.UUID        `json:"userId"`
+	User      *user.SecureUser `json:"user"`
+	FilesURL  []string         `json:"filesUrl"`
+	CreatedAt time.Time        `json:"createdAt"`
+	UpdatedAt time.Time        `json:"updatedAt"`
+}
+
+type CreatePostDTO struct {
+	ID        uuid.UUID        `json:"id"`
+	Message   *string          `json:"message"`
+	UserID    uuid.UUID        `json:"userId"`
+	User      *user.SecureUser `json:"user"`
+	ParentID  *uuid.UUID       `json:"parentId"`
+	Parent    *PostParentDTO   `json:"parent,omitempty"`
+	FilesURL  []string         `json:"filesUrl,omitempty"`
+	CreatedAt time.Time        `json:"createdAt"`
+	UpdatedAt time.Time        `json:"updatedAt"`
 }
 
 type PostSocket interface {
-	EmitCreate(postDTO *PostDTO)
-	EmitUpdate(postDTO *PostDTO)
-	EmitDelete(postDTO *PostDTO)
+	EmitCreate(createPostDTO *CreatePostDTO)
+	EmitUpdate(updatePostDTO *UpdatePostDTO)
+	EmitDelete(deletePostDTO *DeletePostDTO)
 	EmitLikeOrUnlike(postLikeDTO *PostLikeDTO)
 }
 
@@ -57,16 +64,16 @@ func NewPostSocket(socket *server.Server) PostSocket {
 	return &postSocket{socket: socket}
 }
 
-func (s *postSocket) EmitCreate(postDTO *PostDTO) {
-	s.socket.Emit("newPost", postDTO)
+func (s *postSocket) EmitCreate(createPostDTO *CreatePostDTO) {
+	s.socket.Emit("newPost", createPostDTO)
 }
 
-func (s *postSocket) EmitUpdate(postDTO *PostDTO) {
-	s.socket.Emit("updatePost", postDTO)
+func (s *postSocket) EmitUpdate(updatePostDTO *UpdatePostDTO) {
+	s.socket.Emit("updatePost", updatePostDTO)
 }
 
-func (s *postSocket) EmitDelete(postDTO *PostDTO) {
-	s.socket.Emit("deletePost", postDTO)
+func (s *postSocket) EmitDelete(deletePostDTO *DeletePostDTO) {
+	s.socket.Emit("deletePost", deletePostDTO)
 }
 
 func (s *postSocket) EmitLikeOrUnlike(postLikeDTO *PostLikeDTO) {

@@ -12,16 +12,16 @@ import (
 
 type EmitNotificationDTO struct {
 	ID         uuid.UUID               `json:"id"`
-	Type       models.NotificationType `json:"type"`
-	Message    string                  `json:"message"`
-	IsRead     bool                    `json:"isRead"`
-	SenderID   uuid.UUID               `json:"senderId"`
+	Type       models.NotificationType `json:"type,omitempty"`
+	Message    string                  `json:"message,omitempty"`
+	IsRead     bool                    `json:"isRead,omitempty"`
+	SenderID   uuid.UUID               `json:"senderId,omitempty"`
 	Sender     *user.SecureUser        `json:"sender,omitempty"`
-	ReceiverID uuid.UUID               `json:"receiverId"`
+	ReceiverID uuid.UUID               `json:"receiverId,omitempty"`
 	PostID     *uuid.UUID              `json:"postId,omitempty"`
 	CommentID  *uuid.UUID              `json:"commentId,omitempty"`
-	CreatedAt  time.Time               `json:"createdAt"`
-	UpdatedAt  time.Time               `json:"updatedAt"`
+	CreatedAt  time.Time               `json:"createdAt,omitempty"`
+	UpdatedAt  time.Time               `json:"updatedAt,omitempty"`
 }
 
 type NotificationSocket interface {

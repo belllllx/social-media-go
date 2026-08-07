@@ -65,7 +65,7 @@ type PostRepository interface {
 		db *gorm.DB,
 		postID uuid.UUID,
 		updatePost *models.Post,
-	) error
+	) (*models.Post, error)
 	Delete(
 		ctx context.Context,
 		db *gorm.DB,
@@ -259,17 +259,23 @@ func (r *postRepositoryDB) Update(
 	db *gorm.DB,
 	postID uuid.UUID,
 	updatePost *models.Post,
-) error {
+) (*models.Post, error) {
 	post := &models.Post{}
 	err := db.
 		WithContext(ctx).
 		Model(post).
+		Clauses(clause.Returning{
+			Columns: []clause.Column{
+				{Name: "id"},
+				{Name: "message"},
+			},
+		}).
 		Where("id = ?", postID).
 		Updates(*updatePost).Error
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return post, nil
 }
 
 func (r *postRepositoryDB) Delete(
@@ -280,7 +286,11 @@ func (r *postRepositoryDB) Delete(
 	post := &models.Post{}
 	err := db.
 		WithContext(ctx).
-		Clauses(clause.Returning{}).
+		Clauses(clause.Returning{
+			Columns: []clause.Column{
+				{Name: "id"},
+			},
+		}).
 		Where("id = ?", postID).
 		Delete(post).Error
 	if err != nil {

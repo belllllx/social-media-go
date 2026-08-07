@@ -1656,7 +1656,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/post.Post"
+                                            "$ref": "#/definitions/post.UpdatedPost"
                                         }
                                     }
                                 }
@@ -2125,9 +2125,6 @@
                 "message": {
                     "type": "string"
                 },
-                "parentId": {
-                    "type": "string"
-                },
                 "updatedAt": {
                     "type": "string"
                 },
@@ -2171,22 +2168,7 @@
         "post.DeletedPost": {
             "type": "object",
             "properties": {
-                "createdAt": {
-                    "type": "string"
-                },
                 "id": {
-                    "type": "string"
-                },
-                "message": {
-                    "type": "string"
-                },
-                "parentId": {
-                    "type": "string"
-                },
-                "updatedAt": {
-                    "type": "string"
-                },
-                "userId": {
                     "type": "string"
                 }
             }
@@ -2290,9 +2272,6 @@
                 "message": {
                     "type": "string"
                 },
-                "parentId": {
-                    "type": "string"
-                },
                 "updatedAt": {
                     "type": "string"
                 },
@@ -2321,6 +2300,23 @@
                 },
                 "shouldDeleteCurrentFiles": {
                     "type": "boolean"
+                }
+            }
+        },
+        "post.UpdatedPost": {
+            "type": "object",
+            "properties": {
+                "filesUrl": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
                 }
             }
         },

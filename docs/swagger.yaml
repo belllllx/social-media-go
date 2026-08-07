@@ -250,8 +250,6 @@ definitions:
         type: string
       message:
         type: string
-      parentId:
-        type: string
       updatedAt:
         type: string
       user:
@@ -280,17 +278,7 @@ definitions:
     type: object
   post.DeletedPost:
     properties:
-      createdAt:
-        type: string
       id:
-        type: string
-      message:
-        type: string
-      parentId:
-        type: string
-      updatedAt:
-        type: string
-      userId:
         type: string
     type: object
   post.Like:
@@ -358,8 +346,6 @@ definitions:
         type: string
       message:
         type: string
-      parentId:
-        type: string
       updatedAt:
         type: string
       user:
@@ -379,6 +365,17 @@ definitions:
         type: string
       shouldDeleteCurrentFiles:
         type: boolean
+    type: object
+  post.UpdatedPost:
+    properties:
+      filesUrl:
+        items:
+          type: string
+        type: array
+      id:
+        type: string
+      message:
+        type: string
     type: object
   response.SwaggerBadRequestResponse:
     properties:
@@ -1598,7 +1595,7 @@ paths:
             - $ref: '#/definitions/response.SwaggerResponseWithData'
             - properties:
                 data:
-                  $ref: '#/definitions/post.Post'
+                  $ref: '#/definitions/post.UpdatedPost'
               type: object
         "400":
           description: Bad Request
