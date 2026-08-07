@@ -1197,7 +1197,7 @@ func (s *commentService) FindsWithPostIDCursorPagination(
 		commentsCursorPagination = append(commentsCursorPagination, commentCursorPagination)
 	}
 
-	if len(commentsCursorPagination) > 0 {
+	if len(commentsCursorPagination) == limitInt {
 		nextCursor = &commentsCursorPagination[len(commentsCursorPagination)-1].ID
 	}
 

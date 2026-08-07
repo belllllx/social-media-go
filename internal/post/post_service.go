@@ -815,7 +815,7 @@ func (s *postService) FindsCursorPagination(
 		postsCursorPagination = append(postsCursorPagination, postCursorPagination)
 	}
 
-	if len(postsCursorPagination) > 0 {
+	if len(postsCursorPagination) == limitInt {
 		nextCursor = &postsCursorPagination[len(postsCursorPagination)-1].ID
 	}
 	postCursorPagination := &PostCursorPagination{
@@ -1045,7 +1045,7 @@ func (s *postService) FindsWithUserIDCursorPagination(
 		postsCursorPagination = append(postsCursorPagination, postCursorPagination)
 	}
 
-	if len(postsCursorPagination) > 0 {
+	if len(postsCursorPagination) == limitInt {
 		nextCursor = &postsCursorPagination[len(postsCursorPagination)-1].ID
 	}
 	postCursorPagination := &PostCursorPagination{
