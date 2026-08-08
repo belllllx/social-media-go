@@ -185,6 +185,26 @@ definitions:
       userId:
         type: string
     type: object
+  comment.UpdateCommentRequest:
+    properties:
+      fileUrl:
+        type: string
+      message:
+        type: string
+      shouldDeleteCurrentFile:
+        type: boolean
+    type: object
+  comment.UpdatedComment:
+    properties:
+      fileUrl:
+        type: string
+      id:
+        type: string
+      message:
+        type: string
+      postId:
+        type: string
+    type: object
   file.DeleteFileRequest:
     properties:
       fileUrl:
@@ -1178,6 +1198,52 @@ paths:
             - properties:
                 data:
                   $ref: '#/definitions/comment.CreatedComment'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - comment
+  /comment/update/{commentID}:
+    patch:
+      consumes:
+      - application/json
+      description: authentication update comment and socket emit comment to client
+      parameters:
+      - description: uuid for comment id
+        in: path
+        name: commentID
+        required: true
+        type: string
+      - description: update comment payload
+        in: body
+        name: payload
+        schema:
+          $ref: '#/definitions/comment.UpdateCommentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SwaggerResponseWithData'
+            - properties:
+                data:
+                  $ref: '#/definitions/comment.UpdatedComment'
               type: object
         "400":
           description: Bad Request

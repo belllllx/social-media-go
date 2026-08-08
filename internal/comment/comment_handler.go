@@ -9,6 +9,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type UpdateCommentRequest struct {
+	Message                 *string `json:"message"`
+	FileURL                 string  `json:"fileUrl" binding:"omitempty,presignedurl"`
+	ShouldDeleteCurrentFile bool    `json:"shouldDeleteCurrentFile"`
+}
+
 type CreateCommentRequest struct {
 	Message string `json:"message"`
 	FileURL string `json:"fileUrl" binding:"omitempty,presignedurl"`
@@ -21,6 +27,7 @@ type CommentHandler interface {
 	CreateReplyComment(c *gin.Context)
 	CreateTagReply(c *gin.Context)
 	FindsWithPostIDCursorPagination(c *gin.Context)
+	UpdateComment(c *gin.Context)
 }
 
 type commentHandler struct {
@@ -298,4 +305,44 @@ func (h *commentHandler) FindsWithPostIDCursorPagination(c *gin.Context) {
 	}
 
 	response.Ok(c, "Comments retrive successfully", commentCursorPagination)
+}
+
+// UpdateComment godoc
+//
+//	@Description	authentication update comment and socket emit comment to client
+//	@Tags			comment
+//	@Accept			json
+//	@Produce		json
+//	@Param			commentID	path		string					true	"uuid for comment id"
+//	@Param			payload		body		UpdateCommentRequest	false	"update comment payload"
+//	@Success		200			{object}	response.SwaggerResponseWithData{data=UpdatedComment}
+//	@Failure		400			{object}	response.SwaggerBadRequestResponse
+//	@Failure		401			{object}	response.SwaggerResponse
+//	@Failure		404			{object}	response.SwaggerResponse
+//	@Failure		500			{object}	response.SwaggerResponse
+//	@Router			/comment/update/{commentID} [patch]
+func (h *commentHandler) UpdateComment(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	updateCommentRequest := &UpdateCommentRequest{}
+	err := c.ShouldBind(updateCommentRequest)
+	if err != nil {
+		response.AbortWithError(c, err)
+		return
+	}
+
+	commentID := c.Param("commentID")
+	updateCommentDTO := &UpdateCommentDTO{
+		Message:                 updateCommentRequest.Message,
+		FileURL:                 updateCommentRequest.FileURL,
+		CommentID:               commentID,
+		ShouldDeleteCurrentFile: updateCommentRequest.ShouldDeleteCurrentFile,
+	}
+	updatedComment, err := h.commentService.UpdateComment(ctx, updateCommentDTO)
+	if err != nil {
+		helpers.HandleError(c, err)
+		return
+	}
+
+	response.Ok(c, "Update comment successfully", updatedComment)
 }

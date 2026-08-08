@@ -8,6 +8,7 @@ import (
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Cursor struct {
@@ -48,6 +49,12 @@ type CommentRepository interface {
 		cursor *Cursor,
 		limit int,
 	) ([]models.Comment, error)
+	Update(
+		ctx context.Context,
+		db *gorm.DB,
+		commentID uuid.UUID,
+		updateComment *models.Comment,
+	) (*models.Comment, error)
 }
 
 type commentRepositoryDB struct {
@@ -179,4 +186,29 @@ func (r *commentRepositoryDB) FindsByPostIDCursorPaginationWithCommentRelations(
 		return nil, err
 	}
 	return *comments, nil
+}
+
+func (r *commentRepositoryDB) Update(
+	ctx context.Context,
+	db *gorm.DB,
+	commentID uuid.UUID,
+	updateComment *models.Comment,
+) (*models.Comment, error) {
+	comment := &models.Comment{}
+	err := db.
+		WithContext(ctx).
+		Model(comment).
+		Clauses(clause.Returning{
+			Columns: []clause.Column{
+				{Name: "id"},
+				{Name: "message"},
+				{Name: "post_id"},
+			},
+		}).
+		Where("id = ?", commentID).
+		Updates(*updateComment).Error
+	if err != nil {
+		return nil, err
+	}
+	return comment, nil
 }

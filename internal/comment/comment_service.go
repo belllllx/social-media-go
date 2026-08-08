@@ -21,6 +21,13 @@ import (
 	"gorm.io/gorm"
 )
 
+type UpdateCommentDTO struct {
+	Message                 *string
+	FileURL                 string
+	CommentID               string
+	ShouldDeleteCurrentFile bool
+}
+
 type CreateTagReplyDTO struct {
 	Message  string
 	FileURL  string
@@ -43,6 +50,13 @@ type CreateCommentDTO struct {
 	FileURL string
 	PostID  string
 	UserID  uuid.UUID
+}
+
+type UpdatedComment struct {
+	ID      uuid.UUID `json:"id"`
+	Message *string   `json:"message"`
+	PostID  uuid.UUID `json:"postId"`
+	FileURL string    `json:"fileUrl"`
 }
 
 type Like struct {
@@ -114,6 +128,7 @@ type CommentService interface {
 		cursor,
 		limit string,
 	) (*CommentCursorPagination, error)
+	UpdateComment(ctx context.Context, updateCommentDTO *UpdateCommentDTO) (*UpdatedComment, error)
 }
 
 type commentService struct {
@@ -297,7 +312,7 @@ func (s *commentService) CreateComment(ctx context.Context, createCommentDTO *Cr
 		CreatedAt:            comment.User.CreatedAt,
 		UpdatedAt:            comment.User.UpdatedAt,
 	}
-	commentDTO := &socket.CommentDTO{
+	createCommentDTOSocket := &socket.CreateCommentDTO{
 		ID:        comment.ID,
 		Message:   comment.Message,
 		PostID:    comment.PostID,
@@ -323,11 +338,11 @@ func (s *commentService) CreateComment(ctx context.Context, createCommentDTO *Cr
 			return nil, err
 		}
 
-		commentDTO.FileURL = fileURL
+		createCommentDTOSocket.FileURL = fileURL
 		commentResp.FileURL = fileURL
 	}
 
-	go s.commentSocket.EmitCreate(commentDTO)
+	go s.commentSocket.EmitCreate(createCommentDTOSocket)
 
 	// ต้องไม่ comment post ตัวเองถึง emit notification
 	if postByID.UserID != createCommentDTO.UserID {
@@ -541,7 +556,7 @@ func (s *commentService) CreateReplyComment(ctx context.Context, createReplyComm
 		CreatedAt:            reply.User.CreatedAt,
 		UpdatedAt:            reply.User.UpdatedAt,
 	}
-	replyDTO := &socket.CommentDTO{
+	createReplyDTOSocket := &socket.CreateCommentDTO{
 		ID:        reply.ID,
 		Message:   reply.Message,
 		PostID:    reply.PostID,
@@ -569,11 +584,11 @@ func (s *commentService) CreateReplyComment(ctx context.Context, createReplyComm
 			return nil, err
 		}
 
-		replyDTO.FileURL = fileURL
+		createReplyDTOSocket.FileURL = fileURL
 		replyResp.FileURL = fileURL
 	}
 
-	go s.commentSocket.EmitCreate(replyDTO)
+	go s.commentSocket.EmitCreate(createReplyDTOSocket)
 
 	// ต้องไม่ reply comment ตัวเองถึง emit notification
 	if commentByID.UserID != createReplyCommentDTO.UserID {
@@ -835,7 +850,7 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 		CreatedAt:            tag.ReplyToUser.CreatedAt,
 		UpdatedAt:            tag.ReplyToUser.UpdatedAt,
 	}
-	tagDTO := &socket.CommentDTO{
+	createTagDTOSocket := &socket.CreateCommentDTO{
 		ID:            tag.ID,
 		Message:       tag.Message,
 		PostID:        tag.PostID,
@@ -869,11 +884,11 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 			return nil, err
 		}
 
-		tagDTO.FileURL = fileURL
+		createTagDTOSocket.FileURL = fileURL
 		tagResp.FileURL = fileURL
 	}
 
-	go s.commentSocket.EmitCreate(tagDTO)
+	go s.commentSocket.EmitCreate(createTagDTOSocket)
 
 	// ต้องไม่ tag reply ตัวเองถึง emit notification
 	if replyByID.UserID != createTagReplyDTO.UserID {
@@ -1207,4 +1222,143 @@ func (s *commentService) FindsWithPostIDCursorPagination(
 	}
 
 	return commentCursorPagination, nil
+}
+
+func (s *commentService) UpdateComment(ctx context.Context, updateCommentDTO *UpdateCommentDTO) (*UpdatedComment, error) {
+	if updateCommentDTO.Message == nil && updateCommentDTO.FileURL == "" {
+		return nil, errs.NewBadRequestErrorWithMessage("Update comment must contains with message or file")
+	}
+
+	err := helpers.ValidateUUID(updateCommentDTO.CommentID)
+	if err != nil {
+		logs.Warn(err)
+		return nil, err
+	}
+
+	commentIDParse, err := helpers.ParseUUID(updateCommentDTO.CommentID)
+	if err != nil {
+		logs.Error(err)
+		return nil, err
+	}
+
+	commentByID, err := s.commentRepository.FindByID(
+		ctx,
+		s.db,
+		*commentIDParse,
+	)
+	if err != nil && !helpers.IsErrRecordNotFound(err) {
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find comment by id")
+	}
+
+	if helpers.IsErrRecordNotFound(err) {
+		logs.Warn(err)
+		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Comment by id %v is not found", *commentIDParse))
+	}
+
+	updatedComment := &models.Comment{}
+	var file *models.File
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		updateComment := &models.Comment{
+			Message: updateCommentDTO.Message,
+		}
+		updatedComment, err = s.commentRepository.Update(
+			ctx,
+			tx,
+			commentByID.ID,
+			updateComment,
+		)
+		if err != nil {
+			logs.Error(err)
+			return errs.NewInternalServerErrorWithMessage("Failed to update comment")
+		}
+
+		// กรณีมีไฟล์และลบรูปปัจจุบัน
+		if updateCommentDTO.FileURL != "" && updateCommentDTO.ShouldDeleteCurrentFile {
+			file, err = s.fileRepository.FindByContentID(
+				ctx,
+				tx,
+				updatedComment.ID,
+			)
+			if err != nil && !helpers.IsErrRecordNotFound(err) {
+				logs.Error(err)
+				return errs.NewInternalServerErrorWithMessage("Failed to find file of comment")
+			}
+
+			if file != nil {
+				err = s.fileRepository.Delete(
+					ctx,
+					tx,
+					file.ID,
+					file.Filename,
+					file.FileType,
+				)
+				if err != nil {
+					logs.Error(err)
+					return errs.NewInternalServerErrorWithMessage("Failed to delete file of comment")
+				}
+			}
+
+			fileDIR, filename, err := helpers.SplitPresignedURL(updateCommentDTO.FileURL)
+			if err != nil {
+				logs.Error(err)
+				return errs.NewUnexpectedErrorWithMessage("Failed to split presigned url")
+			}
+
+			filePath := fmt.Sprintf("%s/%s", fileDIR, filename)
+			err = s.fileRepository.UpdateContentID(
+				ctx,
+				tx,
+				updatedComment.ID,
+				filePath,
+				models.FileTypeComment,
+			)
+			if err != nil {
+				logs.Error(err)
+				return errs.NewInternalServerErrorWithMessage("Failed to update file of comment")
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		_, ok := err.(*errs.AppError)
+		if !ok {
+			logs.Error(err)
+		}
+		return nil, err
+	}
+
+	if file != nil {
+		_, err = helpers.DeleteObject(
+			ctx,
+			s.s3Client,
+			file.Filename,
+		)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to delete file from bucket")
+		}
+	}
+
+	fileURL, err := s.fileService.PresignGetFile(ctx, updatedComment.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	updateCommentSocketDTO := &socket.UpdateCommentDTO{
+		ID:      updatedComment.ID,
+		Message: updatedComment.Message,
+		PostID:  updatedComment.PostID,
+		FileURL: fileURL,
+	}
+	updateCommentResp := &UpdatedComment{
+		ID:      updatedComment.ID,
+		Message: updatedComment.Message,
+		PostID:  updatedComment.PostID,
+		FileURL: fileURL,
+	}
+
+	go s.commentSocket.EmitUpdate(updateCommentSocketDTO)
+	return updateCommentResp, nil
 }

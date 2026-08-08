@@ -17,7 +17,14 @@ type CommentLikeDTO struct {
 	UpdatedAt time.Time        `json:"updatedAt"`
 }
 
-type CommentDTO struct {
+type UpdateCommentDTO struct {
+	ID      uuid.UUID `json:"id"`
+	Message *string   `json:"message"`
+	PostID  uuid.UUID `json:"postId"`
+	FileURL string    `json:"fileUrl"`
+}
+
+type CreateCommentDTO struct {
 	ID            uuid.UUID        `json:"id"`
 	Message       *string          `json:"message"`
 	PostID        uuid.UUID        `json:"postId"`
@@ -33,7 +40,8 @@ type CommentDTO struct {
 }
 
 type CommentSocket interface {
-	EmitCreate(commentDTO *CommentDTO)
+	EmitCreate(createCommentDTO *CreateCommentDTO)
+	EmitUpdate(updateCommentDTO *UpdateCommentDTO)
 }
 
 type commentSocket struct {
@@ -44,6 +52,10 @@ func NewCommentSocket(socket *server.Server) CommentSocket {
 	return &commentSocket{socket: socket}
 }
 
-func (s *commentSocket) EmitCreate(commentDTO *CommentDTO) {
-	s.socket.Emit("newComment", commentDTO)
+func (s *commentSocket) EmitCreate(createCommentDTO *CreateCommentDTO) {
+	s.socket.Emit("newComment", createCommentDTO)
+}
+
+func (s *commentSocket) EmitUpdate(updateCommentDTO *UpdateCommentDTO) {
+	s.socket.Emit("updateComment", updateCommentDTO)
 }

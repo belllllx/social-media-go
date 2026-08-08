@@ -1264,12 +1264,12 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", *postID))
 	}
 
-	updatePost := &models.Post{
-		Message: updatePostDTO.Message,
-	}
 	updatedPost := &models.Post{}
 	files := []models.File{}
 	err = s.db.Transaction(func(tx *gorm.DB) error {
+		updatePost := &models.Post{
+			Message: updatePostDTO.Message,
+		}
 		updatedPost, err = s.postRepository.Update(
 			ctx,
 			tx,
@@ -1311,6 +1311,7 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 					logs.Error(err)
 					return errs.NewUnexpectedErrorWithMessage("Failed to split presigned url")
 				}
+
 				filePath := fmt.Sprintf("%s/%s", fileDIR, filename)
 				err = s.fileRepository.UpdateContentID(
 					ctx,
@@ -1336,22 +1337,6 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 		return nil, err
 	}
 
-	filesURL, err := s.fileService.PresignGetFiles(ctx, updatedPost.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	updatePostDTOSocket := &socket.UpdatePostDTO{
-		ID:       updatedPost.ID,
-		Message:  updatedPost.Message,
-		FilesURL: filesURL,
-	}
-	updatePostResp := &UpdatedPost{
-		ID:       updatedPost.ID,
-		Message:  updatedPost.Message,
-		FilesURL: filesURL,
-	}
-
 	if len(files) > 0 {
 		keys := []string{}
 		for _, file := range files {
@@ -1367,6 +1352,22 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to delete files from bucket")
 		}
+	}
+
+	filesURL, err := s.fileService.PresignGetFiles(ctx, updatedPost.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	updatePostDTOSocket := &socket.UpdatePostDTO{
+		ID:       updatedPost.ID,
+		Message:  updatedPost.Message,
+		FilesURL: filesURL,
+	}
+	updatePostResp := &UpdatedPost{
+		ID:       updatedPost.ID,
+		Message:  updatedPost.Message,
+		FilesURL: filesURL,
 	}
 
 	go s.postSocket.EmitUpdate(updatePostDTOSocket)
