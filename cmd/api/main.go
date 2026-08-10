@@ -237,6 +237,7 @@ func main() {
 		comment.POST("/tag/create/:postID/:parentID/:replyID", commentHandler.CreateTagReply)
 		comment.GET("/finds/:postID", commentHandler.FindsWithPostIDCursorPagination)
 		comment.PATCH("/update/:commentID", commentHandler.UpdateComment)
+		comment.DELETE("/delete/:commentID", commentHandler.DeleteComment)
 	}
 
 	app.Run()

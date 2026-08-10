@@ -27,12 +27,17 @@ type CommentRepository interface {
 		db *gorm.DB,
 		commentID uuid.UUID,
 	) (*models.Comment, error)
-	FindByIDWithUserRelation(
+	FindByIDWithUserAndPostRelations(
 		ctx context.Context,
 		db *gorm.DB,
 		commentID uuid.UUID,
 	) (*models.Comment, error)
-	FindByIDWithUserAndReplyToUserRelations(
+	FindByIDWithCommentRelations(
+		ctx context.Context,
+		db *gorm.DB,
+		commentID uuid.UUID,
+	) (*models.Comment, error)
+	FindByIDWithPostAndParentRelations(
 		ctx context.Context,
 		db *gorm.DB,
 		commentID uuid.UUID,
@@ -54,6 +59,11 @@ type CommentRepository interface {
 		db *gorm.DB,
 		commentID uuid.UUID,
 		updateComment *models.Comment,
+	) (*models.Comment, error)
+	Delete(
+		ctx context.Context,
+		db *gorm.DB,
+		commentID uuid.UUID,
 	) (*models.Comment, error)
 }
 
@@ -88,7 +98,7 @@ func (r *commentRepositoryDB) FindByID(
 	return comment, nil
 }
 
-func (r *commentRepositoryDB) FindByIDWithUserRelation(
+func (r *commentRepositoryDB) FindByIDWithUserAndPostRelations(
 	ctx context.Context,
 	db *gorm.DB,
 	commentID uuid.UUID,
@@ -98,6 +108,7 @@ func (r *commentRepositoryDB) FindByIDWithUserRelation(
 		WithContext(ctx).
 		Where("id = ?", commentID).
 		Preload("User", helpers.OmitUserPasswordHash).
+		Preload("Post").
 		Take(comment).Error
 	if err != nil {
 		return nil, err
@@ -105,7 +116,7 @@ func (r *commentRepositoryDB) FindByIDWithUserRelation(
 	return comment, nil
 }
 
-func (r *commentRepositoryDB) FindByIDWithUserAndReplyToUserRelations(
+func (r *commentRepositoryDB) FindByIDWithCommentRelations(
 	ctx context.Context,
 	db *gorm.DB,
 	commentID uuid.UUID,
@@ -116,6 +127,25 @@ func (r *commentRepositoryDB) FindByIDWithUserAndReplyToUserRelations(
 		Where("id = ?", commentID).
 		Preload("User", helpers.OmitUserPasswordHash).
 		Preload("ReplyToUser", helpers.OmitUserPasswordHash).
+		Preload("Post").
+		Take(comment).Error
+	if err != nil {
+		return nil, err
+	}
+	return comment, nil
+}
+
+func (r *commentRepositoryDB) FindByIDWithPostAndParentRelations(
+	ctx context.Context,
+	db *gorm.DB,
+	commentID uuid.UUID,
+) (*models.Comment, error) {
+	comment := &models.Comment{}
+	err := db.
+		WithContext(ctx).
+		Where("id = ?", commentID).
+		Preload("Post").
+		Preload("Parent").
 		Take(comment).Error
 	if err != nil {
 		return nil, err
@@ -207,6 +237,29 @@ func (r *commentRepositoryDB) Update(
 		}).
 		Where("id = ?", commentID).
 		Updates(*updateComment).Error
+	if err != nil {
+		return nil, err
+	}
+	return comment, nil
+}
+
+func (r *commentRepositoryDB) Delete(
+	ctx context.Context,
+	db *gorm.DB,
+	commentID uuid.UUID,
+) (*models.Comment, error) {
+	comment := &models.Comment{}
+	err := db.
+		WithContext(ctx).
+		Clauses(clause.Returning{
+			Columns: []clause.Column{
+				{Name: "id"},
+				{Name: "post_id"},
+				{Name: "parent_id"},
+			},
+		}).
+		Where("id = ?", commentID).
+		Delete(comment).Error
 	if err != nil {
 		return nil, err
 	}

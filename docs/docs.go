@@ -773,6 +773,70 @@ const docTemplate = `{
                 }
             }
         },
+        "/comment/delete/{commentID}": {
+            "delete": {
+                "description": "authentication delete comment and socket emit comment and notification to client",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "comment"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "uuid for comment id",
+                        "name": "commentID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SwaggerResponseWithData"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/comment.DeletedComment"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/comment/finds/{postID}": {
             "get": {
                 "description": "authentication and find comments cursor pagination",
@@ -2036,6 +2100,14 @@ const docTemplate = `{
                     "$ref": "#/definitions/user.SecureUser"
                 },
                 "userId": {
+                    "type": "string"
+                }
+            }
+        },
+        "comment.DeletedComment": {
+            "type": "object",
+            "properties": {
+                "id": {
                     "type": "string"
                 }
             }

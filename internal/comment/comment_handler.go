@@ -28,6 +28,7 @@ type CommentHandler interface {
 	CreateTagReply(c *gin.Context)
 	FindsWithPostIDCursorPagination(c *gin.Context)
 	UpdateComment(c *gin.Context)
+	DeleteComment(c *gin.Context)
 }
 
 type commentHandler struct {
@@ -345,4 +346,39 @@ func (h *commentHandler) UpdateComment(c *gin.Context) {
 	}
 
 	response.Ok(c, "Update comment successfully", updatedComment)
+}
+
+// DeleteComment godoc
+//
+//	@Description	authentication delete comment and socket emit comment and notification to client
+//	@Tags			comment
+//	@Produce		json
+//	@Param			commentID	path		string	true	"uuid for comment id"
+//	@Success		200			{object}	response.SwaggerResponseWithData{data=DeletedComment}
+//	@Failure		400			{object}	response.SwaggerBadRequestResponse
+//	@Failure		401			{object}	response.SwaggerResponse
+//	@Failure		404			{object}	response.SwaggerResponse
+//	@Failure		500			{object}	response.SwaggerResponse
+//	@Router			/comment/delete/{commentID} [delete]
+func (h *commentHandler) DeleteComment(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	user, ok := c.MustGet("user").(*user.SecureUserWithFollowRelations)
+	if !ok {
+		response.AbortWithUnauthorized(c)
+		return
+	}
+
+	commentID := c.Param("commentID")
+	deletedComment, err := h.commentService.DeleteComment(
+		ctx,
+		user.ID,
+		commentID,
+	)
+	if err != nil {
+		helpers.HandleError(c, err)
+		return
+	}
+
+	response.Ok(c, "Delete comment successfully", deletedComment)
 }

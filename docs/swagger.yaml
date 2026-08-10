@@ -139,6 +139,11 @@ definitions:
       userId:
         type: string
     type: object
+  comment.DeletedComment:
+    properties:
+      id:
+        type: string
+    type: object
   comment.Like:
     properties:
       commentId:
@@ -1042,6 +1047,46 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/response.SwaggerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - comment
+  /comment/delete/{commentID}:
+    delete:
+      description: authentication delete comment and socket emit comment and notification
+        to client
+      parameters:
+      - description: uuid for comment id
+        in: path
+        name: commentID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SwaggerResponseWithData'
+            - properties:
+                data:
+                  $ref: '#/definitions/comment.DeletedComment'
+              type: object
         "400":
           description: Bad Request
           schema:

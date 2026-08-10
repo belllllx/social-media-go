@@ -1412,6 +1412,51 @@ func (s *postService) DeletePost(ctx context.Context, postID string) (*DeletedPo
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find files of post")
 	}
 
+	var notification *models.Notification
+	notifications := []models.Notification{}
+
+	// กรณีแชร์โพส
+	if post.ParentID != nil {
+		notification, err = s.notificationRepository.FindOfPost(
+			ctx,
+			s.db,
+			post.UserID,
+			post.Parent.UserID,
+			post.ID,
+		)
+		if err != nil && !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification of share post")
+		}
+	} else {
+		// กรณีโพสปกติ
+		usersExcept, err := s.userRepository.FindsByIDExcept(
+			ctx,
+			s.db,
+			post.UserID,
+		)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find users except")
+		}
+
+		for _, userExcept := range usersExcept {
+			notifications, err := s.notificationRepository.FindsOfPost(
+				ctx,
+				s.db,
+				post.UserID,
+				userExcept.ID,
+				post.ID,
+			)
+			if err != nil {
+				logs.Error(err)
+				return nil, errs.NewInternalServerErrorWithMessage("Failed to find notifications of post")
+			}
+
+			notifications = append(notifications, notifications...)
+		}
+	}
+
 	deletedPost := &models.Post{}
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		if len(files) > 0 {
@@ -1470,18 +1515,6 @@ func (s *postService) DeletePost(ctx context.Context, postID string) (*DeletedPo
 
 	// กรณีแชร์โพส
 	if post.ParentID != nil {
-		notification, err := s.notificationRepository.FindOfPost(
-			ctx,
-			s.db,
-			post.UserID,
-			post.Parent.UserID,
-			post.ID,
-		)
-		if err != nil && !helpers.IsErrRecordNotFound(err) {
-			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification of share post")
-		}
-
 		// กรณีมีแจ้งเตือน emit กลับไปหา client เพื่อลบออก
 		if notification != nil {
 			emitNotificationDTO := &socket.EmitNotificationDTO{
@@ -1489,36 +1522,18 @@ func (s *postService) DeletePost(ctx context.Context, postID string) (*DeletedPo
 			}
 			go s.notificationSocket.EmitNotification(emitNotificationDTO)
 		}
-	}
-
-	// กรณีโพสปกติ
-	usersExcept, err := s.userRepository.FindsByIDExcept(
-		ctx,
-		s.db,
-		post.UserID,
-	)
-	for _, userExcept := range usersExcept {
-		notifications, err := s.notificationRepository.FindsOfPost(
-			ctx,
-			s.db,
-			post.UserID,
-			userExcept.ID,
-			post.ID,
-		)
-		if err != nil {
-			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notifications of post")
-		}
-
-		// กรณีมีแจ้งเตือน emit กลับไปหา client เพื่อลบออก
+	} else {
+		// กรณีโพสปกติ
 		emitNotificationsDTO := []socket.EmitNotificationDTO{}
 		for _, notification := range notifications {
 			emitNotificationsDTO = append(emitNotificationsDTO, socket.EmitNotificationDTO{
 				ID: notification.ID,
 			})
 		}
-
-		go s.notificationSocket.EmitNotifications(emitNotificationsDTO)
+		// กรณีมีแจ้งเตือน emit กลับไปหา client เพื่อลบออก
+		if len(emitNotificationsDTO) > 0 {
+			go s.notificationSocket.EmitNotifications(emitNotificationsDTO)
+		}
 	}
 
 	deletedPostResp := &DeletedPost{
@@ -1735,7 +1750,7 @@ func (s *postService) ToggleLike(
 			return errs.NewInternalServerErrorWithMessage("Failed to find notification of like post")
 		}
 
-		err = s.notificationRepository.DeleteByID(
+		err = s.notificationRepository.Delete(
 			ctx,
 			tx,
 			notification.ID,

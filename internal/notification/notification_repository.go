@@ -51,7 +51,15 @@ type NotificationRepository interface {
 		receiverID,
 		postID uuid.UUID,
 	) (*models.Notification, error)
-	DeleteByID(
+	FindOfComment(
+		ctx context.Context,
+		db *gorm.DB,
+		senderID,
+		receiverID,
+		commentID uuid.UUID,
+		notificationType models.NotificationType,
+	) (*models.Notification, error)
+	Delete(
 		ctx context.Context,
 		db *gorm.DB,
 		notificationID uuid.UUID,
@@ -125,11 +133,13 @@ func (r *notificationRepositoryDB) FindOfPost(
 	notification := &models.Notification{}
 	err := db.
 		WithContext(ctx).
+		Select("id").
 		Where(
-			"sender_id = ? AND receiver_id = ? AND post_id = ?",
+			"sender_id = ? AND receiver_id = ? AND post_id = ? AND type = ?",
 			senderID,
 			receiverID,
 			postID,
+			models.NotificationTypeShare,
 		).
 		Take(notification).Error
 	if err != nil {
@@ -148,11 +158,13 @@ func (r *notificationRepositoryDB) FindsOfPost(
 	notifications := &[]models.Notification{}
 	err := db.
 		WithContext(ctx).
+		Select("id").
 		Where(
-			"sender_id = ? AND receiver_id = ? AND post_id = ?",
+			"sender_id = ? AND receiver_id = ? AND post_id = ? AND type = ?",
 			senderID,
 			receiverID,
 			postID,
+			models.NotificationTypePost,
 		).
 		Find(notifications).Error
 	if err != nil {
@@ -171,12 +183,14 @@ func (r *notificationRepositoryDB) FindOfLikePost(
 	notification := &models.Notification{}
 	err := db.
 		WithContext(ctx).
+		Select("id").
 		Where(
-			"type = ? AND sender_id = ? AND receiver_id = ? AND post_id = ?",
+			"type = ? AND sender_id = ? AND receiver_id = ? AND post_id = ? AND type = ?",
 			models.NotificationTypeLike,
 			senderID,
 			receiverID,
 			postID,
+			models.NotificationTypeLike,
 		).
 		Take(notification).Error
 	if err != nil {
@@ -185,7 +199,33 @@ func (r *notificationRepositoryDB) FindOfLikePost(
 	return notification, nil
 }
 
-func (r *notificationRepositoryDB) DeleteByID(
+func (r *notificationRepositoryDB) FindOfComment(
+	ctx context.Context,
+	db *gorm.DB,
+	senderID,
+	receiverID,
+	commentID uuid.UUID,
+	notificationType models.NotificationType,
+) (*models.Notification, error) {
+	notification := &models.Notification{}
+	err := db.
+		WithContext(ctx).
+		Select("id").
+		Where(
+			"sender_id = ? AND receiver_id = ? AND comment_id = ? AND type = ?",
+			senderID,
+			receiverID,
+			commentID,
+			notificationType,
+		).
+		Take(notification).Error
+	if err != nil {
+		return nil, err
+	}
+	return notification, nil
+}
+
+func (r *notificationRepositoryDB) Delete(
 	ctx context.Context,
 	db *gorm.DB,
 	notificationID uuid.UUID,

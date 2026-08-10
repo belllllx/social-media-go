@@ -17,6 +17,17 @@ type CommentLikeDTO struct {
 	UpdatedAt time.Time        `json:"updatedAt"`
 }
 
+type PostDTO struct {
+	UserID uuid.UUID `json:"userId"`
+}
+
+type DeleteCommentDTO struct {
+	ID       uuid.UUID  `json:"id"`
+	PostID   uuid.UUID  `json:"postId"`
+	Post     *PostDTO   `json:"post"`
+	ParentID *uuid.UUID `json:"parentId,omitempty"`
+}
+
 type UpdateCommentDTO struct {
 	ID      uuid.UUID `json:"id"`
 	Message *string   `json:"message"`
@@ -28,6 +39,7 @@ type CreateCommentDTO struct {
 	ID            uuid.UUID        `json:"id"`
 	Message       *string          `json:"message"`
 	PostID        uuid.UUID        `json:"postId"`
+	Post          *PostDTO         `json:"post"`
 	UserID        uuid.UUID        `json:"userId"`
 	ParentID      *uuid.UUID       `json:"parentId,omitempty"`
 	ReplyID       *uuid.UUID       `json:"replyId,omitempty"`
@@ -42,6 +54,7 @@ type CreateCommentDTO struct {
 type CommentSocket interface {
 	EmitCreate(createCommentDTO *CreateCommentDTO)
 	EmitUpdate(updateCommentDTO *UpdateCommentDTO)
+	EmitDelete(deleteCommentDTO *DeleteCommentDTO)
 }
 
 type commentSocket struct {
@@ -58,4 +71,8 @@ func (s *commentSocket) EmitCreate(createCommentDTO *CreateCommentDTO) {
 
 func (s *commentSocket) EmitUpdate(updateCommentDTO *UpdateCommentDTO) {
 	s.socket.Emit("updateComment", updateCommentDTO)
+}
+
+func (s *commentSocket) EmitDelete(deleteCommentDTO *DeleteCommentDTO) {
+	s.socket.Emit("deleteComment", deleteCommentDTO)
 }

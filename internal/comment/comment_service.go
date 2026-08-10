@@ -52,6 +52,17 @@ type CreateCommentDTO struct {
 	UserID  uuid.UUID
 }
 
+type Post struct {
+	UserID uuid.UUID `json:"userId"`
+}
+
+type DeletedComment struct {
+	ID       uuid.UUID  `json:"id"`
+	PostID   uuid.UUID  `json:"postId"`
+	Post     *Post      `json:"post"`
+	ParentID *uuid.UUID `json:"parentId,omitempty"`
+}
+
 type UpdatedComment struct {
 	ID      uuid.UUID `json:"id"`
 	Message *string   `json:"message"`
@@ -107,6 +118,7 @@ type CreatedComment struct {
 	ID            uuid.UUID        `json:"id"`
 	Message       *string          `json:"message"`
 	PostID        uuid.UUID        `json:"postId"`
+	Post          *Post            `json:"post"`
 	UserID        uuid.UUID        `json:"userId"`
 	ParentID      *uuid.UUID       `json:"parentId,omitempty"`
 	ReplyID       *uuid.UUID       `json:"replyId,omitempty"`
@@ -129,6 +141,11 @@ type CommentService interface {
 		limit string,
 	) (*CommentCursorPagination, error)
 	UpdateComment(ctx context.Context, updateCommentDTO *UpdateCommentDTO) (*UpdatedComment, error)
+	DeleteComment(
+		ctx context.Context,
+		userID uuid.UUID,
+		commentID string,
+	) (*DeletedComment, error)
 }
 
 type commentService struct {
@@ -283,14 +300,14 @@ func (s *commentService) CreateComment(ctx context.Context, createCommentDTO *Cr
 		return nil, err
 	}
 
-	comment, err := s.commentRepository.FindByIDWithUserRelation(
+	comment, err := s.commentRepository.FindByIDWithUserAndPostRelations(
 		ctx,
 		s.db,
 		createComment.ID,
 	)
 	if err != nil {
 		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find comment by id with user relation")
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find comment by id with user and post relations")
 	}
 
 	err = s.userService.GetUserImage(ctx, &comment.User)
@@ -313,18 +330,24 @@ func (s *commentService) CreateComment(ctx context.Context, createCommentDTO *Cr
 		UpdatedAt:            comment.User.UpdatedAt,
 	}
 	createCommentDTOSocket := &socket.CreateCommentDTO{
-		ID:        comment.ID,
-		Message:   comment.Message,
-		PostID:    comment.PostID,
+		ID:      comment.ID,
+		Message: comment.Message,
+		PostID:  comment.PostID,
+		Post: &socket.PostDTO{
+			UserID: comment.Post.UserID,
+		},
 		UserID:    comment.UserID,
 		User:      secureUserComment,
 		CreatedAt: comment.CreatedAt,
 		UpdatedAt: comment.UpdatedAt,
 	}
 	commentResp := &CreatedComment{
-		ID:        comment.ID,
-		Message:   comment.Message,
-		PostID:    comment.PostID,
+		ID:      comment.ID,
+		Message: comment.Message,
+		PostID:  comment.PostID,
+		Post: &Post{
+			UserID: comment.Post.UserID,
+		},
 		UserID:    comment.UserID,
 		User:      secureUserComment,
 		CreatedAt: comment.CreatedAt,
@@ -527,14 +550,14 @@ func (s *commentService) CreateReplyComment(ctx context.Context, createReplyComm
 		return nil, err
 	}
 
-	reply, err := s.commentRepository.FindByIDWithUserRelation(
+	reply, err := s.commentRepository.FindByIDWithUserAndPostRelations(
 		ctx,
 		s.db,
 		createReplyComment.ID,
 	)
 	if err != nil {
 		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find reply by id with user relation")
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find reply by id with user and post relations")
 	}
 
 	err = s.userService.GetUserImage(ctx, &reply.User)
@@ -557,9 +580,12 @@ func (s *commentService) CreateReplyComment(ctx context.Context, createReplyComm
 		UpdatedAt:            reply.User.UpdatedAt,
 	}
 	createReplyDTOSocket := &socket.CreateCommentDTO{
-		ID:        reply.ID,
-		Message:   reply.Message,
-		PostID:    reply.PostID,
+		ID:      reply.ID,
+		Message: reply.Message,
+		PostID:  reply.PostID,
+		Post: &socket.PostDTO{
+			UserID: reply.Post.UserID,
+		},
 		UserID:    reply.UserID,
 		ParentID:  reply.ParentID,
 		User:      secureUserReply,
@@ -567,9 +593,12 @@ func (s *commentService) CreateReplyComment(ctx context.Context, createReplyComm
 		UpdatedAt: reply.UpdatedAt,
 	}
 	replyResp := &CreatedComment{
-		ID:        reply.ID,
-		Message:   reply.Message,
-		PostID:    reply.PostID,
+		ID:      reply.ID,
+		Message: reply.Message,
+		PostID:  reply.PostID,
+		Post: &Post{
+			UserID: reply.Post.UserID,
+		},
 		UserID:    reply.UserID,
 		ParentID:  reply.ParentID,
 		User:      secureUserReply,
@@ -802,14 +831,14 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 		return nil, err
 	}
 
-	tag, err := s.commentRepository.FindByIDWithUserAndReplyToUserRelations(
+	tag, err := s.commentRepository.FindByIDWithCommentRelations(
 		ctx,
 		s.db,
 		createTagReply.ID,
 	)
 	if err != nil {
 		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find tag by id with user and reply to user relations")
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find tag by id with comment relations")
 	}
 
 	err = s.userService.GetUserImage(ctx, &tag.User)
@@ -851,9 +880,12 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 		UpdatedAt:            tag.ReplyToUser.UpdatedAt,
 	}
 	createTagDTOSocket := &socket.CreateCommentDTO{
-		ID:            tag.ID,
-		Message:       tag.Message,
-		PostID:        tag.PostID,
+		ID:      tag.ID,
+		Message: tag.Message,
+		PostID:  tag.PostID,
+		Post: &socket.PostDTO{
+			UserID: tag.Post.UserID,
+		},
 		UserID:        tag.UserID,
 		ParentID:      tag.ParentID,
 		ReplyID:       tag.ReplyID,
@@ -864,9 +896,12 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 		UpdatedAt:     tag.UpdatedAt,
 	}
 	tagResp := &CreatedComment{
-		ID:            tag.ID,
-		Message:       tag.Message,
-		PostID:        tag.PostID,
+		ID:      tag.ID,
+		Message: tag.Message,
+		PostID:  tag.PostID,
+		Post: &Post{
+			UserID: tag.Post.UserID,
+		},
 		UserID:        tag.UserID,
 		ParentID:      tag.ParentID,
 		ReplyID:       tag.ReplyID,
@@ -1361,4 +1396,169 @@ func (s *commentService) UpdateComment(ctx context.Context, updateCommentDTO *Up
 
 	go s.commentSocket.EmitUpdate(updateCommentSocketDTO)
 	return updateCommentResp, nil
+}
+
+func (s *commentService) DeleteComment(
+	ctx context.Context,
+	userID uuid.UUID,
+	commentID string,
+) (*DeletedComment, error) {
+	err := helpers.ValidateUUID(commentID)
+	if err != nil {
+		logs.Warn(err)
+		return nil, err
+	}
+
+	commentIDParse, err := helpers.ParseUUID(commentID)
+	if err != nil {
+		logs.Error(err)
+		return nil, err
+	}
+
+	commentByID, err := s.commentRepository.FindByIDWithPostAndParentRelations(
+		ctx,
+		s.db,
+		*commentIDParse,
+	)
+	if err != nil && !helpers.IsErrRecordNotFound(err) {
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find comment by id with post and parent relations")
+	}
+
+	if helpers.IsErrRecordNotFound(err) {
+		logs.Warn(err)
+		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Comment by id %v is not found", *commentIDParse))
+	}
+
+	file, err := s.fileRepository.FindByContentID(
+		ctx,
+		s.db,
+		commentByID.ID,
+	)
+	if err != nil && !helpers.IsErrRecordNotFound(err) {
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find file of comment")
+	}
+
+	var notification *models.Notification
+
+	// กรณี comment
+	if commentByID.ParentID == nil {
+		notification, err = s.notificationRepository.FindOfComment(
+			ctx,
+			s.db,
+			userID,
+			commentByID.Post.UserID,
+			commentByID.ID,
+			models.NotificationTypeComment,
+		)
+		if err != nil && !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification of comment")
+		}
+	} else if commentByID.ParentID != nil && commentByID.ReplyID == nil && commentByID.ReplyToUserID == nil {
+		// กรณี reply
+		notification, err = s.notificationRepository.FindOfComment(
+			ctx,
+			s.db,
+			userID,
+			commentByID.Parent.UserID,
+			commentByID.ID,
+			models.NotificationTypeReply,
+		)
+		if err != nil && !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification of reply")
+		}
+	} else {
+		// กรณี tag
+		notification, err = s.notificationRepository.FindOfComment(
+			ctx,
+			s.db,
+			userID,
+			*commentByID.ReplyToUserID,
+			commentByID.ID,
+			models.NotificationTypeTag,
+		)
+		if err != nil && !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification of tag")
+		}
+	}
+
+	deletedComment := &models.Comment{}
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		// กรณีมีไฟล์
+		if file != nil {
+			err = s.fileRepository.Delete(
+				ctx,
+				tx,
+				file.ID,
+				file.Filename,
+				file.FileType,
+			)
+			if err != nil {
+				logs.Error(err)
+				return errs.NewInternalServerErrorWithMessage("Failed to delete file of comment")
+			}
+		}
+
+		deletedComment, err = s.commentRepository.Delete(
+			ctx,
+			tx,
+			commentByID.ID,
+		)
+		if err != nil {
+			logs.Error(err)
+			return errs.NewInternalServerErrorWithMessage("Failed to delete comment")
+		}
+
+		return nil
+	})
+	if err != nil {
+		_, ok := err.(*errs.AppError)
+		if !ok {
+			logs.Error(err)
+		}
+		return nil, err
+	}
+
+	if file != nil {
+		_, err = helpers.DeleteObject(
+			ctx,
+			s.s3Client,
+			file.Filename,
+		)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to delete file from bucket")
+		}
+	}
+
+	deleteCommentDTOSocket := &socket.DeleteCommentDTO{
+		ID:     deletedComment.ID,
+		PostID: deletedComment.PostID,
+		Post: &socket.PostDTO{
+			UserID: commentByID.Post.UserID,
+		},
+		ParentID: deletedComment.ParentID,
+	}
+	go s.commentSocket.EmitDelete(deleteCommentDTOSocket)
+
+	if notification != nil {
+		emitNotificationDTO := &socket.EmitNotificationDTO{
+			ID: notification.ID,
+		}
+		go s.notificationSocket.EmitNotification(emitNotificationDTO)
+	}
+
+	deleteCommentResp := &DeletedComment{
+		ID:     deletedComment.ID,
+		PostID: deletedComment.PostID,
+		Post: &Post{
+			UserID: commentByID.Post.UserID,
+		},
+		ParentID: deletedComment.ParentID,
+	}
+	return deleteCommentResp, nil
 }
