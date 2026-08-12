@@ -22,17 +22,35 @@ type LikeRepository interface {
 		userID,
 		postID uuid.UUID,
 	) (*models.Like, error)
+	FindOfComment(
+		ctx context.Context,
+		db *gorm.DB,
+		userID,
+		commentID uuid.UUID,
+	) (*models.Like, error)
 	FindOfPostWithUserRelation(
 		ctx context.Context,
 		db *gorm.DB,
 		userID,
 		postID uuid.UUID,
 	) (*models.Like, error)
+	FindOfCommentWithUserRelation(
+		ctx context.Context,
+		db *gorm.DB,
+		userID,
+		commentID uuid.UUID,
+	) (*models.Like, error)
 	DeleteOfPost(
 		ctx context.Context,
 		db *gorm.DB,
 		userID,
 		postID uuid.UUID,
+	) (*models.Like, error)
+	DeleteOfComment(
+		ctx context.Context,
+		db *gorm.DB,
+		userID,
+		commentID uuid.UUID,
 	) (*models.Like, error)
 }
 
@@ -68,6 +86,23 @@ func (r *likeRepositoryDB) FindOfPost(
 	return like, nil
 }
 
+func (r *likeRepositoryDB) FindOfComment(
+	ctx context.Context,
+	db *gorm.DB,
+	userID,
+	commentID uuid.UUID,
+) (*models.Like, error) {
+	like := &models.Like{}
+	err := db.
+		WithContext(ctx).
+		Where("user_id = ? AND comment_id = ?", userID, commentID).
+		Take(like).Error
+	if err != nil {
+		return nil, err
+	}
+	return like, nil
+}
+
 func (r *likeRepositoryDB) FindOfPostWithUserRelation(
 	ctx context.Context,
 	db *gorm.DB,
@@ -78,6 +113,24 @@ func (r *likeRepositoryDB) FindOfPostWithUserRelation(
 	err := db.
 		WithContext(ctx).
 		Where("user_id = ? AND post_id = ?", userID, postID).
+		Preload("User", helpers.OmitUserPasswordHash).
+		Take(like).Error
+	if err != nil {
+		return nil, err
+	}
+	return like, nil
+}
+
+func (r *likeRepositoryDB) FindOfCommentWithUserRelation(
+	ctx context.Context,
+	db *gorm.DB,
+	userID,
+	commentID uuid.UUID,
+) (*models.Like, error) {
+	like := &models.Like{}
+	err := db.
+		WithContext(ctx).
+		Where("user_id = ? AND comment_id = ?", userID, commentID).
 		Preload("User", helpers.OmitUserPasswordHash).
 		Take(like).Error
 	if err != nil {
@@ -97,6 +150,24 @@ func (r *likeRepositoryDB) DeleteOfPost(
 		WithContext(ctx).
 		Clauses(clause.Returning{}).
 		Where("user_id = ? AND post_id = ?", userID, postID).
+		Delete(like).Error
+	if err != nil {
+		return nil, err
+	}
+	return like, nil
+}
+
+func (r *likeRepositoryDB) DeleteOfComment(
+	ctx context.Context,
+	db *gorm.DB,
+	userID,
+	commentID uuid.UUID,
+) (*models.Like, error) {
+	like := &models.Like{}
+	err := db.
+		WithContext(ctx).
+		Clauses(clause.Returning{}).
+		Where("user_id = ? AND comment_id = ?", userID, commentID).
 		Delete(like).Error
 	if err != nil {
 		return nil, err

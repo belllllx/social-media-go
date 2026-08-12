@@ -124,6 +124,8 @@ definitions:
         type: string
       parentId:
         type: string
+      post:
+        $ref: '#/definitions/comment.Post'
       postId:
         type: string
       replyId:
@@ -143,6 +145,12 @@ definitions:
     properties:
       id:
         type: string
+      parentId:
+        type: string
+      post:
+        $ref: '#/definitions/comment.Post'
+      postId:
+        type: string
     type: object
   comment.Like:
     properties:
@@ -156,6 +164,11 @@ definitions:
         type: string
       user:
         $ref: '#/definitions/user.SecureUser'
+      userId:
+        type: string
+    type: object
+  comment.Post:
+    properties:
       userId:
         type: string
     type: object
@@ -1243,6 +1256,46 @@ paths:
             - properties:
                 data:
                   $ref: '#/definitions/comment.CreatedComment'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - comment
+  /comment/toggle-like/{commentID}:
+    post:
+      description: authentication toggle like or unlike comment and socket emit like
+        or unlike comment, notification to client
+      parameters:
+      - description: uuid for comment id
+        in: path
+        name: commentID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SwaggerResponseWithData'
+            - properties:
+                data:
+                  $ref: '#/definitions/comment.Like'
               type: object
         "400":
           description: Bad Request

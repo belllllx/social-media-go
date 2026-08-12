@@ -55,6 +55,7 @@ type CommentSocket interface {
 	EmitCreate(createCommentDTO *CreateCommentDTO)
 	EmitUpdate(updateCommentDTO *UpdateCommentDTO)
 	EmitDelete(deleteCommentDTO *DeleteCommentDTO)
+	EmitLikeOrUnlike(commentLikeDTO *CommentLikeDTO)
 }
 
 type commentSocket struct {
@@ -75,4 +76,8 @@ func (s *commentSocket) EmitUpdate(updateCommentDTO *UpdateCommentDTO) {
 
 func (s *commentSocket) EmitDelete(deleteCommentDTO *DeleteCommentDTO) {
 	s.socket.Emit("deleteComment", deleteCommentDTO)
+}
+
+func (s *commentSocket) EmitLikeOrUnlike(commentLikeDTO *CommentLikeDTO) {
+	s.socket.Emit("newLikeComment", commentLikeDTO)
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/belllllx/social-media-go/internal/file"
+	"github.com/belllllx/social-media-go/internal/like"
 	"github.com/belllllx/social-media-go/internal/logs"
 	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/internal/notification"
@@ -146,6 +147,11 @@ type CommentService interface {
 		userID uuid.UUID,
 		commentID string,
 	) (*DeletedComment, error)
+	ToggleLike(
+		ctx context.Context,
+		userID uuid.UUID,
+		commentID string,
+	) (string, *Like, error)
 }
 
 type commentService struct {
@@ -157,6 +163,7 @@ type commentService struct {
 	postRepository         post.PostRepository
 	fileRepository         file.FileRepository
 	notificationRepository notification.NotificationRepository
+	likeRepository         like.LikeRepository
 	notificationService    notification.NotificationService
 	userService            user.UserService
 	fileService            file.FileService
@@ -173,6 +180,7 @@ func NewCommentService(
 	postRepository post.PostRepository,
 	fileRepository file.FileRepository,
 	notificationRepository notification.NotificationRepository,
+	likeRepository like.LikeRepository,
 	notificationService notification.NotificationService,
 	userService user.UserService,
 	fileService file.FileService,
@@ -188,6 +196,7 @@ func NewCommentService(
 		postRepository:         postRepository,
 		fileRepository:         fileRepository,
 		notificationRepository: notificationRepository,
+		likeRepository:         likeRepository,
 		notificationService:    notificationService,
 		userService:            userService,
 		fileService:            fileService,
@@ -1561,4 +1570,256 @@ func (s *commentService) DeleteComment(
 		ParentID: deletedComment.ParentID,
 	}
 	return deleteCommentResp, nil
+}
+
+func (s *commentService) ToggleLike(
+	ctx context.Context,
+	userID uuid.UUID,
+	commentID string,
+) (string, *Like, error) {
+	err := helpers.ValidateUUID(commentID)
+	if err != nil {
+		logs.Warn(err)
+		return "", nil, err
+	}
+
+	commentIDParse, err := helpers.ParseUUID(commentID)
+	if err != nil {
+		logs.Error(err)
+		return "", nil, err
+	}
+
+	commentByID, err := s.commentRepository.FindByID(
+		ctx,
+		s.db,
+		*commentIDParse,
+	)
+	if err != nil && !helpers.IsErrRecordNotFound(err) {
+		logs.Error(err)
+		return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find comment by id")
+	}
+
+	if helpers.IsErrRecordNotFound(err) {
+		logs.Warn(err)
+		return "", nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Comment by id %v is not found", *commentIDParse))
+	}
+
+	_, err = s.likeRepository.FindOfComment(
+		ctx,
+		s.db,
+		userID,
+		commentByID.ID,
+	)
+	if err != nil && !helpers.IsErrRecordNotFound(err) {
+		logs.Error(err)
+		return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find like of comment")
+	}
+
+	// กรณี like
+	if helpers.IsErrRecordNotFound(err) {
+		createNotificationDTO := &models.Notification{
+			Type:       models.NotificationTypeLike,
+			SenderID:   userID,
+			ReceiverID: commentByID.UserID,
+			CommentID:  &commentByID.ID,
+			Message:    "Like your comment",
+		}
+
+		err = s.db.Transaction(func(tx *gorm.DB) error {
+			createLike := &models.Like{
+				UserID:    userID,
+				CommentID: &commentByID.ID,
+			}
+			err = s.likeRepository.Create(
+				ctx,
+				tx,
+				createLike,
+			)
+			if err != nil {
+				logs.Error(err)
+				return errs.NewInternalServerErrorWithMessage("Failed to create like of comment")
+			}
+
+			err = s.notificationService.CreateNotification(
+				ctx,
+				tx,
+				createNotificationDTO,
+			)
+			if err != nil {
+				return err
+			}
+
+			return nil
+		})
+		if err != nil {
+			_, ok := err.(*errs.AppError)
+			if !ok {
+				logs.Error(err)
+			}
+			return "", nil, err
+		}
+
+		createdLike, err := s.likeRepository.FindOfCommentWithUserRelation(
+			ctx,
+			s.db,
+			userID,
+			commentByID.ID,
+		)
+		if err != nil {
+			logs.Error(err)
+			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find like of comment with user relation")
+		}
+
+		err = s.userService.GetUserImage(ctx, &createdLike.User)
+		if err != nil {
+			return "", nil, err
+		}
+
+		createdNotification, err := s.notificationRepository.FindByIDWithSenderRelation(
+			ctx,
+			s.db,
+			createNotificationDTO.ID,
+		)
+		if err != nil {
+			logs.Error(err)
+			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find notification by id with sender relation")
+		}
+
+		err = s.userService.GetUserImage(ctx, &createdNotification.Sender)
+		if err != nil {
+			return "", nil, err
+		}
+
+		secureUserLike := &user.SecureUser{
+			ID:                   createdLike.UserID,
+			Fullname:             createdLike.User.Fullname,
+			Username:             createdLike.User.Username,
+			Email:                createdLike.User.Email,
+			DateOfBirth:          createdLike.User.DateOfBirth,
+			ProfileUrl:           createdLike.User.ProfileUrl,
+			ProfileBackgroundUrl: createdLike.User.ProfileBackgroundUrl,
+			Info:                 createdLike.User.Info,
+			Role:                 createdLike.User.Role,
+			ProviderType:         createdLike.User.ProviderType,
+			CreatedAt:            createdLike.User.CreatedAt,
+			UpdatedAt:            createdLike.User.UpdatedAt,
+		}
+		commentLikeDTO := &socket.CommentLikeDTO{
+			ID:        createdLike.ID,
+			UserID:    createdLike.UserID,
+			User:      secureUserLike,
+			CommentID: *createdLike.CommentID,
+			CreatedAt: createdLike.CreatedAt,
+			UpdatedAt: createdLike.UpdatedAt,
+		}
+		go s.commentSocket.EmitLikeOrUnlike(commentLikeDTO)
+
+		secureUserNotification := &user.SecureUser{
+			ID:                   createdNotification.SenderID,
+			Fullname:             createdNotification.Sender.Fullname,
+			Username:             createdNotification.Sender.Username,
+			Email:                createdNotification.Sender.Email,
+			DateOfBirth:          createdNotification.Sender.DateOfBirth,
+			ProfileUrl:           createdNotification.Sender.ProfileUrl,
+			ProfileBackgroundUrl: createdNotification.Sender.ProfileBackgroundUrl,
+			Info:                 createdNotification.Sender.Info,
+			Role:                 createdNotification.Sender.Role,
+			ProviderType:         createdNotification.Sender.ProviderType,
+			CreatedAt:            createdNotification.Sender.CreatedAt,
+			UpdatedAt:            createdNotification.Sender.UpdatedAt,
+		}
+		emitNotificationDTO := &socket.EmitNotificationDTO{
+			ID:         createdNotification.ID,
+			Type:       createdNotification.Type,
+			Message:    createdNotification.Message,
+			IsRead:     createdNotification.IsRead,
+			SenderID:   createdNotification.SenderID,
+			Sender:     secureUserNotification,
+			ReceiverID: createdNotification.ReceiverID,
+			CommentID:  createdNotification.CommentID,
+			CreatedAt:  createdNotification.CreatedAt,
+			UpdatedAt:  createdNotification.UpdatedAt,
+		}
+		go s.notificationSocket.EmitNotification(emitNotificationDTO)
+
+		likeResp := &Like{
+			ID:        createdLike.ID,
+			UserID:    createdLike.UserID,
+			User:      secureUserLike,
+			CommentID: *createdLike.CommentID,
+			CreatedAt: createdLike.CreatedAt,
+			UpdatedAt: createdLike.UpdatedAt,
+		}
+		return "Like successfully", likeResp, nil
+	}
+
+	// กรณี unlike
+	deletedLike := &models.Like{}
+	notification := &models.Notification{}
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		deletedLike, err = s.likeRepository.DeleteOfComment(
+			ctx,
+			tx,
+			userID,
+			commentByID.ID,
+		)
+		if err != nil {
+			logs.Error(err)
+			return errs.NewInternalServerErrorWithMessage("Failed to delete like of comment")
+		}
+
+		notification, err = s.notificationRepository.FindOfLikeComment(
+			ctx,
+			tx,
+			userID,
+			commentByID.UserID,
+			commentByID.ID,
+		)
+		if err != nil {
+			logs.Error(err)
+			return errs.NewInternalServerErrorWithMessage("Failed to find notification of like comment")
+		}
+
+		err = s.notificationRepository.Delete(
+			ctx,
+			tx,
+			notification.ID,
+		)
+		if err != nil {
+			logs.Error(err)
+			return errs.NewInternalServerErrorWithMessage("Failed to delete notification by id")
+		}
+
+		return nil
+	})
+	if err != nil {
+		_, ok := err.(*errs.AppError)
+		if !ok {
+			logs.Error(err)
+		}
+		return "", nil, err
+	}
+
+	commentLikeDTO := &socket.CommentLikeDTO{
+		ID:        deletedLike.ID,
+		UserID:    deletedLike.UserID,
+		CommentID: *deletedLike.CommentID,
+		CreatedAt: deletedLike.CreatedAt,
+		UpdatedAt: deletedLike.UpdatedAt,
+	}
+	go s.commentSocket.EmitLikeOrUnlike(commentLikeDTO)
+
+	emitNotificationDTO := &socket.EmitNotificationDTO{
+		ID: notification.ID,
+	}
+	go s.notificationSocket.EmitNotification(emitNotificationDTO)
+
+	likeResp := &Like{
+		ID:        deletedLike.ID,
+		UserID:    deletedLike.UserID,
+		CommentID: *deletedLike.CommentID,
+		CreatedAt: deletedLike.CreatedAt,
+		UpdatedAt: deletedLike.UpdatedAt,
+	}
+	return "Unlike successfully", likeResp, nil
 }

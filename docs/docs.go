@@ -1085,6 +1085,70 @@ const docTemplate = `{
                 }
             }
         },
+        "/comment/toggle-like/{commentID}": {
+            "post": {
+                "description": "authentication toggle like or unlike comment and socket emit like or unlike comment, notification to client",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "comment"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "uuid for comment id",
+                        "name": "commentID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SwaggerResponseWithData"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/comment.Like"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/comment/update/{commentID}": {
             "patch": {
                 "description": "authentication update comment and socket emit comment to client",
@@ -2081,6 +2145,9 @@ const docTemplate = `{
                 "parentId": {
                     "type": "string"
                 },
+                "post": {
+                    "$ref": "#/definitions/comment.Post"
+                },
                 "postId": {
                     "type": "string"
                 },
@@ -2109,6 +2176,15 @@ const docTemplate = `{
             "properties": {
                 "id": {
                     "type": "string"
+                },
+                "parentId": {
+                    "type": "string"
+                },
+                "post": {
+                    "$ref": "#/definitions/comment.Post"
+                },
+                "postId": {
+                    "type": "string"
                 }
             }
         },
@@ -2130,6 +2206,14 @@ const docTemplate = `{
                 "user": {
                     "$ref": "#/definitions/user.SecureUser"
                 },
+                "userId": {
+                    "type": "string"
+                }
+            }
+        },
+        "comment.Post": {
+            "type": "object",
+            "properties": {
                 "userId": {
                     "type": "string"
                 }

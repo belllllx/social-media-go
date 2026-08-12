@@ -77,5 +77,5 @@ func (s *postSocket) EmitDelete(deletePostDTO *DeletePostDTO) {
 }
 
 func (s *postSocket) EmitLikeOrUnlike(postLikeDTO *PostLikeDTO) {
-	s.socket.Emit("newLike", postLikeDTO)
+	s.socket.Emit("newLikePost", postLikeDTO)
 }
