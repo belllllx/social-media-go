@@ -1285,6 +1285,76 @@ const docTemplate = `{
                 }
             }
         },
+        "/notification/finds": {
+            "get": {
+                "description": "authentication and find notifications with receiver id cursor pagination",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notification"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "cursor uuid for notification id",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "limit for notifications cursor pagination",
+                        "name": "limit",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SwaggerResponseWithData"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/notification.NotificationCursorPagination"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/post/create": {
             "post": {
                 "description": "authentication create post, notifications and socket emit post, notifications to client",
@@ -2327,6 +2397,27 @@ const docTemplate = `{
                 }
             }
         },
+        "models.NotificationType": {
+            "type": "string",
+            "enum": [
+                "POST",
+                "SHARE",
+                "COMMENT",
+                "REPLY",
+                "TAG",
+                "LIKE",
+                "FOLLOW"
+            ],
+            "x-enum-varnames": [
+                "NotificationTypePost",
+                "NotificationTypeShare",
+                "NotificationTypeComment",
+                "NotificationTypeReply",
+                "NotificationTypeTag",
+                "NotificationTypeLike",
+                "NotificationTypeFollow"
+            ]
+        },
         "models.ProviderType": {
             "type": "string",
             "enum": [
@@ -2352,6 +2443,58 @@ const docTemplate = `{
                 "RoleUser",
                 "RoleAdmin"
             ]
+        },
+        "notification.Notification": {
+            "type": "object",
+            "properties": {
+                "commentId": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "isRead": {
+                    "type": "boolean"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "postId": {
+                    "type": "string"
+                },
+                "receiverId": {
+                    "type": "string"
+                },
+                "sender": {
+                    "$ref": "#/definitions/user.SecureUser"
+                },
+                "senderId": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/models.NotificationType"
+                },
+                "updatedAt": {
+                    "type": "string"
+                }
+            }
+        },
+        "notification.NotificationCursorPagination": {
+            "type": "object",
+            "properties": {
+                "nextCursor": {
+                    "type": "string"
+                },
+                "notifications": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/notification.Notification"
+                    }
+                }
+            }
         },
         "post.CreatePostRequest": {
             "type": "object",

@@ -91,7 +91,11 @@ func main() {
 		app.S3Client,
 		app.PresignClient,
 	)
-	notificationService := notification.NewNotificationService(notificationRepositoryDB, userService)
+	notificationService := notification.NewNotificationService(
+		app.DB,
+		notificationRepositoryDB,
+		userService,
+	)
 	postService := post.NewPostService(
 		app.DB,
 		app.RedisClient,
@@ -131,6 +135,7 @@ func main() {
 	)
 	postHandler := post.NewPostHandler(fileService, postService)
 	commentHandler := comment.NewCommentHandler(commentService, fileService)
+	notificationHandler := notification.NewNotificationHandler(notificationService)
 
 	app.Cron.AddFunc("*/30 * * * *", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -240,6 +245,11 @@ func main() {
 		comment.PATCH("/update/:commentID", commentHandler.UpdateComment)
 		comment.DELETE("/delete/:commentID", commentHandler.DeleteComment)
 		comment.POST("/toggle-like/:commentID", commentHandler.ToggleLike)
+	}
+
+	{
+		notification := api.Group("/notification")
+		notification.GET("/finds", notificationHandler.FindsWithReceiverIDCursorPagination)
 	}
 
 	app.Run()

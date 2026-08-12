@@ -2,12 +2,18 @@ package notification
 
 import (
 	"context"
+	"time"
 
 	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+type Cursor struct {
+	ID        uuid.UUID
+	CreatedAt time.Time
+}
 
 type NotificationRepository interface {
 	Create(
@@ -66,6 +72,18 @@ type NotificationRepository interface {
 		receiverID,
 		commentID uuid.UUID,
 	) (*models.Notification, error)
+	FindByIDCursor(
+		ctx context.Context,
+		db *gorm.DB,
+		notificationID uuid.UUID,
+	) (*Cursor, error)
+	FindsByReceiverIDCursorPaginationWithSenderRelation(
+		ctx context.Context,
+		db *gorm.DB,
+		userID uuid.UUID,
+		cursor *Cursor,
+		limit int,
+	) ([]models.Notification, error)
 	Delete(
 		ctx context.Context,
 		db *gorm.DB,
@@ -254,6 +272,58 @@ func (r *notificationRepositoryDB) FindOfLikeComment(
 		return nil, err
 	}
 	return notification, nil
+}
+
+func (r *notificationRepositoryDB) FindByIDCursor(
+	ctx context.Context,
+	db *gorm.DB,
+	notificationID uuid.UUID,
+) (*Cursor, error) {
+	notification := &models.Notification{}
+	err := db.
+		WithContext(ctx).
+		Where("id = ?", notificationID).
+		Select("id", "created_at").
+		Take(notification).Error
+	if err != nil {
+		return nil, err
+	}
+	cursor := &Cursor{
+		ID:        notification.ID,
+		CreatedAt: notification.CreatedAt,
+	}
+	return cursor, nil
+}
+
+func (r *notificationRepositoryDB) FindsByReceiverIDCursorPaginationWithSenderRelation(
+	ctx context.Context,
+	db *gorm.DB,
+	userID uuid.UUID,
+	cursor *Cursor,
+	limit int,
+) ([]models.Notification, error) {
+	notifications := &[]models.Notification{}
+	db = db.
+		WithContext(ctx).
+		Where("receiver_id = ?", userID).
+		Preload("Sender", helpers.OmitUserPasswordHash).
+		Order("created_at DESC, id DESC").
+		Limit(limit)
+
+	if cursor != nil {
+		db = db.Where(
+			"(created_at < ?) OR (created_at = ? AND id < ?)",
+			cursor.CreatedAt,
+			cursor.CreatedAt,
+			cursor.ID,
+		)
+	}
+
+	err := db.Find(notifications).Error
+	if err != nil {
+		return nil, err
+	}
+	return *notifications, nil
 }
 
 func (r *notificationRepositoryDB) Delete(

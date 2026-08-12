@@ -242,6 +242,24 @@ definitions:
           type: string
         type: array
     type: object
+  models.NotificationType:
+    enum:
+    - POST
+    - SHARE
+    - COMMENT
+    - REPLY
+    - TAG
+    - LIKE
+    - FOLLOW
+    type: string
+    x-enum-varnames:
+    - NotificationTypePost
+    - NotificationTypeShare
+    - NotificationTypeComment
+    - NotificationTypeReply
+    - NotificationTypeTag
+    - NotificationTypeLike
+    - NotificationTypeFollow
   models.ProviderType:
     enum:
     - LOCAL
@@ -262,6 +280,40 @@ definitions:
     x-enum-varnames:
     - RoleUser
     - RoleAdmin
+  notification.Notification:
+    properties:
+      commentId:
+        type: string
+      createdAt:
+        type: string
+      id:
+        type: string
+      isRead:
+        type: boolean
+      message:
+        type: string
+      postId:
+        type: string
+      receiverId:
+        type: string
+      sender:
+        $ref: '#/definitions/user.SecureUser'
+      senderId:
+        type: string
+      type:
+        $ref: '#/definitions/models.NotificationType'
+      updatedAt:
+        type: string
+    type: object
+  notification.NotificationCursorPagination:
+    properties:
+      nextCursor:
+        type: string
+      notifications:
+        items:
+          $ref: '#/definitions/notification.Notification'
+        type: array
+    type: object
   post.CreatePostRequest:
     properties:
       filesUrl:
@@ -1398,6 +1450,49 @@ paths:
             $ref: '#/definitions/response.SwaggerResponse'
       tags:
       - comment
+  /notification/finds:
+    get:
+      description: authentication and find notifications with receiver id cursor pagination
+      parameters:
+      - description: cursor uuid for notification id
+        in: query
+        name: cursor
+        type: string
+      - description: limit for notifications cursor pagination
+        in: query
+        name: limit
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SwaggerResponseWithData'
+            - properties:
+                data:
+                  $ref: '#/definitions/notification.NotificationCursorPagination'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - notification
   /post/create:
     post:
       consumes:
