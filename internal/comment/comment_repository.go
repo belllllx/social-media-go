@@ -57,12 +57,14 @@ type CommentRepository interface {
 	Update(
 		ctx context.Context,
 		db *gorm.DB,
+		userID,
 		commentID uuid.UUID,
 		updateComment *models.Comment,
 	) (*models.Comment, error)
 	Delete(
 		ctx context.Context,
 		db *gorm.DB,
+		userID,
 		commentID uuid.UUID,
 	) (*models.Comment, error)
 }
@@ -221,6 +223,7 @@ func (r *commentRepositoryDB) FindsByPostIDCursorPaginationWithCommentRelations(
 func (r *commentRepositoryDB) Update(
 	ctx context.Context,
 	db *gorm.DB,
+	userID,
 	commentID uuid.UUID,
 	updateComment *models.Comment,
 ) (*models.Comment, error) {
@@ -235,7 +238,7 @@ func (r *commentRepositoryDB) Update(
 				{Name: "post_id"},
 			},
 		}).
-		Where("id = ?", commentID).
+		Where("id = ? AND user_id = ?", commentID, userID).
 		Updates(*updateComment).Error
 	if err != nil {
 		return nil, err
@@ -246,6 +249,7 @@ func (r *commentRepositoryDB) Update(
 func (r *commentRepositoryDB) Delete(
 	ctx context.Context,
 	db *gorm.DB,
+	userID,
 	commentID uuid.UUID,
 ) (*models.Comment, error) {
 	comment := &models.Comment{}
@@ -258,7 +262,7 @@ func (r *commentRepositoryDB) Delete(
 				{Name: "parent_id"},
 			},
 		}).
-		Where("id = ?", commentID).
+		Where("id = ? AND user_id = ?", commentID, userID).
 		Delete(comment).Error
 	if err != nil {
 		return nil, err

@@ -326,6 +326,12 @@ func (h *commentHandler) FindsWithPostIDCursorPagination(c *gin.Context) {
 func (h *commentHandler) UpdateComment(c *gin.Context) {
 	ctx := c.Request.Context()
 
+	user, ok := c.MustGet("user").(*user.SecureUserWithFollowRelations)
+	if !ok {
+		response.AbortWithUnauthorized(c)
+		return
+	}
+
 	updateCommentRequest := &UpdateCommentRequest{}
 	err := c.ShouldBind(updateCommentRequest)
 	if err != nil {
@@ -335,6 +341,7 @@ func (h *commentHandler) UpdateComment(c *gin.Context) {
 
 	commentID := c.Param("commentID")
 	updateCommentDTO := &UpdateCommentDTO{
+		UserID:                  user.ID,
 		Message:                 updateCommentRequest.Message,
 		FileURL:                 updateCommentRequest.FileURL,
 		CommentID:               commentID,
@@ -389,13 +396,14 @@ func (h *commentHandler) DeleteComment(c *gin.Context) {
 //	@Description	authentication toggle like or unlike comment and socket emit like or unlike comment, notification to client
 //	@Tags			comment
 //	@Produce		json
+//	@Param			postID		path		string	true	"uuid for post id"
 //	@Param			commentID	path		string	true	"uuid for comment id"
 //	@Success		200			{object}	response.SwaggerResponseWithData{data=Like}
 //	@Failure		400			{object}	response.SwaggerBadRequestResponse
 //	@Failure		401			{object}	response.SwaggerResponse
 //	@Failure		404			{object}	response.SwaggerResponse
 //	@Failure		500			{object}	response.SwaggerResponse
-//	@Router			/comment/toggle-like/{commentID} [post]
+//	@Router			/comment/toggle-like/{postID}/{commentID} [post]
 func (h *commentHandler) ToggleLike(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -405,10 +413,12 @@ func (h *commentHandler) ToggleLike(c *gin.Context) {
 		return
 	}
 
+	postID := c.Param("postID")
 	commentID := c.Param("commentID")
 	message, like, err := h.commentService.ToggleLike(
 		ctx,
 		user.ID,
+		postID,
 		commentID,
 	)
 	if err != nil {

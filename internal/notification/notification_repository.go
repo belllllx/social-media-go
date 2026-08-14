@@ -8,6 +8,7 @@ import (
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Cursor struct {
@@ -70,6 +71,7 @@ type NotificationRepository interface {
 		db *gorm.DB,
 		senderID,
 		receiverID,
+		postID,
 		commentID uuid.UUID,
 	) (*models.Notification, error)
 	FindByIDCursor(
@@ -83,6 +85,12 @@ type NotificationRepository interface {
 		userID uuid.UUID,
 		cursor *Cursor,
 		limit int,
+	) ([]models.Notification, error)
+	UpdateIsRead(
+		ctx context.Context,
+		db *gorm.DB,
+		userID uuid.UUID,
+		notificationsID []uuid.UUID,
 	) ([]models.Notification, error)
 	Delete(
 		ctx context.Context,
@@ -208,7 +216,7 @@ func (r *notificationRepositoryDB) FindOfLikePost(
 	notification := &models.Notification{}
 	err := db.
 		WithContext(ctx).
-		Select("id").
+		Select("id", "receiver_id").
 		Where(
 			"type = ? AND sender_id = ? AND receiver_id = ? AND post_id = ?",
 			models.NotificationTypeLike,
@@ -254,17 +262,19 @@ func (r *notificationRepositoryDB) FindOfLikeComment(
 	db *gorm.DB,
 	senderID,
 	receiverID,
+	postID,
 	commentID uuid.UUID,
 ) (*models.Notification, error) {
 	notification := &models.Notification{}
 	err := db.
 		WithContext(ctx).
-		Select("id").
+		Select("id", "receiver_id").
 		Where(
-			"type = ? AND sender_id = ? AND receiver_id = ? AND comment_id = ?",
+			"type = ? AND sender_id = ? AND receiver_id = ? AND post_id = ? AND comment_id = ?",
 			models.NotificationTypeLike,
 			senderID,
 			receiverID,
+			postID,
 			commentID,
 		).
 		Take(notification).Error
@@ -320,6 +330,35 @@ func (r *notificationRepositoryDB) FindsByReceiverIDCursorPaginationWithSenderRe
 	}
 
 	err := db.Find(notifications).Error
+	if err != nil {
+		return nil, err
+	}
+	return *notifications, nil
+}
+
+func (r *notificationRepositoryDB) UpdateIsRead(
+	ctx context.Context,
+	db *gorm.DB,
+	userID uuid.UUID,
+	notificationsID []uuid.UUID,
+) ([]models.Notification, error) {
+	notifications := &[]models.Notification{}
+	err := db.
+		WithContext(ctx).
+		Model(notifications).
+		Clauses(clause.Returning{
+			Columns: []clause.Column{
+				{Name: "id"},
+				{Name: "is_read"},
+			},
+		}).
+		Where(
+			"id IN ? AND receiver_id = ? AND is_read = ?",
+			notificationsID,
+			userID,
+			false,
+		).
+		Update("is_read", true).Error
 	if err != nil {
 		return nil, err
 	}

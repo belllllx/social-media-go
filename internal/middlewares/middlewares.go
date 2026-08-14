@@ -27,20 +27,20 @@ func GlobalErrorsHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()
 
-		if len(c.Errors) > 0 {
-			for _, ginErr := range c.Errors {
-				var validateErrs validator.ValidationErrors
+		for _, ginErr := range c.Errors {
+			var validateErrs validator.ValidationErrors
 
-				if errors.As(ginErr.Err, &validateErrs) {
-					errFields := map[string]string{}
-					for _, e := range validateErrs {
-						errFields[e.Field()] = helpers.GetErrorMessages(e)
-					}
-					response.AbortWithBadRequestErrorFields(c, errFields)
-					return
+			if errors.As(ginErr.Err, &validateErrs) {
+				errFields := map[string]string{}
+				for _, e := range validateErrs {
+					errFields[e.Field()] = helpers.GetErrorMessages(e)
 				}
+				response.AbortWithBadRequestErrorFields(c, errFields)
+				return
 			}
+		}
 
+		if len(c.Errors) > 0 {
 			logs.Error(c.Errors.Last().Err)
 			response.AbortWithInternalServerError(c, c.Errors.Last().Err)
 		}

@@ -1085,7 +1085,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/comment/toggle-like/{commentID}": {
+        "/comment/toggle-like/{postID}/{commentID}": {
             "post": {
                 "description": "authentication toggle like or unlike comment and socket emit like or unlike comment, notification to client",
                 "produces": [
@@ -1095,6 +1095,13 @@ const docTemplate = `{
                     "comment"
                 ],
                 "parameters": [
+                    {
+                        "type": "string",
+                        "description": "uuid for post id",
+                        "name": "postID",
+                        "in": "path",
+                        "required": true
+                    },
                     {
                         "type": "string",
                         "description": "uuid for comment id",
@@ -1322,6 +1329,78 @@ const docTemplate = `{
                                     "properties": {
                                         "data": {
                                             "$ref": "#/definitions/notification.NotificationCursorPagination"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/notification/read-all": {
+            "patch": {
+                "description": "authentication and update read notifications",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notification"
+                ],
+                "parameters": [
+                    {
+                        "description": "update notification payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/notification.UpdateNotificationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SwaggerResponseWithData"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/notification.UpdatedNotification"
+                                            }
                                         }
                                     }
                                 }
@@ -2493,6 +2572,31 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/notification.Notification"
                     }
+                }
+            }
+        },
+        "notification.UpdateNotificationRequest": {
+            "type": "object",
+            "required": [
+                "notificationsId"
+            ],
+            "properties": {
+                "notificationsId": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "notification.UpdatedNotification": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "isRead": {
+                    "type": "boolean"
                 }
             }
         },

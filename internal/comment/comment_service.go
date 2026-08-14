@@ -23,6 +23,7 @@ import (
 )
 
 type UpdateCommentDTO struct {
+	UserID                  uuid.UUID
 	Message                 *string
 	FileURL                 string
 	CommentID               string
@@ -150,6 +151,7 @@ type CommentService interface {
 	ToggleLike(
 		ctx context.Context,
 		userID uuid.UUID,
+		postID,
 		commentID string,
 	) (string, *Like, error)
 }
@@ -1300,6 +1302,11 @@ func (s *commentService) UpdateComment(ctx context.Context, updateCommentDTO *Up
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Comment by id %v is not found", *commentIDParse))
 	}
 
+	// ถ้าไม่ใช่คอมเมนท์ตัวเองห้าม
+	if commentByID.UserID != updateCommentDTO.UserID {
+		return nil, errs.NewBadRequestErrorWithMessage("You can only update your own comments")
+	}
+
 	updatedComment := &models.Comment{}
 	var file *models.File
 	err = s.db.Transaction(func(tx *gorm.DB) error {
@@ -1309,6 +1316,7 @@ func (s *commentService) UpdateComment(ctx context.Context, updateCommentDTO *Up
 		updatedComment, err = s.commentRepository.Update(
 			ctx,
 			tx,
+			updateCommentDTO.UserID,
 			commentByID.ID,
 			updateComment,
 		)
@@ -1439,6 +1447,11 @@ func (s *commentService) DeleteComment(
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Comment by id %v is not found", *commentIDParse))
 	}
 
+	// ถ้าไม่ใช่คอมเมนท์ตัวเองห้าม
+	if commentByID.UserID != userID {
+		return nil, errs.NewBadRequestErrorWithMessage("You can only delete your own comments")
+	}
+
 	file, err := s.fileRepository.FindByContentID(
 		ctx,
 		s.db,
@@ -1515,6 +1528,7 @@ func (s *commentService) DeleteComment(
 		deletedComment, err = s.commentRepository.Delete(
 			ctx,
 			tx,
+			userID,
 			commentByID.ID,
 		)
 		if err != nil {
@@ -1575,9 +1589,22 @@ func (s *commentService) DeleteComment(
 func (s *commentService) ToggleLike(
 	ctx context.Context,
 	userID uuid.UUID,
+	postID,
 	commentID string,
 ) (string, *Like, error) {
-	err := helpers.ValidateUUID(commentID)
+	err := helpers.ValidateUUID(postID)
+	if err != nil {
+		logs.Warn(err)
+		return "", nil, err
+	}
+
+	postIDParse, err := helpers.ParseUUID(postID)
+	if err != nil {
+		logs.Error(err)
+		return "", nil, err
+	}
+
+	err = helpers.ValidateUUID(commentID)
 	if err != nil {
 		logs.Warn(err)
 		return "", nil, err
@@ -1587,6 +1614,21 @@ func (s *commentService) ToggleLike(
 	if err != nil {
 		logs.Error(err)
 		return "", nil, err
+	}
+
+	postByID, err := s.postRepository.FindByID(
+		ctx,
+		s.db,
+		*postIDParse,
+	)
+	if err != nil && !helpers.IsErrRecordNotFound(err) {
+		logs.Error(err)
+		return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id")
+	}
+
+	if helpers.IsErrRecordNotFound(err) {
+		logs.Warn(err)
+		return "", nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", *postIDParse))
 	}
 
 	commentByID, err := s.commentRepository.FindByID(
@@ -1617,12 +1659,17 @@ func (s *commentService) ToggleLike(
 
 	// กรณี like
 	if helpers.IsErrRecordNotFound(err) {
-		createNotificationDTO := &models.Notification{
-			Type:       models.NotificationTypeLike,
-			SenderID:   userID,
-			ReceiverID: commentByID.UserID,
-			CommentID:  &commentByID.ID,
-			Message:    "Like your comment",
+		var createNotificationDTO *models.Notification
+
+		if commentByID.UserID != userID {
+			createNotificationDTO = &models.Notification{
+				Type:       models.NotificationTypeLike,
+				SenderID:   userID,
+				ReceiverID: commentByID.UserID,
+				PostID:     &postByID.ID,
+				CommentID:  &commentByID.ID,
+				Message:    "Like your comment",
+			}
 		}
 
 		err = s.db.Transaction(func(tx *gorm.DB) error {
@@ -1640,13 +1687,16 @@ func (s *commentService) ToggleLike(
 				return errs.NewInternalServerErrorWithMessage("Failed to create like of comment")
 			}
 
-			err = s.notificationService.CreateNotification(
-				ctx,
-				tx,
-				createNotificationDTO,
-			)
-			if err != nil {
-				return err
+			// ต้องไม่ like comment ตัวเองถึงสร้าง notification
+			if commentByID.UserID != userID {
+				err = s.notificationService.CreateNotification(
+					ctx,
+					tx,
+					createNotificationDTO,
+				)
+				if err != nil {
+					return err
+				}
 			}
 
 			return nil
@@ -1675,21 +1725,6 @@ func (s *commentService) ToggleLike(
 			return "", nil, err
 		}
 
-		createdNotification, err := s.notificationRepository.FindByIDWithSenderRelation(
-			ctx,
-			s.db,
-			createNotificationDTO.ID,
-		)
-		if err != nil {
-			logs.Error(err)
-			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find notification by id with sender relation")
-		}
-
-		err = s.userService.GetUserImage(ctx, &createdNotification.Sender)
-		if err != nil {
-			return "", nil, err
-		}
-
 		secureUserLike := &user.SecureUser{
 			ID:                   createdLike.UserID,
 			Fullname:             createdLike.User.Fullname,
@@ -1714,33 +1749,52 @@ func (s *commentService) ToggleLike(
 		}
 		go s.commentSocket.EmitLikeOrUnlike(commentLikeDTO)
 
-		secureUserNotification := &user.SecureUser{
-			ID:                   createdNotification.SenderID,
-			Fullname:             createdNotification.Sender.Fullname,
-			Username:             createdNotification.Sender.Username,
-			Email:                createdNotification.Sender.Email,
-			DateOfBirth:          createdNotification.Sender.DateOfBirth,
-			ProfileUrl:           createdNotification.Sender.ProfileUrl,
-			ProfileBackgroundUrl: createdNotification.Sender.ProfileBackgroundUrl,
-			Info:                 createdNotification.Sender.Info,
-			Role:                 createdNotification.Sender.Role,
-			ProviderType:         createdNotification.Sender.ProviderType,
-			CreatedAt:            createdNotification.Sender.CreatedAt,
-			UpdatedAt:            createdNotification.Sender.UpdatedAt,
+		// ต้องไม่ like comment ตัวเองถึง emit notification
+		if commentByID.UserID != userID {
+			createdNotification, err := s.notificationRepository.FindByIDWithSenderRelation(
+				ctx,
+				s.db,
+				createNotificationDTO.ID,
+			)
+			if err != nil {
+				logs.Error(err)
+				return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find notification by id with sender relation")
+			}
+
+			err = s.userService.GetUserImage(ctx, &createdNotification.Sender)
+			if err != nil {
+				return "", nil, err
+			}
+
+			secureUserNotification := &user.SecureUser{
+				ID:                   createdNotification.SenderID,
+				Fullname:             createdNotification.Sender.Fullname,
+				Username:             createdNotification.Sender.Username,
+				Email:                createdNotification.Sender.Email,
+				DateOfBirth:          createdNotification.Sender.DateOfBirth,
+				ProfileUrl:           createdNotification.Sender.ProfileUrl,
+				ProfileBackgroundUrl: createdNotification.Sender.ProfileBackgroundUrl,
+				Info:                 createdNotification.Sender.Info,
+				Role:                 createdNotification.Sender.Role,
+				ProviderType:         createdNotification.Sender.ProviderType,
+				CreatedAt:            createdNotification.Sender.CreatedAt,
+				UpdatedAt:            createdNotification.Sender.UpdatedAt,
+			}
+			emitNotificationDTO := &socket.EmitNotificationDTO{
+				ID:         createdNotification.ID,
+				Type:       createdNotification.Type,
+				Message:    createdNotification.Message,
+				IsRead:     createdNotification.IsRead,
+				SenderID:   createdNotification.SenderID,
+				Sender:     secureUserNotification,
+				ReceiverID: createdNotification.ReceiverID,
+				PostID:     createdNotification.PostID,
+				CommentID:  createdNotification.CommentID,
+				CreatedAt:  createdNotification.CreatedAt,
+				UpdatedAt:  createdNotification.UpdatedAt,
+			}
+			go s.notificationSocket.EmitNotification(emitNotificationDTO)
 		}
-		emitNotificationDTO := &socket.EmitNotificationDTO{
-			ID:         createdNotification.ID,
-			Type:       createdNotification.Type,
-			Message:    createdNotification.Message,
-			IsRead:     createdNotification.IsRead,
-			SenderID:   createdNotification.SenderID,
-			Sender:     secureUserNotification,
-			ReceiverID: createdNotification.ReceiverID,
-			CommentID:  createdNotification.CommentID,
-			CreatedAt:  createdNotification.CreatedAt,
-			UpdatedAt:  createdNotification.UpdatedAt,
-		}
-		go s.notificationSocket.EmitNotification(emitNotificationDTO)
 
 		likeResp := &Like{
 			ID:        createdLike.ID,
@@ -1773,6 +1827,7 @@ func (s *commentService) ToggleLike(
 			tx,
 			userID,
 			commentByID.UserID,
+			postByID.ID,
 			commentByID.ID,
 		)
 		if err != nil {
@@ -1780,14 +1835,16 @@ func (s *commentService) ToggleLike(
 			return errs.NewInternalServerErrorWithMessage("Failed to find notification of like comment")
 		}
 
-		err = s.notificationRepository.Delete(
-			ctx,
-			tx,
-			notification.ID,
-		)
-		if err != nil {
-			logs.Error(err)
-			return errs.NewInternalServerErrorWithMessage("Failed to delete notification by id")
+		if notification != nil {
+			err = s.notificationRepository.Delete(
+				ctx,
+				tx,
+				notification.ID,
+			)
+			if err != nil {
+				logs.Error(err)
+				return errs.NewInternalServerErrorWithMessage("Failed to delete notification by id")
+			}
 		}
 
 		return nil
@@ -1809,10 +1866,13 @@ func (s *commentService) ToggleLike(
 	}
 	go s.commentSocket.EmitLikeOrUnlike(commentLikeDTO)
 
-	emitNotificationDTO := &socket.EmitNotificationDTO{
-		ID: notification.ID,
+	if notification != nil {
+		emitNotificationDTO := &socket.EmitNotificationDTO{
+			ID:         notification.ID,
+			ReceiverID: notification.ReceiverID,
+		}
+		go s.notificationSocket.EmitNotification(emitNotificationDTO)
 	}
-	go s.notificationSocket.EmitNotification(emitNotificationDTO)
 
 	likeResp := &Like{
 		ID:        deletedLike.ID,

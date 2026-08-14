@@ -244,12 +244,13 @@ func main() {
 		comment.GET("/finds/:postID", commentHandler.FindsWithPostIDCursorPagination)
 		comment.PATCH("/update/:commentID", commentHandler.UpdateComment)
 		comment.DELETE("/delete/:commentID", commentHandler.DeleteComment)
-		comment.POST("/toggle-like/:commentID", commentHandler.ToggleLike)
+		comment.POST("/toggle-like/:postID/:commentID", commentHandler.ToggleLike)
 	}
 
 	{
 		notification := api.Group("/notification")
 		notification.GET("/finds", notificationHandler.FindsWithReceiverIDCursorPagination)
+		notification.PATCH("/read-all", notificationHandler.UpdateIsRead)
 	}
 
 	app.Run()

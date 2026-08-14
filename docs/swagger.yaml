@@ -314,6 +314,22 @@ definitions:
           $ref: '#/definitions/notification.Notification'
         type: array
     type: object
+  notification.UpdateNotificationRequest:
+    properties:
+      notificationsId:
+        items:
+          type: string
+        type: array
+    required:
+    - notificationsId
+    type: object
+  notification.UpdatedNotification:
+    properties:
+      id:
+        type: string
+      isRead:
+        type: boolean
+    type: object
   post.CreatePostRequest:
     properties:
       filesUrl:
@@ -1327,11 +1343,16 @@ paths:
             $ref: '#/definitions/response.SwaggerResponse'
       tags:
       - comment
-  /comment/toggle-like/{commentID}:
+  /comment/toggle-like/{postID}/{commentID}:
     post:
       description: authentication toggle like or unlike comment and socket emit like
         or unlike comment, notification to client
       parameters:
+      - description: uuid for post id
+        in: path
+        name: postID
+        required: true
+        type: string
       - description: uuid for comment id
         in: path
         name: commentID
@@ -1474,6 +1495,50 @@ paths:
             - properties:
                 data:
                   $ref: '#/definitions/notification.NotificationCursorPagination'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - notification
+  /notification/read-all:
+    patch:
+      consumes:
+      - application/json
+      description: authentication and update read notifications
+      parameters:
+      - description: update notification payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/notification.UpdateNotificationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SwaggerResponseWithData'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/notification.UpdatedNotification'
+                  type: array
               type: object
         "400":
           description: Bad Request

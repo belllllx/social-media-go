@@ -15,6 +15,11 @@ import (
 	"gorm.io/gorm"
 )
 
+type UpdatedNotification struct {
+	ID     uuid.UUID `json:"id"`
+	IsRead bool      `json:"isRead"`
+}
+
 type Notification struct {
 	ID         uuid.UUID               `json:"id"`
 	Type       models.NotificationType `json:"type"`
@@ -51,6 +56,11 @@ type NotificationService interface {
 		cursor,
 		limit string,
 	) (*NotificationCursorPagination, error)
+	UpdateIsRead(
+		ctx context.Context,
+		userID uuid.UUID,
+		notificationsID []uuid.UUID,
+	) ([]UpdatedNotification, error)
 }
 
 type notificationService struct {
@@ -227,4 +237,30 @@ func (s *notificationService) FindsWithReceiverIDCursorPagination(
 	}
 
 	return notificationCursorPagination, nil
+}
+
+func (s *notificationService) UpdateIsRead(
+	ctx context.Context,
+	userID uuid.UUID,
+	notificationsID []uuid.UUID,
+) ([]UpdatedNotification, error) {
+	updatedNotifications, err := s.notificationRepository.UpdateIsRead(
+		ctx,
+		s.db,
+		userID,
+		notificationsID,
+	)
+	if err != nil {
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to update notifications")
+	}
+
+	updateNotificationsResp := []UpdatedNotification{}
+	for _, updatedNotification := range updatedNotifications {
+		updateNotificationsResp = append(updateNotificationsResp, UpdatedNotification{
+			ID:     updatedNotification.ID,
+			IsRead: updatedNotification.IsRead,
+		})
+	}
+	return updateNotificationsResp, nil
 }

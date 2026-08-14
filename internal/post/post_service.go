@@ -23,6 +23,7 @@ import (
 )
 
 type UpdatePostDTO struct {
+	UserID                   uuid.UUID
 	PostID                   string
 	Message                  *string
 	FilesURL                 []string
@@ -127,7 +128,11 @@ type PostService interface {
 	) (*PostCursorPagination, error)
 	FindWithID(ctx context.Context, postID string) (*Post, error)
 	UpdatePost(ctx context.Context, updatePostDTO *UpdatePostDTO) (*UpdatedPost, error)
-	DeletePost(ctx context.Context, postID string) (*DeletedPost, error)
+	DeletePost(
+		ctx context.Context,
+		userID uuid.UUID,
+		postID string,
+	) (*DeletedPost, error)
 	ToggleLike(
 		ctx context.Context,
 		userID uuid.UUID,
@@ -1264,6 +1269,11 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", *postID))
 	}
 
+	// ถ้าไม่ใช่โพสต์ตัวเองห้ามอัพเดด
+	if postByID.UserID != updatePostDTO.UserID {
+		return nil, errs.NewBadRequestErrorWithMessage("You can only update your own posts")
+	}
+
 	updatedPost := &models.Post{}
 	files := []models.File{}
 	err = s.db.Transaction(func(tx *gorm.DB) error {
@@ -1273,6 +1283,7 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 		updatedPost, err = s.postRepository.Update(
 			ctx,
 			tx,
+			updatePostDTO.UserID,
 			postByID.ID,
 			updatePost,
 		)
@@ -1374,7 +1385,11 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 	return updatePostResp, nil
 }
 
-func (s *postService) DeletePost(ctx context.Context, postID string) (*DeletedPost, error) {
+func (s *postService) DeletePost(
+	ctx context.Context,
+	userID uuid.UUID,
+	postID string,
+) (*DeletedPost, error) {
 	err := helpers.ValidateUUID(postID)
 	if err != nil {
 		logs.Warn(err)
@@ -1400,6 +1415,11 @@ func (s *postService) DeletePost(ctx context.Context, postID string) (*DeletedPo
 	if helpers.IsErrRecordNotFound(err) {
 		logs.Warn(err)
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", *postIDParse))
+	}
+
+	// ถ้าไม่ใช่โพสต์ตัวเองห้าม
+	if post.UserID != userID {
+		return nil, errs.NewBadRequestErrorWithMessage("You can only delete your own posts")
 	}
 
 	files, err := s.fileRepository.FindsByContentID(
@@ -1474,6 +1494,7 @@ func (s *postService) DeletePost(ctx context.Context, postID string) (*DeletedPo
 		deletedPost, err = s.postRepository.Delete(
 			ctx,
 			tx,
+			userID,
 			post.ID,
 		)
 		if err != nil {
@@ -1587,12 +1608,16 @@ func (s *postService) ToggleLike(
 
 	// กรณี like
 	if helpers.IsErrRecordNotFound(err) {
-		createNotificationDTO := &models.Notification{
-			Type:       models.NotificationTypeLike,
-			SenderID:   userID,
-			ReceiverID: postByID.UserID,
-			PostID:     &postByID.ID,
-			Message:    "Like your post",
+		var createNotificationDTO *models.Notification
+
+		if postByID.UserID != userID {
+			createNotificationDTO = &models.Notification{
+				Type:       models.NotificationTypeLike,
+				SenderID:   userID,
+				ReceiverID: postByID.UserID,
+				PostID:     &postByID.ID,
+				Message:    "Like your post",
+			}
 		}
 
 		err = s.db.Transaction(func(tx *gorm.DB) error {
@@ -1610,13 +1635,16 @@ func (s *postService) ToggleLike(
 				return errs.NewInternalServerErrorWithMessage("Failed to create like of post")
 			}
 
-			err = s.notificationService.CreateNotification(
-				ctx,
-				tx,
-				createNotificationDTO,
-			)
-			if err != nil {
-				return err
+			// ต้องไม่ like post ตัวเองถึงสร้าง notification
+			if postByID.UserID != userID {
+				err = s.notificationService.CreateNotification(
+					ctx,
+					tx,
+					createNotificationDTO,
+				)
+				if err != nil {
+					return err
+				}
 			}
 
 			return nil
@@ -1645,21 +1673,6 @@ func (s *postService) ToggleLike(
 			return "", nil, err
 		}
 
-		createdNotification, err := s.notificationRepository.FindByIDWithSenderRelation(
-			ctx,
-			s.db,
-			createNotificationDTO.ID,
-		)
-		if err != nil {
-			logs.Error(err)
-			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find notification by id with sender relation")
-		}
-
-		err = s.userService.GetUserImage(ctx, &createdNotification.Sender)
-		if err != nil {
-			return "", nil, err
-		}
-
 		secureUserLike := &user.SecureUser{
 			ID:                   createdLike.UserID,
 			Fullname:             createdLike.User.Fullname,
@@ -1684,33 +1697,51 @@ func (s *postService) ToggleLike(
 		}
 		go s.postSocket.EmitLikeOrUnlike(postLikeDTO)
 
-		secureUserNotification := &user.SecureUser{
-			ID:                   createdNotification.SenderID,
-			Fullname:             createdNotification.Sender.Fullname,
-			Username:             createdNotification.Sender.Username,
-			Email:                createdNotification.Sender.Email,
-			DateOfBirth:          createdNotification.Sender.DateOfBirth,
-			ProfileUrl:           createdNotification.Sender.ProfileUrl,
-			ProfileBackgroundUrl: createdNotification.Sender.ProfileBackgroundUrl,
-			Info:                 createdNotification.Sender.Info,
-			Role:                 createdNotification.Sender.Role,
-			ProviderType:         createdNotification.Sender.ProviderType,
-			CreatedAt:            createdNotification.Sender.CreatedAt,
-			UpdatedAt:            createdNotification.Sender.UpdatedAt,
+		// ต้องไม่ like post ตัวเองถึง emit notification
+		if postByID.UserID != userID {
+			createdNotification, err := s.notificationRepository.FindByIDWithSenderRelation(
+				ctx,
+				s.db,
+				createNotificationDTO.ID,
+			)
+			if err != nil {
+				logs.Error(err)
+				return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find notification by id with sender relation")
+			}
+
+			err = s.userService.GetUserImage(ctx, &createdNotification.Sender)
+			if err != nil {
+				return "", nil, err
+			}
+
+			secureUserNotification := &user.SecureUser{
+				ID:                   createdNotification.SenderID,
+				Fullname:             createdNotification.Sender.Fullname,
+				Username:             createdNotification.Sender.Username,
+				Email:                createdNotification.Sender.Email,
+				DateOfBirth:          createdNotification.Sender.DateOfBirth,
+				ProfileUrl:           createdNotification.Sender.ProfileUrl,
+				ProfileBackgroundUrl: createdNotification.Sender.ProfileBackgroundUrl,
+				Info:                 createdNotification.Sender.Info,
+				Role:                 createdNotification.Sender.Role,
+				ProviderType:         createdNotification.Sender.ProviderType,
+				CreatedAt:            createdNotification.Sender.CreatedAt,
+				UpdatedAt:            createdNotification.Sender.UpdatedAt,
+			}
+			emitNotificationDTO := &socket.EmitNotificationDTO{
+				ID:         createdNotification.ID,
+				Type:       createdNotification.Type,
+				Message:    createdNotification.Message,
+				IsRead:     createdNotification.IsRead,
+				SenderID:   createdNotification.SenderID,
+				Sender:     secureUserNotification,
+				ReceiverID: createdNotification.ReceiverID,
+				PostID:     createdNotification.PostID,
+				CreatedAt:  createdNotification.CreatedAt,
+				UpdatedAt:  createdNotification.UpdatedAt,
+			}
+			go s.notificationSocket.EmitNotification(emitNotificationDTO)
 		}
-		emitNotificationDTO := &socket.EmitNotificationDTO{
-			ID:         createdNotification.ID,
-			Type:       createdNotification.Type,
-			Message:    createdNotification.Message,
-			IsRead:     createdNotification.IsRead,
-			SenderID:   createdNotification.SenderID,
-			Sender:     secureUserNotification,
-			ReceiverID: createdNotification.ReceiverID,
-			PostID:     createdNotification.PostID,
-			CreatedAt:  createdNotification.CreatedAt,
-			UpdatedAt:  createdNotification.UpdatedAt,
-		}
-		go s.notificationSocket.EmitNotification(emitNotificationDTO)
 
 		likeResp := &Like{
 			ID:        createdLike.ID,
@@ -1745,19 +1776,21 @@ func (s *postService) ToggleLike(
 			postByID.UserID,
 			postByID.ID,
 		)
-		if err != nil {
+		if err != nil && !helpers.IsErrRecordNotFound(err) {
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to find notification of like post")
 		}
 
-		err = s.notificationRepository.Delete(
-			ctx,
-			tx,
-			notification.ID,
-		)
-		if err != nil {
-			logs.Error(err)
-			return errs.NewInternalServerErrorWithMessage("Failed to delete notification by id")
+		if notification != nil {
+			err = s.notificationRepository.Delete(
+				ctx,
+				tx,
+				notification.ID,
+			)
+			if err != nil {
+				logs.Error(err)
+				return errs.NewInternalServerErrorWithMessage("Failed to delete notification by id")
+			}
 		}
 
 		return nil
@@ -1779,10 +1812,13 @@ func (s *postService) ToggleLike(
 	}
 	go s.postSocket.EmitLikeOrUnlike(postLikeDTO)
 
-	emitNotificationDTO := &socket.EmitNotificationDTO{
-		ID: notification.ID,
+	if notification != nil {
+		emitNotificationDTO := &socket.EmitNotificationDTO{
+			ID:         notification.ID,
+			ReceiverID: notification.ReceiverID,
+		}
+		go s.notificationSocket.EmitNotification(emitNotificationDTO)
 	}
-	go s.notificationSocket.EmitNotification(emitNotificationDTO)
 
 	likeResp := &Like{
 		ID:        deletedLike.ID,

@@ -63,12 +63,14 @@ type PostRepository interface {
 	Update(
 		ctx context.Context,
 		db *gorm.DB,
+		userID,
 		postID uuid.UUID,
 		updatePost *models.Post,
 	) (*models.Post, error)
 	Delete(
 		ctx context.Context,
 		db *gorm.DB,
+		userID,
 		postID uuid.UUID,
 	) (*models.Post, error)
 }
@@ -257,6 +259,7 @@ func (r *postRepositoryDB) FindsByUserIDCursorPaginationWithPostRelations(
 func (r *postRepositoryDB) Update(
 	ctx context.Context,
 	db *gorm.DB,
+	userID,
 	postID uuid.UUID,
 	updatePost *models.Post,
 ) (*models.Post, error) {
@@ -270,7 +273,7 @@ func (r *postRepositoryDB) Update(
 				{Name: "message"},
 			},
 		}).
-		Where("id = ?", postID).
+		Where("id = ? AND user_id = ?", postID, userID).
 		Updates(*updatePost).Error
 	if err != nil {
 		return nil, err
@@ -281,6 +284,7 @@ func (r *postRepositoryDB) Update(
 func (r *postRepositoryDB) Delete(
 	ctx context.Context,
 	db *gorm.DB,
+	userID,
 	postID uuid.UUID,
 ) (*models.Post, error) {
 	post := &models.Post{}
@@ -291,7 +295,7 @@ func (r *postRepositoryDB) Delete(
 				{Name: "id"},
 			},
 		}).
-		Where("id = ?", postID).
+		Where("id = ? AND user_id = ?", postID, userID).
 		Delete(post).Error
 	if err != nil {
 		return nil, err

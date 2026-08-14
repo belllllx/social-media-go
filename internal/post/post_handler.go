@@ -343,6 +343,12 @@ func (h *postHandler) FindWithID(c *gin.Context) {
 func (h *postHandler) UpdatePost(c *gin.Context) {
 	ctx := c.Request.Context()
 
+	user, ok := c.MustGet("user").(*user.SecureUserWithFollowRelations)
+	if !ok {
+		response.AbortWithUnauthorized(c)
+		return
+	}
+
 	postID := c.Param("postID")
 	updatePostRequest := &UpdatePostRequest{}
 	err := c.ShouldBind(updatePostRequest)
@@ -352,6 +358,7 @@ func (h *postHandler) UpdatePost(c *gin.Context) {
 	}
 
 	updatePostDTO := &UpdatePostDTO{
+		UserID:                   user.ID,
 		PostID:                   postID,
 		Message:                  updatePostRequest.Message,
 		FilesURL:                 updatePostRequest.FilesURL,
@@ -382,8 +389,18 @@ func (h *postHandler) UpdatePost(c *gin.Context) {
 func (h *postHandler) DeletePost(c *gin.Context) {
 	ctx := c.Request.Context()
 
+	user, ok := c.MustGet("user").(*user.SecureUserWithFollowRelations)
+	if !ok {
+		response.AbortWithUnauthorized(c)
+		return
+	}
+
 	postID := c.Param("postID")
-	deletedPost, err := h.postService.DeletePost(ctx, postID)
+	deletedPost, err := h.postService.DeletePost(
+		ctx,
+		user.ID,
+		postID,
+	)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
