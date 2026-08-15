@@ -378,7 +378,6 @@ func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostD
 				Sender:     notificationSender,
 				ReceiverID: notification.ReceiverID,
 				PostID:     notification.PostID,
-				CommentID:  notification.CommentID,
 				CreatedAt:  notification.CreatedAt,
 				UpdatedAt:  notification.UpdatedAt,
 			})
@@ -595,7 +594,6 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 			Sender:     notificationSender,
 			ReceiverID: notification.ReceiverID,
 			PostID:     notification.PostID,
-			CommentID:  notification.CommentID,
 			CreatedAt:  notification.CreatedAt,
 			UpdatedAt:  notification.UpdatedAt,
 		}
@@ -1461,7 +1459,7 @@ func (s *postService) DeletePost(
 		}
 
 		for _, userExcept := range usersExcept {
-			notifications, err := s.notificationRepository.FindsOfPost(
+			notificationsUserExcept, err := s.notificationRepository.FindsOfPost(
 				ctx,
 				s.db,
 				post.UserID,
@@ -1473,7 +1471,7 @@ func (s *postService) DeletePost(
 				return nil, errs.NewInternalServerErrorWithMessage("Failed to find notifications of post")
 			}
 
-			notifications = append(notifications, notifications...)
+			notifications = append(notifications, notificationsUserExcept...)
 		}
 	}
 
@@ -1538,22 +1536,24 @@ func (s *postService) DeletePost(
 	if post.ParentID != nil {
 		// กรณีมีแจ้งเตือน emit กลับไปหา client เพื่อลบออก
 		if notification != nil {
-			emitNotificationDTO := &socket.EmitNotificationDTO{
-				ID: notification.ID,
+			emitDeleteNotificationDTO := &socket.EmitDeleteNotificationDTO{
+				ID:         notification.ID,
+				ReceiverID: notification.ReceiverID,
 			}
-			go s.notificationSocket.EmitNotification(emitNotificationDTO)
+			go s.notificationSocket.EmitDeleteNotification(emitDeleteNotificationDTO)
 		}
 	} else {
 		// กรณีโพสปกติ
-		emitNotificationsDTO := []socket.EmitNotificationDTO{}
+		emitDeleteNotificationsDTO := []socket.EmitDeleteNotificationDTO{}
 		for _, notification := range notifications {
-			emitNotificationsDTO = append(emitNotificationsDTO, socket.EmitNotificationDTO{
-				ID: notification.ID,
+			emitDeleteNotificationsDTO = append(emitDeleteNotificationsDTO, socket.EmitDeleteNotificationDTO{
+				ID:         notification.ID,
+				ReceiverID: notification.ReceiverID,
 			})
 		}
 		// กรณีมีแจ้งเตือน emit กลับไปหา client เพื่อลบออก
-		if len(emitNotificationsDTO) > 0 {
-			go s.notificationSocket.EmitNotifications(emitNotificationsDTO)
+		if len(emitDeleteNotificationsDTO) > 0 {
+			go s.notificationSocket.EmitDeleteNotifications(emitDeleteNotificationsDTO)
 		}
 	}
 
@@ -1813,11 +1813,11 @@ func (s *postService) ToggleLike(
 	go s.postSocket.EmitLikeOrUnlike(postLikeDTO)
 
 	if notification != nil {
-		emitNotificationDTO := &socket.EmitNotificationDTO{
+		emitDeleteNotificationDTO := &socket.EmitDeleteNotificationDTO{
 			ID:         notification.ID,
 			ReceiverID: notification.ReceiverID,
 		}
-		go s.notificationSocket.EmitNotification(emitNotificationDTO)
+		go s.notificationSocket.EmitDeleteNotification(emitDeleteNotificationDTO)
 	}
 
 	likeResp := &Like{

@@ -1569,10 +1569,11 @@ func (s *commentService) DeleteComment(
 	go s.commentSocket.EmitDelete(deleteCommentDTOSocket)
 
 	if notification != nil {
-		emitNotificationDTO := &socket.EmitNotificationDTO{
-			ID: notification.ID,
+		emitDeleteNotificationDTO := &socket.EmitDeleteNotificationDTO{
+			ID:         notification.ID,
+			ReceiverID: notification.ReceiverID,
 		}
-		go s.notificationSocket.EmitNotification(emitNotificationDTO)
+		go s.notificationSocket.EmitDeleteNotification(emitDeleteNotificationDTO)
 	}
 
 	deleteCommentResp := &DeletedComment{
@@ -1830,7 +1831,7 @@ func (s *commentService) ToggleLike(
 			postByID.ID,
 			commentByID.ID,
 		)
-		if err != nil {
+		if err != nil && !helpers.IsErrRecordNotFound(err) {
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to find notification of like comment")
 		}
@@ -1867,11 +1868,11 @@ func (s *commentService) ToggleLike(
 	go s.commentSocket.EmitLikeOrUnlike(commentLikeDTO)
 
 	if notification != nil {
-		emitNotificationDTO := &socket.EmitNotificationDTO{
+		emitDeleteNotificationDTO := &socket.EmitDeleteNotificationDTO{
 			ID:         notification.ID,
 			ReceiverID: notification.ReceiverID,
 		}
-		go s.notificationSocket.EmitNotification(emitNotificationDTO)
+		go s.notificationSocket.EmitDeleteNotification(emitDeleteNotificationDTO)
 	}
 
 	likeResp := &Like{

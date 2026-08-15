@@ -166,7 +166,7 @@ func (r *notificationRepositoryDB) FindOfPost(
 	notification := &models.Notification{}
 	err := db.
 		WithContext(ctx).
-		Select("id").
+		Select("id", "receiver_id").
 		Where(
 			"sender_id = ? AND receiver_id = ? AND post_id = ? AND type = ?",
 			senderID,
@@ -191,7 +191,7 @@ func (r *notificationRepositoryDB) FindsOfPost(
 	notifications := &[]models.Notification{}
 	err := db.
 		WithContext(ctx).
-		Select("id").
+		Select("id", "receiver_id").
 		Where(
 			"sender_id = ? AND receiver_id = ? AND post_id = ? AND type = ?",
 			senderID,
@@ -242,7 +242,7 @@ func (r *notificationRepositoryDB) FindOfComment(
 	notification := &models.Notification{}
 	err := db.
 		WithContext(ctx).
-		Select("id").
+		Select("id", "receiver_id").
 		Where(
 			"sender_id = ? AND receiver_id = ? AND comment_id = ? AND type = ?",
 			senderID,

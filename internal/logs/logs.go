@@ -1,6 +1,8 @@
 package logs
 
 import (
+	"fmt"
+
 	"go.uber.org/zap"
 )
 
@@ -26,8 +28,8 @@ func Info(msg string, fields ...zap.Field) {
 	logger.Info(msg, fields...)
 }
 
-func Debug(msg string, fields ...zap.Field) {
-	logger.Debug(msg, fields...)
+func Debug(args ...any) {
+	logger.Debug(fmt.Sprintln(args...))
 }
 
 func Warn(msg any, fields ...zap.Field) {
