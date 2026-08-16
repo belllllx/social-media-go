@@ -186,7 +186,7 @@ func (r *commentRepositoryDB) FindsByPostIDCursorPaginationWithCommentRelations(
 	comments := &[]models.Comment{}
 	db = db.
 		WithContext(ctx).
-		Where("(post_id = ? AND parent_id IS NULL)", postID).
+		Where("post_id = ? AND parent_id IS NULL", postID).
 		Preload("User", helpers.OmitUserPasswordHash).
 		Preload("Likes", func(db *gorm.DB) *gorm.DB {
 			return db.Order("likes.created_at DESC")
@@ -206,7 +206,7 @@ func (r *commentRepositoryDB) FindsByPostIDCursorPaginationWithCommentRelations(
 
 	if cursor != nil {
 		db = db.Where(
-			"(created_at < ?) OR (created_at = ? AND id < ?)",
+			"(created_at < ? OR (created_at = ? AND id < ?))",
 			cursor.CreatedAt,
 			cursor.CreatedAt,
 			cursor.ID,

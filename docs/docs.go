@@ -2108,6 +2108,141 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/user/find/{userID}": {
+            "get": {
+                "description": "authentication and find user by id with follow relations",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "user"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "uuid for user id",
+                        "name": "userID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SwaggerResponseWithData"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/user.SecureUserWithFollowRelations"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/user/finds-with-fullname": {
+            "get": {
+                "description": "authentication and find users with fullname cursor pagination",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "user"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "search user with fullname",
+                        "name": "fullname",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "cursor uuid for user id",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "limit for users cursor pagination",
+                        "name": "limit",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SwaggerResponseWithData"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/user.UserCursorPagination"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -3088,6 +3223,20 @@ const docTemplate = `{
                 },
                 "username": {
                     "type": "string"
+                }
+            }
+        },
+        "user.UserCursorPagination": {
+            "type": "object",
+            "properties": {
+                "nextCursor": {
+                    "type": "string"
+                },
+                "users": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/user.SecureUser"
+                    }
                 }
             }
         }

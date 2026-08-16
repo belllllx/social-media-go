@@ -205,7 +205,7 @@ func (r *postRepositoryDB) FindsCursorPaginationWithPostRelations(
 
 	if cursor != nil {
 		db = db.Where(
-			"(created_at < ?) OR (created_at = ? AND id < ?)",
+			"created_at < ? OR (created_at = ? AND id < ?)",
 			cursor.CreatedAt,
 			cursor.CreatedAt,
 			cursor.ID,
@@ -242,7 +242,7 @@ func (r *postRepositoryDB) FindsByUserIDCursorPaginationWithPostRelations(
 
 	if cursor != nil {
 		db = db.Where(
-			"(created_at < ?) OR (created_at = ? AND id < ?)",
+			"(created_at < ? OR (created_at = ? AND id < ?))",
 			cursor.CreatedAt,
 			cursor.CreatedAt,
 			cursor.ID,

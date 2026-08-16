@@ -136,6 +136,7 @@ func main() {
 	postHandler := post.NewPostHandler(fileService, postService)
 	commentHandler := comment.NewCommentHandler(commentService, fileService)
 	notificationHandler := notification.NewNotificationHandler(notificationService)
+	userHandler := user.NewUserHandler(userService)
 
 	app.Cron.AddFunc("*/30 * * * *", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -251,6 +252,12 @@ func main() {
 		notification := api.Group("/notification")
 		notification.GET("/finds", notificationHandler.FindsWithReceiverIDCursorPagination)
 		notification.PATCH("/read-all", notificationHandler.UpdateIsRead)
+	}
+
+	{
+		user := api.Group("/user")
+		user.GET("/finds-with-fullname", userHandler.FindsWithFullnameCursorPagination)
+		user.GET("/find/:userID", userHandler.FindByIDWithFollowRelations)
 	}
 
 	app.Run()

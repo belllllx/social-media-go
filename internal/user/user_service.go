@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -13,6 +14,13 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+type FindsWithFullnameCursorPaginationDTO struct {
+	UserID   uuid.UUID
+	Fullname string
+	Cursor   string
+	Limit    string
+}
 
 type FollowerData struct {
 	ID          int64     `json:"id"`
@@ -71,6 +79,11 @@ type SecureUser struct {
 	UpdatedAt            time.Time           `json:"updatedAt"`
 }
 
+type UserCursorPagination struct {
+	Users      []SecureUser `json:"users"`
+	NextCursor *uuid.UUID   `json:"nextCursor"`
+}
+
 type SecureUserWithFollowRelations struct {
 	ID                   uuid.UUID           `json:"id"`
 	Fullname             string              `json:"fullname"`
@@ -89,7 +102,12 @@ type SecureUserWithFollowRelations struct {
 }
 
 type UserService interface {
+	FindByID(ctx context.Context, userID string) (*SecureUserWithFollowRelations, error)
 	FindByIDWithFollowRelations(ctx context.Context, userID uuid.UUID) (*SecureUserWithFollowRelations, error)
+	FindsWithFullnameCursorPagination(
+		ctx context.Context,
+		findsWithFullnameCursorPaginationDTO *FindsWithFullnameCursorPaginationDTO,
+	) (*UserCursorPagination, error)
 	ResetPassword(
 		ctx context.Context,
 		email,
@@ -114,6 +132,22 @@ func NewUserService(
 		presignClient:  presignClient,
 		userRepository: userRepository,
 	}
+}
+
+func (s *userService) FindByID(ctx context.Context, userID string) (*SecureUserWithFollowRelations, error) {
+	err := helpers.ValidateUUID(userID)
+	if err != nil {
+		logs.Warn(err)
+		return nil, err
+	}
+
+	userIDParse, err := helpers.ParseUUID(userID)
+	if err != nil {
+		logs.Error(err)
+		return nil, err
+	}
+
+	return s.FindByIDWithFollowRelations(ctx, *userIDParse)
 }
 
 func (s *userService) FindByIDWithFollowRelations(ctx context.Context, userID uuid.UUID) (*SecureUserWithFollowRelations, error) {
@@ -240,6 +274,112 @@ func (s *userService) FindByIDWithFollowRelations(ctx context.Context, userID uu
 		UpdatedAt:            user.UpdatedAt,
 	}
 	return secureUserWithFollowRelations, nil
+}
+
+func (s *userService) FindsWithFullnameCursorPagination(
+	ctx context.Context,
+	findsWithFullnameCursorPaginationDTO *FindsWithFullnameCursorPaginationDTO,
+) (*UserCursorPagination, error) {
+	var nextCursor *uuid.UUID
+	var cursorID *uuid.UUID
+
+	if findsWithFullnameCursorPaginationDTO.Cursor != "" {
+		err := helpers.ValidateUUID(findsWithFullnameCursorPaginationDTO.Cursor)
+		if err != nil {
+			logs.Warn(err)
+			return nil, err
+		}
+
+		cursorID, err = helpers.ParseUUID(findsWithFullnameCursorPaginationDTO.Cursor)
+		if err != nil {
+			logs.Error(err)
+			return nil, err
+		}
+	}
+
+	limitInt, err := strconv.Atoi(findsWithFullnameCursorPaginationDTO.Limit)
+	if err != nil {
+		return nil, errs.NewBadRequestErrorWithMessage("Invalid limit must be string integer")
+	}
+
+	if limitInt <= 0 {
+		return nil, errs.NewBadRequestErrorWithMessage("Invalid limit must be greater than 0")
+	}
+
+	users := []models.User{}
+	usersCursorPagination := []SecureUser{}
+	if findsWithFullnameCursorPaginationDTO.Cursor == "" {
+		users, err = s.userRepository.FindsByFullnameCursorPagination(
+			ctx,
+			s.db,
+			findsWithFullnameCursorPaginationDTO.UserID,
+			findsWithFullnameCursorPaginationDTO.Fullname,
+			nil,
+			limitInt,
+		)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find users by fullname cursor pagination")
+		}
+	} else {
+		cursor, err := s.userRepository.FindByIDCursor(
+			ctx,
+			s.db,
+			findsWithFullnameCursorPaginationDTO.UserID,
+		)
+		if err != nil && !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find user cursor by user id")
+		}
+
+		if helpers.IsErrRecordNotFound(err) {
+			return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Cursor by user id %v is not found", *cursorID))
+		}
+
+		users, err = s.userRepository.FindsByFullnameCursorPagination(
+			ctx,
+			s.db,
+			findsWithFullnameCursorPaginationDTO.UserID,
+			findsWithFullnameCursorPaginationDTO.Fullname,
+			cursor,
+			limitInt,
+		)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find users by fullname cursor pagination")
+		}
+	}
+
+	for _, user := range users {
+		err = s.GetUserImage(ctx, &user)
+		if err != nil {
+			return nil, err
+		}
+
+		usersCursorPagination = append(usersCursorPagination, SecureUser{
+			ID:                   user.ID,
+			Fullname:             user.Fullname,
+			Username:             user.Username,
+			Email:                user.Email,
+			DateOfBirth:          user.DateOfBirth,
+			ProfileUrl:           user.ProfileUrl,
+			ProfileBackgroundUrl: user.ProfileBackgroundUrl,
+			Info:                 user.Info,
+			Role:                 user.Role,
+			ProviderType:         user.ProviderType,
+			CreatedAt:            user.CreatedAt,
+			UpdatedAt:            user.UpdatedAt,
+		})
+	}
+
+	if len(usersCursorPagination) == limitInt {
+		nextCursor = &usersCursorPagination[len(usersCursorPagination)-1].ID
+	}
+	userCursorPagination := &UserCursorPagination{
+		Users:      usersCursorPagination,
+		NextCursor: nextCursor,
+	}
+	return userCursorPagination, nil
 }
 
 func (s *userService) ResetPassword(

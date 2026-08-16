@@ -651,6 +651,15 @@ definitions:
       username:
         type: string
     type: object
+  user.UserCursorPagination:
+    properties:
+      nextCursor:
+        type: string
+      users:
+        items:
+          $ref: '#/definitions/user.SecureUser'
+        type: array
+    type: object
 externalDocs:
   description: OpenAPI
   url: https://swagger.io/resources/open-api/
@@ -1976,4 +1985,87 @@ paths:
             $ref: '#/definitions/response.SwaggerResponse'
       tags:
       - post
+  /user/find/{userID}:
+    get:
+      description: authentication and find user by id with follow relations
+      parameters:
+      - description: uuid for user id
+        in: path
+        name: userID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SwaggerResponseWithData'
+            - properties:
+                data:
+                  $ref: '#/definitions/user.SecureUserWithFollowRelations'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - user
+  /user/finds-with-fullname:
+    get:
+      description: authentication and find users with fullname cursor pagination
+      parameters:
+      - description: search user with fullname
+        in: query
+        name: fullname
+        required: true
+        type: string
+      - description: cursor uuid for user id
+        in: query
+        name: cursor
+        type: string
+      - description: limit for users cursor pagination
+        in: query
+        name: limit
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SwaggerResponseWithData'
+            - properties:
+                data:
+                  $ref: '#/definitions/user.UserCursorPagination'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - user
 swagger: "2.0"
