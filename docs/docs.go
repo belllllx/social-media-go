@@ -449,7 +449,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/user.SecureUserWithFollowRelations"
+                                            "$ref": "#/definitions/user.SecureUserWithFollowingRelation"
                                         }
                                     }
                                 }
@@ -2167,6 +2167,76 @@ const docTemplate = `{
                 }
             }
         },
+        "/user/finds": {
+            "get": {
+                "description": "authentication and find users follower relation cursor pagination",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "user"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "cursor uuid for user id",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "limit for users follower relation cursor pagination",
+                        "name": "limit",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SwaggerResponseWithData"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/user.UserWithFollowerRelationCursorPagination"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/user/finds-with-fullname": {
             "get": {
                 "description": "authentication and find users with fullname cursor pagination",
@@ -2711,18 +2781,7 @@ const docTemplate = `{
             }
         },
         "notification.UpdateNotificationRequest": {
-            "type": "object",
-            "required": [
-                "notificationsId"
-            ],
-            "properties": {
-                "notificationsId": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
+            "type": "object"
         },
         "notification.UpdatedNotification": {
             "type": "object",
@@ -3226,6 +3285,100 @@ const docTemplate = `{
                 }
             }
         },
+        "user.SecureUserWithFollowerRelation": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "dateOfBirth": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "followers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/user.Follower"
+                    }
+                },
+                "fullname": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "info": {
+                    "type": "string"
+                },
+                "profileBackgroundUrl": {
+                    "type": "string"
+                },
+                "profileUrl": {
+                    "type": "string"
+                },
+                "providerType": {
+                    "$ref": "#/definitions/models.ProviderType"
+                },
+                "role": {
+                    "$ref": "#/definitions/models.Role"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "user.SecureUserWithFollowingRelation": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "dateOfBirth": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "followings": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/user.Following"
+                    }
+                },
+                "fullname": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "info": {
+                    "type": "string"
+                },
+                "profileBackgroundUrl": {
+                    "type": "string"
+                },
+                "profileUrl": {
+                    "type": "string"
+                },
+                "providerType": {
+                    "$ref": "#/definitions/models.ProviderType"
+                },
+                "role": {
+                    "$ref": "#/definitions/models.Role"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
         "user.UserCursorPagination": {
             "type": "object",
             "properties": {
@@ -3236,6 +3389,20 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/user.SecureUser"
+                    }
+                }
+            }
+        },
+        "user.UserWithFollowerRelationCursorPagination": {
+            "type": "object",
+            "properties": {
+                "nextCursor": {
+                    "type": "string"
+                },
+                "users": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/user.SecureUserWithFollowerRelation"
                     }
                 }
             }

@@ -59,7 +59,7 @@ type NotificationService interface {
 	UpdateIsRead(
 		ctx context.Context,
 		userID uuid.UUID,
-		notificationsID []uuid.UUID,
+		notificationsID uuid.UUIDs,
 	) ([]UpdatedNotification, error)
 }
 
@@ -142,6 +142,7 @@ func (s *notificationService) FindsWithReceiverIDCursorPagination(
 
 	limitInt, err := strconv.Atoi(limit)
 	if err != nil {
+		logs.Warn(err)
 		return nil, errs.NewBadRequestErrorWithMessage("Invalid limit must be string integer")
 	}
 
@@ -242,7 +243,7 @@ func (s *notificationService) FindsWithReceiverIDCursorPagination(
 func (s *notificationService) UpdateIsRead(
 	ctx context.Context,
 	userID uuid.UUID,
-	notificationsID []uuid.UUID,
+	notificationsID uuid.UUIDs,
 ) ([]UpdatedNotification, error) {
 	updatedNotifications, err := s.notificationRepository.UpdateIsRead(
 		ctx,

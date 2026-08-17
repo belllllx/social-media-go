@@ -331,7 +331,7 @@ func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostD
 		}
 		go s.postSocket.EmitCreate(createPostDTOSocket)
 
-		notificationsID := []uuid.UUID{}
+		notificationsID := uuid.UUIDs{}
 		for _, createNotificationDTO := range createNotificationsDTO {
 			notificationsID = append(notificationsID, createNotificationDTO.ID)
 		}
@@ -647,6 +647,7 @@ func (s *postService) FindsCursorPagination(
 
 	limitInt, err := strconv.Atoi(limit)
 	if err != nil {
+		logs.Warn(err)
 		return nil, errs.NewBadRequestErrorWithMessage("Invalid limit must be string integer")
 	}
 
@@ -874,6 +875,7 @@ func (s *postService) FindsWithUserIDCursorPagination(
 
 	limitInt, err := strconv.Atoi(limit)
 	if err != nil {
+		logs.Warn(err)
 		return nil, errs.NewBadRequestErrorWithMessage("Invalid limit must be string integer")
 	}
 

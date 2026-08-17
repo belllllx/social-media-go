@@ -163,8 +163,8 @@ func (r *commentRepositoryDB) FindByIDCursor(
 	comment := &models.Comment{}
 	err := db.
 		WithContext(ctx).
-		Where("id = ?", commentID).
 		Select("id", "created_at").
+		Where("id = ?", commentID).
 		Take(comment).Error
 	if err != nil {
 		return nil, err

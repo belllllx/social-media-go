@@ -171,8 +171,8 @@ func (r *postRepositoryDB) FindByIDCursor(
 	post := &models.Post{}
 	err := db.
 		WithContext(ctx).
-		Where("id = ?", postID).
 		Select("id", "created_at").
+		Where("id = ?", postID).
 		Take(post).Error
 	if err != nil {
 		return nil, err

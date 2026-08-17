@@ -41,7 +41,7 @@ type SecureUserFollow struct {
 	Info                 *string             `json:"info"`
 	Role                 models.Role         `json:"role"`
 	ProviderType         models.ProviderType `json:"providerType"`
-	Followers            []FollowerData      `json:"followers"`
+	Followers            []FollowerData      `json:"followers,omitempty"`
 	CreatedAt            time.Time           `json:"createdAt"`
 	UpdatedAt            time.Time           `json:"updatedAt"`
 }
@@ -79,11 +79,6 @@ type SecureUser struct {
 	UpdatedAt            time.Time           `json:"updatedAt"`
 }
 
-type UserCursorPagination struct {
-	Users      []SecureUser `json:"users"`
-	NextCursor *uuid.UUID   `json:"nextCursor"`
-}
-
 type SecureUserWithFollowRelations struct {
 	ID                   uuid.UUID           `json:"id"`
 	Fullname             string              `json:"fullname"`
@@ -101,13 +96,61 @@ type SecureUserWithFollowRelations struct {
 	UpdatedAt            time.Time           `json:"updatedAt"`
 }
 
+type SecureUserWithFollowerRelation struct {
+	ID                   uuid.UUID           `json:"id"`
+	Fullname             string              `json:"fullname"`
+	Username             *string             `json:"username"`
+	Email                string              `json:"email"`
+	DateOfBirth          *time.Time          `json:"dateOfBirth"`
+	ProfileUrl           *string             `json:"profileUrl"`
+	ProfileBackgroundUrl *string             `json:"profileBackgroundUrl"`
+	Info                 *string             `json:"info"`
+	Role                 models.Role         `json:"role"`
+	ProviderType         models.ProviderType `json:"providerType"`
+	Followers            []Follower          `json:"followers"`
+	CreatedAt            time.Time           `json:"createdAt"`
+	UpdatedAt            time.Time           `json:"updatedAt"`
+}
+
+type SecureUserWithFollowingRelation struct {
+	ID                   uuid.UUID           `json:"id"`
+	Fullname             string              `json:"fullname"`
+	Username             *string             `json:"username"`
+	Email                string              `json:"email"`
+	DateOfBirth          *time.Time          `json:"dateOfBirth"`
+	ProfileUrl           *string             `json:"profileUrl"`
+	ProfileBackgroundUrl *string             `json:"profileBackgroundUrl"`
+	Info                 *string             `json:"info"`
+	Role                 models.Role         `json:"role"`
+	ProviderType         models.ProviderType `json:"providerType"`
+	Followings           []Following         `json:"followings"`
+	CreatedAt            time.Time           `json:"createdAt"`
+	UpdatedAt            time.Time           `json:"updatedAt"`
+}
+
+type UserCursorPagination struct {
+	Users      []SecureUser `json:"users"`
+	NextCursor *uuid.UUID   `json:"nextCursor"`
+}
+
+type UserWithFollowerRelationCursorPagination struct {
+	Users      []SecureUserWithFollowerRelation `json:"users"`
+	NextCursor *uuid.UUID                       `json:"nextCursor"`
+}
+
 type UserService interface {
-	FindByID(ctx context.Context, userID string) (*SecureUserWithFollowRelations, error)
-	FindByIDWithFollowRelations(ctx context.Context, userID uuid.UUID) (*SecureUserWithFollowRelations, error)
+	FindByIDWithFollowingRelation(ctx context.Context, userID uuid.UUID) (*SecureUserWithFollowingRelation, error)
+	FindByIDWithFollowRelations(ctx context.Context, userID string) (*SecureUserWithFollowRelations, error)
 	FindsWithFullnameCursorPagination(
 		ctx context.Context,
 		findsWithFullnameCursorPaginationDTO *FindsWithFullnameCursorPaginationDTO,
 	) (*UserCursorPagination, error)
+	FindsCursorPaginationWithFollowerRelation(
+		ctx context.Context,
+		userID uuid.UUID,
+		cursor,
+		limit string,
+	) (*UserWithFollowerRelationCursorPagination, error)
 	ResetPassword(
 		ctx context.Context,
 		email,
@@ -134,7 +177,57 @@ func NewUserService(
 	}
 }
 
-func (s *userService) FindByID(ctx context.Context, userID string) (*SecureUserWithFollowRelations, error) {
+func (s *userService) FindByIDWithFollowingRelation(ctx context.Context, userID uuid.UUID) (*SecureUserWithFollowingRelation, error) {
+	user, err := s.userRepository.FindByIDWithFollowingRelation(
+		ctx,
+		s.db,
+		userID,
+	)
+	if err != nil && !helpers.IsErrRecordNotFound(err) {
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to find user by id with following relation")
+	}
+
+	if helpers.IsErrRecordNotFound(err) {
+		logs.Warn(err)
+		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("User by id %v is not found", userID))
+	}
+
+	err = s.GetUserImage(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+
+	followings := []Following{}
+	for _, following := range user.Followings {
+		followings = append(followings, Following{
+			ID:          following.ID,
+			FollowerID:  following.FollowerID,
+			FollowingID: following.FollowingID,
+			CreatedAt:   following.CreatedAt,
+			UpdatedAt:   following.UpdatedAt,
+		})
+	}
+
+	secureUserWithFollowingRelation := &SecureUserWithFollowingRelation{
+		ID:                   user.ID,
+		Fullname:             user.Fullname,
+		Username:             user.Username,
+		Email:                user.Email,
+		DateOfBirth:          user.DateOfBirth,
+		ProfileUrl:           user.ProfileUrl,
+		ProfileBackgroundUrl: user.ProfileBackgroundUrl,
+		Info:                 user.Info,
+		Role:                 user.Role,
+		ProviderType:         user.ProviderType,
+		Followings:           followings,
+		CreatedAt:            user.CreatedAt,
+		UpdatedAt:            user.UpdatedAt,
+	}
+	return secureUserWithFollowingRelation, nil
+}
+
+func (s *userService) FindByIDWithFollowRelations(ctx context.Context, userID string) (*SecureUserWithFollowRelations, error) {
 	err := helpers.ValidateUUID(userID)
 	if err != nil {
 		logs.Warn(err)
@@ -147,14 +240,10 @@ func (s *userService) FindByID(ctx context.Context, userID string) (*SecureUserW
 		return nil, err
 	}
 
-	return s.FindByIDWithFollowRelations(ctx, *userIDParse)
-}
-
-func (s *userService) FindByIDWithFollowRelations(ctx context.Context, userID uuid.UUID) (*SecureUserWithFollowRelations, error) {
 	user, err := s.userRepository.FindByIDWithFollowRelations(
 		ctx,
 		s.db,
-		userID,
+		*userIDParse,
 	)
 	if err != nil && !helpers.IsErrRecordNotFound(err) {
 		logs.Error(err)
@@ -299,6 +388,7 @@ func (s *userService) FindsWithFullnameCursorPagination(
 
 	limitInt, err := strconv.Atoi(findsWithFullnameCursorPaginationDTO.Limit)
 	if err != nil {
+		logs.Warn(err)
 		return nil, errs.NewBadRequestErrorWithMessage("Invalid limit must be string integer")
 	}
 
@@ -333,6 +423,7 @@ func (s *userService) FindsWithFullnameCursorPagination(
 		}
 
 		if helpers.IsErrRecordNotFound(err) {
+			logs.Warn(err)
 			return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Cursor by user id %v is not found", *cursorID))
 		}
 
@@ -380,6 +471,146 @@ func (s *userService) FindsWithFullnameCursorPagination(
 		NextCursor: nextCursor,
 	}
 	return userCursorPagination, nil
+}
+
+func (s *userService) FindsCursorPaginationWithFollowerRelation(
+	ctx context.Context,
+	userID uuid.UUID,
+	cursor,
+	limit string,
+) (*UserWithFollowerRelationCursorPagination, error) {
+	var nextCursor *uuid.UUID
+	var cursorID *uuid.UUID
+
+	if cursor != "" {
+		err := helpers.ValidateUUID(cursor)
+		if err != nil {
+			logs.Warn(err)
+			return nil, err
+		}
+
+		cursorID, err = helpers.ParseUUID(cursor)
+		if err != nil {
+			logs.Error(err)
+			return nil, err
+		}
+	}
+
+	limitInt, err := strconv.Atoi(limit)
+	if err != nil {
+		logs.Warn(err)
+		return nil, errs.NewBadRequestErrorWithMessage("Invalid limit must be string integer")
+	}
+
+	if limitInt <= 0 {
+		return nil, errs.NewBadRequestErrorWithMessage("Invalid limit must be greater than 0")
+	}
+
+	users := []models.User{}
+	usersWithFollowerRelationCursorPagination := []SecureUserWithFollowerRelation{}
+	if cursor == "" {
+		users, err = s.userRepository.FindsCursorPaginationWithFollowerRelation(
+			ctx,
+			s.db,
+			userID,
+			nil,
+			limitInt,
+		)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find users cursor pagination with follower relation")
+		}
+	} else {
+		cursor, err := s.userRepository.FindByIDCursor(
+			ctx,
+			s.db,
+			*cursorID,
+		)
+		if err != nil && !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find user cursor by user id")
+		}
+
+		if helpers.IsErrRecordNotFound(err) {
+			logs.Warn(err)
+			return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Cursor by user id %v is not found", *cursorID))
+		}
+
+		users, err = s.userRepository.FindsCursorPaginationWithFollowerRelation(
+			ctx,
+			s.db,
+			userID,
+			cursor,
+			limitInt,
+		)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find users cursor pagination with follower relation")
+		}
+	}
+
+	for _, user := range users {
+		err = s.GetUserImage(ctx, &user)
+		if err != nil {
+			return nil, err
+		}
+
+		followers := []Follower{}
+		for _, follower := range user.Followers {
+			err = s.GetUserImage(ctx, &follower.Follower)
+			if err != nil {
+				return nil, err
+			}
+
+			secureUserFollower := &SecureUserFollow{
+				ID:                   follower.FollowerID,
+				Fullname:             follower.Follower.Fullname,
+				Username:             follower.Follower.Username,
+				Email:                follower.Follower.Email,
+				DateOfBirth:          follower.Follower.DateOfBirth,
+				ProfileUrl:           follower.Follower.ProfileUrl,
+				ProfileBackgroundUrl: follower.Follower.ProfileBackgroundUrl,
+				Info:                 follower.Follower.Info,
+				Role:                 follower.Follower.Role,
+				ProviderType:         follower.Follower.ProviderType,
+				CreatedAt:            follower.Follower.CreatedAt,
+				UpdatedAt:            follower.Follower.UpdatedAt,
+			}
+			followers = append(followers, Follower{
+				ID:           follower.ID,
+				FollowerID:   follower.FollowerID,
+				FollowingID:  follower.FollowingID,
+				FollowerUser: secureUserFollower,
+				CreatedAt:    follower.CreatedAt,
+				UpdatedAt:    follower.UpdatedAt,
+			})
+		}
+
+		usersWithFollowerRelationCursorPagination = append(usersWithFollowerRelationCursorPagination, SecureUserWithFollowerRelation{
+			ID:                   user.ID,
+			Fullname:             user.Fullname,
+			Username:             user.Username,
+			Email:                user.Email,
+			DateOfBirth:          user.DateOfBirth,
+			ProfileUrl:           user.ProfileUrl,
+			ProfileBackgroundUrl: user.ProfileBackgroundUrl,
+			Info:                 user.Info,
+			Role:                 user.Role,
+			ProviderType:         user.ProviderType,
+			Followers:            followers,
+			CreatedAt:            user.CreatedAt,
+			UpdatedAt:            user.UpdatedAt,
+		})
+	}
+
+	if len(usersWithFollowerRelationCursorPagination) == limitInt {
+		nextCursor = &usersWithFollowerRelationCursorPagination[len(usersWithFollowerRelationCursorPagination)-1].ID
+	}
+	userWithFollowerRelationCursorPagination := &UserWithFollowerRelationCursorPagination{
+		Users:      usersWithFollowerRelationCursorPagination,
+		NextCursor: nextCursor,
+	}
+	return userWithFollowerRelationCursorPagination, nil
 }
 
 func (s *userService) ResetPassword(

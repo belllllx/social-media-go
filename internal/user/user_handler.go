@@ -8,6 +8,7 @@ import (
 
 type UserHandler interface {
 	FindsWithFullnameCursorPagination(c *gin.Context)
+	FindsCursorPaginationWithFollowerRelation(c *gin.Context)
 	FindByIDWithFollowRelations(c *gin.Context)
 }
 
@@ -36,7 +37,7 @@ func NewUserHandler(userService UserService) UserHandler {
 func (h *userHandler) FindsWithFullnameCursorPagination(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	user, ok := c.MustGet("user").(*SecureUserWithFollowRelations)
+	user, ok := c.MustGet("user").(*SecureUserWithFollowingRelation)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
@@ -60,6 +61,44 @@ func (h *userHandler) FindsWithFullnameCursorPagination(c *gin.Context) {
 	response.Ok(c, "Users retrive successfully", userCursorPagination)
 }
 
+// FindsCursorPaginationWithFollowerRelation godoc
+//
+//	@Description	authentication and find users follower relation cursor pagination
+//	@Tags			user
+//	@Produce		json
+//	@Param			cursor	query		string	false	"cursor uuid for user id"
+//	@Param			limit	query		int		true	"limit for users follower relation cursor pagination"
+//	@Success		200		{object}	response.SwaggerResponseWithData{data=UserWithFollowerRelationCursorPagination}
+//	@Failure		400		{object}	response.SwaggerBadRequestResponse
+//	@Failure		401		{object}	response.SwaggerResponse
+//	@Failure		404		{object}	response.SwaggerResponse
+//	@Failure		500		{object}	response.SwaggerResponse
+//	@Router			/user/finds [get]
+func (h *userHandler) FindsCursorPaginationWithFollowerRelation(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	user, ok := c.MustGet("user").(*SecureUserWithFollowingRelation)
+	if !ok {
+		response.AbortWithUnauthorized(c)
+		return
+	}
+
+	cursor := c.Query("cursor")
+	limit := c.Query("limit")
+	userWithFollowerRelationCursorPagination, err := h.userService.FindsCursorPaginationWithFollowerRelation(
+		ctx,
+		user.ID,
+		cursor,
+		limit,
+	)
+	if err != nil {
+		helpers.HandleError(c, err)
+		return
+	}
+
+	response.Ok(c, "Users retrive successfully", userWithFollowerRelationCursorPagination)
+}
+
 // FindByIDWithFollowRelations godoc
 //
 //	@Description	authentication and find user by id with follow relations
@@ -75,7 +114,7 @@ func (h *userHandler) FindByIDWithFollowRelations(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	userID := c.Param("userID")
-	secureUserWithFollowRelations, err := h.userService.FindByID(ctx, userID)
+	secureUserWithFollowRelations, err := h.userService.FindByIDWithFollowRelations(ctx, userID)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return

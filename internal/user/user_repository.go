@@ -31,6 +31,11 @@ type UserRepository interface {
 		db *gorm.DB,
 		email string,
 	) (*models.User, error)
+	FindByIDWithFollowingRelation(
+		ctx context.Context,
+		db *gorm.DB,
+		userID uuid.UUID,
+	) (*models.User, error)
 	FindByIDWithFollowRelations(
 		ctx context.Context,
 		db *gorm.DB,
@@ -56,6 +61,13 @@ type UserRepository interface {
 		db *gorm.DB,
 		userID uuid.UUID,
 		fullname string,
+		cursor *Cursor,
+		limit int,
+	) ([]models.User, error)
+	FindsCursorPaginationWithFollowerRelation(
+		ctx context.Context,
+		db *gorm.DB,
+		userID uuid.UUID,
 		cursor *Cursor,
 		limit int,
 	) ([]models.User, error)
@@ -106,7 +118,52 @@ func (r *userRepositoryDB) FindByEmail(
 	user := &models.User{}
 	err := db.
 		WithContext(ctx).
+		Select(
+			"id",
+			"fullname",
+			"username",
+			"email",
+			"date_of_birth",
+			"profile_url",
+			"profile_background_url",
+			"info",
+			"role",
+			"provider_type",
+			"created_at",
+			"updated_at",
+		).
 		Where("email = ?", email).
+		Take(user).Error
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+func (r *userRepositoryDB) FindByIDWithFollowingRelation(
+	ctx context.Context,
+	db *gorm.DB,
+	userID uuid.UUID,
+) (*models.User, error) {
+	user := &models.User{}
+	err := db.
+		WithContext(ctx).
+		Select(
+			"id",
+			"fullname",
+			"username",
+			"email",
+			"date_of_birth",
+			"profile_url",
+			"profile_background_url",
+			"info",
+			"role",
+			"provider_type",
+			"created_at",
+			"updated_at",
+		).
+		Where("id = ?", userID).
+		Preload("Followings").
 		Take(user).Error
 	if err != nil {
 		return nil, err
@@ -122,6 +179,20 @@ func (r *userRepositoryDB) FindByIDWithFollowRelations(
 	user := &models.User{}
 	err := db.
 		WithContext(ctx).
+		Select(
+			"id",
+			"fullname",
+			"username",
+			"email",
+			"date_of_birth",
+			"profile_url",
+			"profile_background_url",
+			"info",
+			"role",
+			"provider_type",
+			"created_at",
+			"updated_at",
+		).
 		Where("id = ?", userID).
 		Preload("Followings.Following", helpers.OmitUserPasswordHash).
 		Preload("Followings.Following.Followers").
@@ -172,6 +243,20 @@ func (r *userRepositoryDB) FindByID(
 	user := &models.User{}
 	err := db.
 		WithContext(ctx).
+		Select(
+			"id",
+			"fullname",
+			"username",
+			"email",
+			"date_of_birth",
+			"profile_url",
+			"profile_background_url",
+			"info",
+			"role",
+			"provider_type",
+			"created_at",
+			"updated_at",
+		).
 		Where("id = ?", userID).
 		Take(user).Error
 	if err != nil {
@@ -188,8 +273,8 @@ func (r *userRepositoryDB) FindByIDCursor(
 	user := &models.User{}
 	err := db.
 		WithContext(ctx).
-		Where("id = ?", userID).
 		Select("id", "created_at").
+		Where("id = ?", userID).
 		Take(user).Error
 	if err != nil {
 		return nil, err
@@ -227,6 +312,51 @@ func (r *userRepositoryDB) FindsByFullnameCursorPagination(
 			"updated_at",
 		).
 		Where("id <> ? AND fullname ILIKE ?", userID, "%"+fullname+"%").
+		Order("created_at DESC, id DESC").
+		Limit(limit)
+
+	if cursor != nil {
+		db = db.Where(
+			"(created_at < ? OR (created_at = ? AND id < ?))",
+			cursor.CreatedAt,
+			cursor.CreatedAt,
+			cursor.ID,
+		)
+	}
+
+	err := db.Find(users).Error
+	if err != nil {
+		return nil, err
+	}
+	return *users, nil
+}
+
+func (r *userRepositoryDB) FindsCursorPaginationWithFollowerRelation(
+	ctx context.Context,
+	db *gorm.DB,
+	userID uuid.UUID,
+	cursor *Cursor,
+	limit int,
+) ([]models.User, error) {
+	users := &[]models.User{}
+	db = db.
+		WithContext(ctx).
+		Select(
+			"id",
+			"fullname",
+			"username",
+			"email",
+			"date_of_birth",
+			"profile_url",
+			"profile_background_url",
+			"info",
+			"role",
+			"provider_type",
+			"created_at",
+			"updated_at",
+		).
+		Where("id <> ?", userID).
+		Preload("Followers.Follower", helpers.OmitUserPasswordHash).
 		Order("created_at DESC, id DESC").
 		Limit(limit)
 

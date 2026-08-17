@@ -9,7 +9,7 @@ import (
 )
 
 type UpdateNotificationRequest struct {
-	NotificationsID []uuid.UUID `json:"notificationsId" binding:"required"`
+	NotificationsID uuid.UUIDs `json:"notificationsId" binding:"required"`
 }
 
 type NotificationHandler interface {
@@ -41,7 +41,7 @@ func NewNotificationHandler(notificationService NotificationService) Notificatio
 func (h *notificationHandler) FindsWithReceiverIDCursorPagination(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	user, ok := c.MustGet("user").(*user.SecureUserWithFollowRelations)
+	user, ok := c.MustGet("user").(*user.SecureUserWithFollowingRelation)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
@@ -79,7 +79,7 @@ func (h *notificationHandler) FindsWithReceiverIDCursorPagination(c *gin.Context
 func (h *notificationHandler) UpdateIsRead(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	user, ok := c.MustGet("user").(*user.SecureUserWithFollowRelations)
+	user, ok := c.MustGet("user").(*user.SecureUserWithFollowingRelation)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return

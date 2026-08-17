@@ -141,13 +141,13 @@ func RequireAuth(userService user.UserService) gin.HandlerFunc {
 			return
 		}
 
-		secureUserWithFollowRelations, err := userService.FindByIDWithFollowRelations(ctx, claims.UserID)
+		secureUserWithFollowingRelation, err := userService.FindByIDWithFollowingRelation(ctx, claims.UserID)
 		if err != nil {
 			helpers.HandleError(c, err)
 			return
 		}
 
-		c.Set("user", secureUserWithFollowRelations)
+		c.Set("user", secureUserWithFollowingRelation)
 		c.Next()
 	}
 }

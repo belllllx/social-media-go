@@ -1024,6 +1024,7 @@ func (s *commentService) FindsWithPostIDCursorPagination(
 
 	limitInt, err := strconv.Atoi(limit)
 	if err != nil {
+		logs.Warn(err)
 		return nil, errs.NewBadRequestErrorWithMessage("Invalid limit must be string integer")
 	}
 

@@ -349,18 +349,18 @@ func (h *authHandler) Login(c *gin.Context) {
 //	@Description	authentication and set cookie
 //	@Tags			auth
 //	@Produce		json
-//	@Success		200	{object}	response.SwaggerResponseWithData{data=user.SecureUserWithFollowRelations}
+//	@Success		200	{object}	response.SwaggerResponseWithData{data=user.SecureUserWithFollowingRelation}
 //	@Failure		401	{object}	response.SwaggerResponse
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/profile [get]
 func (h *authHandler) Profile(c *gin.Context) {
-	secureUserWithFollowRelations, ok := c.MustGet("user").(*user.SecureUserWithFollowRelations)
+	user, ok := c.MustGet("user").(*user.SecureUserWithFollowingRelation)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
 	}
 
-	response.Ok(c, "User retrive successfully", secureUserWithFollowRelations)
+	response.Ok(c, "User retrive successfully", user)
 }
 
 // Refresh godoc

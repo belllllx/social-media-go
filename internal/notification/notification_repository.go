@@ -35,7 +35,7 @@ type NotificationRepository interface {
 	FindsByIDWithSenderRelation(
 		ctx context.Context,
 		db *gorm.DB,
-		notificationsID []uuid.UUID,
+		notificationsID uuid.UUIDs,
 	) ([]models.Notification, error)
 	FindOfPost(
 		ctx context.Context,
@@ -90,7 +90,7 @@ type NotificationRepository interface {
 		ctx context.Context,
 		db *gorm.DB,
 		userID uuid.UUID,
-		notificationsID []uuid.UUID,
+		notificationsID uuid.UUIDs,
 	) ([]models.Notification, error)
 	Delete(
 		ctx context.Context,
@@ -142,7 +142,7 @@ func (r *notificationRepositoryDB) FindByIDWithSenderRelation(
 func (r *notificationRepositoryDB) FindsByIDWithSenderRelation(
 	ctx context.Context,
 	db *gorm.DB,
-	notificationsID []uuid.UUID,
+	notificationsID uuid.UUIDs,
 ) ([]models.Notification, error) {
 	notifications := &[]models.Notification{}
 	err := db.
@@ -292,8 +292,8 @@ func (r *notificationRepositoryDB) FindByIDCursor(
 	notification := &models.Notification{}
 	err := db.
 		WithContext(ctx).
-		Where("id = ?", notificationID).
 		Select("id", "created_at").
+		Where("id = ?", notificationID).
 		Take(notification).Error
 	if err != nil {
 		return nil, err
@@ -340,7 +340,7 @@ func (r *notificationRepositoryDB) UpdateIsRead(
 	ctx context.Context,
 	db *gorm.DB,
 	userID uuid.UUID,
-	notificationsID []uuid.UUID,
+	notificationsID uuid.UUIDs,
 ) ([]models.Notification, error) {
 	notifications := &[]models.Notification{}
 	err := db.

@@ -315,13 +315,6 @@ definitions:
         type: array
     type: object
   notification.UpdateNotificationRequest:
-    properties:
-      notificationsId:
-        items:
-          type: string
-        type: array
-    required:
-    - notificationsId
     type: object
   notification.UpdatedNotification:
     properties:
@@ -651,6 +644,68 @@ definitions:
       username:
         type: string
     type: object
+  user.SecureUserWithFollowerRelation:
+    properties:
+      createdAt:
+        type: string
+      dateOfBirth:
+        type: string
+      email:
+        type: string
+      followers:
+        items:
+          $ref: '#/definitions/user.Follower'
+        type: array
+      fullname:
+        type: string
+      id:
+        type: string
+      info:
+        type: string
+      profileBackgroundUrl:
+        type: string
+      profileUrl:
+        type: string
+      providerType:
+        $ref: '#/definitions/models.ProviderType'
+      role:
+        $ref: '#/definitions/models.Role'
+      updatedAt:
+        type: string
+      username:
+        type: string
+    type: object
+  user.SecureUserWithFollowingRelation:
+    properties:
+      createdAt:
+        type: string
+      dateOfBirth:
+        type: string
+      email:
+        type: string
+      followings:
+        items:
+          $ref: '#/definitions/user.Following'
+        type: array
+      fullname:
+        type: string
+      id:
+        type: string
+      info:
+        type: string
+      profileBackgroundUrl:
+        type: string
+      profileUrl:
+        type: string
+      providerType:
+        $ref: '#/definitions/models.ProviderType'
+      role:
+        $ref: '#/definitions/models.Role'
+      updatedAt:
+        type: string
+      username:
+        type: string
+    type: object
   user.UserCursorPagination:
     properties:
       nextCursor:
@@ -658,6 +713,15 @@ definitions:
       users:
         items:
           $ref: '#/definitions/user.SecureUser'
+        type: array
+    type: object
+  user.UserWithFollowerRelationCursorPagination:
+    properties:
+      nextCursor:
+        type: string
+      users:
+        items:
+          $ref: '#/definitions/user.SecureUserWithFollowerRelation'
         type: array
     type: object
 externalDocs:
@@ -952,7 +1016,7 @@ paths:
             - $ref: '#/definitions/response.SwaggerResponseWithData'
             - properties:
                 data:
-                  $ref: '#/definitions/user.SecureUserWithFollowRelations'
+                  $ref: '#/definitions/user.SecureUserWithFollowingRelation'
               type: object
         "401":
           description: Unauthorized
@@ -2006,6 +2070,49 @@ paths:
                 data:
                   $ref: '#/definitions/user.SecureUserWithFollowRelations'
               type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - user
+  /user/finds:
+    get:
+      description: authentication and find users follower relation cursor pagination
+      parameters:
+      - description: cursor uuid for user id
+        in: query
+        name: cursor
+        type: string
+      - description: limit for users follower relation cursor pagination
+        in: query
+        name: limit
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SwaggerResponseWithData'
+            - properties:
+                data:
+                  $ref: '#/definitions/user.UserWithFollowerRelationCursorPagination'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
         "401":
           description: Unauthorized
           schema:

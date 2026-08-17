@@ -257,6 +257,7 @@ func main() {
 	{
 		user := api.Group("/user")
 		user.GET("/finds-with-fullname", userHandler.FindsWithFullnameCursorPagination)
+		user.GET("/finds", userHandler.FindsCursorPaginationWithFollowerRelation)
 		user.GET("/find/:userID", userHandler.FindByIDWithFollowRelations)
 	}
 
