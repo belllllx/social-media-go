@@ -1,6 +1,7 @@
 package user
 
 import (
+	"github.com/belllllx/social-media-go/internal/dto"
 	"github.com/belllllx/social-media-go/internal/response"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/gin-gonic/gin"
@@ -10,6 +11,7 @@ type UserHandler interface {
 	FindsWithFullnameCursorPagination(c *gin.Context)
 	FindsCursorPaginationWithFollowerRelation(c *gin.Context)
 	FindByIDWithFollowRelations(c *gin.Context)
+	ToggleFollow(c *gin.Context)
 }
 
 type userHandler struct {
@@ -37,7 +39,7 @@ func NewUserHandler(userService UserService) UserHandler {
 func (h *userHandler) FindsWithFullnameCursorPagination(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	user, ok := c.MustGet("user").(*SecureUserWithFollowingRelation)
+	user, ok := c.MustGet("user").(*dto.SecureUserWithFollowingRelation)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
@@ -77,7 +79,7 @@ func (h *userHandler) FindsWithFullnameCursorPagination(c *gin.Context) {
 func (h *userHandler) FindsCursorPaginationWithFollowerRelation(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	user, ok := c.MustGet("user").(*SecureUserWithFollowingRelation)
+	user, ok := c.MustGet("user").(*dto.SecureUserWithFollowingRelation)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
@@ -121,4 +123,39 @@ func (h *userHandler) FindByIDWithFollowRelations(c *gin.Context) {
 	}
 
 	response.Ok(c, "User retrive successfully", secureUserWithFollowRelations)
+}
+
+// ToggleFollow godoc
+//
+//	@Description	authentication follow or unfollow and emit follow or unfollow, notification to client
+//	@Tags			user
+//	@Produce		json
+//	@Param			followingID	path		string	true	"uuid for user id following"
+//	@Success		200			{object}	response.SwaggerResponseWithData{data=Follow}
+//	@Failure		400			{object}	response.SwaggerBadRequestResponse
+//	@Failure		401			{object}	response.SwaggerResponse
+//	@Failure		404			{object}	response.SwaggerResponse
+//	@Failure		500			{object}	response.SwaggerResponse
+//	@Router			/user/toggle-follow/{followingID} [post]
+func (h *userHandler) ToggleFollow(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	user, ok := c.MustGet("user").(*dto.SecureUserWithFollowingRelation)
+	if !ok {
+		response.AbortWithUnauthorized(c)
+		return
+	}
+
+	followingID := c.Param("followingID")
+	message, follow, err := h.userService.ToggleFollow(
+		ctx,
+		user.ID,
+		followingID,
+	)
+	if err != nil {
+		helpers.HandleError(c, err)
+		return
+	}
+
+	response.Ok(c, message, follow)
 }

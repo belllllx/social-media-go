@@ -3,18 +3,18 @@ package socket
 import (
 	"time"
 
-	"github.com/belllllx/social-media-go/internal/user"
+	"github.com/belllllx/social-media-go/internal/dto"
 	"github.com/google/uuid"
 	server "github.com/zishang520/socket.io/servers/socket/v3"
 )
 
 type CommentLikeDTO struct {
-	ID        int64            `json:"id"`
-	UserID    uuid.UUID        `json:"userId"`
-	User      *user.SecureUser `json:"user,omitempty"`
-	CommentID uuid.UUID        `json:"commentId"`
-	CreatedAt time.Time        `json:"createdAt"`
-	UpdatedAt time.Time        `json:"updatedAt"`
+	ID        int64           `json:"id"`
+	UserID    uuid.UUID       `json:"userId"`
+	User      *dto.SecureUser `json:"user,omitempty"`
+	CommentID uuid.UUID       `json:"commentId"`
+	CreatedAt time.Time       `json:"createdAt"`
+	UpdatedAt time.Time       `json:"updatedAt"`
 }
 
 type PostDTO struct {
@@ -36,26 +36,26 @@ type UpdateCommentDTO struct {
 }
 
 type CreateCommentDTO struct {
-	ID            uuid.UUID        `json:"id"`
-	Message       *string          `json:"message"`
-	PostID        uuid.UUID        `json:"postId"`
-	Post          *PostDTO         `json:"post"`
-	UserID        uuid.UUID        `json:"userId"`
-	ParentID      *uuid.UUID       `json:"parentId,omitempty"`
-	ReplyID       *uuid.UUID       `json:"replyId,omitempty"`
-	ReplyToUserID *uuid.UUID       `json:"replyToUserId,omitempty"`
-	ReplyToUser   *user.SecureUser `json:"replyToUser,omitempty"`
-	User          *user.SecureUser `json:"user"`
-	FileURL       string           `json:"fileUrl,omitempty"`
-	CreatedAt     time.Time        `json:"createdAt"`
-	UpdatedAt     time.Time        `json:"updatedAt"`
+	ID            uuid.UUID       `json:"id"`
+	Message       *string         `json:"message"`
+	PostID        uuid.UUID       `json:"postId"`
+	Post          *PostDTO        `json:"post"`
+	UserID        uuid.UUID       `json:"userId"`
+	ParentID      *uuid.UUID      `json:"parentId,omitempty"`
+	ReplyID       *uuid.UUID      `json:"replyId,omitempty"`
+	ReplyToUserID *uuid.UUID      `json:"replyToUserId,omitempty"`
+	ReplyToUser   *dto.SecureUser `json:"replyToUser,omitempty"`
+	User          *dto.SecureUser `json:"user"`
+	FileURL       string          `json:"fileUrl,omitempty"`
+	CreatedAt     time.Time       `json:"createdAt"`
+	UpdatedAt     time.Time       `json:"updatedAt"`
 }
 
 type CommentSocket interface {
 	EmitCreate(createCommentDTO *CreateCommentDTO)
 	EmitUpdate(updateCommentDTO *UpdateCommentDTO)
 	EmitDelete(deleteCommentDTO *DeleteCommentDTO)
-	EmitLikeOrUnlike(commentLikeDTO *CommentLikeDTO)
+	EmitToggleLike(commentLikeDTO *CommentLikeDTO)
 }
 
 type commentSocket struct {
@@ -78,6 +78,6 @@ func (s *commentSocket) EmitDelete(deleteCommentDTO *DeleteCommentDTO) {
 	s.socket.Emit("deleteComment", deleteCommentDTO)
 }
 
-func (s *commentSocket) EmitLikeOrUnlike(commentLikeDTO *CommentLikeDTO) {
-	s.socket.Emit("newLikeComment", commentLikeDTO)
+func (s *commentSocket) EmitToggleLike(commentLikeDTO *CommentLikeDTO) {
+	s.socket.Emit("toggleLikeComment", commentLikeDTO)
 }

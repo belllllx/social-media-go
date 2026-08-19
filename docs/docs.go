@@ -449,7 +449,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/user.SecureUserWithFollowingRelation"
+                                            "$ref": "#/definitions/dto.SecureUserWithFollowingRelation"
                                         }
                                     }
                                 }
@@ -2313,6 +2313,70 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/user/toggle-follow/{followingID}": {
+            "post": {
+                "description": "authentication follow or unfollow and emit follow or unfollow, notification to client",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "user"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "uuid for user id following",
+                        "name": "followingID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SwaggerResponseWithData"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/user.Follow"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerBadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.SwaggerResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -2449,7 +2513,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "user": {
-                    "$ref": "#/definitions/user.SecureUser"
+                    "$ref": "#/definitions/dto.SecureUser"
                 },
                 "userId": {
                     "type": "string"
@@ -2509,7 +2573,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "replyToUser": {
-                    "$ref": "#/definitions/user.SecureUser"
+                    "$ref": "#/definitions/dto.SecureUser"
                 },
                 "replyToUserId": {
                     "type": "string"
@@ -2518,7 +2582,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "user": {
-                    "$ref": "#/definitions/user.SecureUser"
+                    "$ref": "#/definitions/dto.SecureUser"
                 },
                 "userId": {
                     "type": "string"
@@ -2558,7 +2622,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "user": {
-                    "$ref": "#/definitions/user.SecureUser"
+                    "$ref": "#/definitions/dto.SecureUser"
                 },
                 "userId": {
                     "type": "string"
@@ -2604,7 +2668,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "replyToUser": {
-                    "$ref": "#/definitions/user.SecureUser"
+                    "$ref": "#/definitions/dto.SecureUser"
                 },
                 "replyToUserId": {
                     "type": "string"
@@ -2613,7 +2677,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "user": {
-                    "$ref": "#/definitions/user.SecureUser"
+                    "$ref": "#/definitions/dto.SecureUser"
                 },
                 "userId": {
                     "type": "string"
@@ -2647,6 +2711,114 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "postId": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.Following": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "followerId": {
+                    "type": "string"
+                },
+                "followingId": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "updatedAt": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.SecureUser": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "dateOfBirth": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "fullname": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "info": {
+                    "type": "string"
+                },
+                "profileBackgroundUrl": {
+                    "type": "string"
+                },
+                "profileUrl": {
+                    "type": "string"
+                },
+                "providerType": {
+                    "$ref": "#/definitions/models.ProviderType"
+                },
+                "role": {
+                    "$ref": "#/definitions/models.Role"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.SecureUserWithFollowingRelation": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "dateOfBirth": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "followings": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.Following"
+                    }
+                },
+                "fullname": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "info": {
+                    "type": "string"
+                },
+                "profileBackgroundUrl": {
+                    "type": "string"
+                },
+                "profileUrl": {
+                    "type": "string"
+                },
+                "providerType": {
+                    "$ref": "#/definitions/models.ProviderType"
+                },
+                "role": {
+                    "$ref": "#/definitions/models.Role"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "username": {
                     "type": "string"
                 }
             }
@@ -2753,7 +2925,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "sender": {
-                    "$ref": "#/definitions/user.SecureUser"
+                    "$ref": "#/definitions/dto.SecureUser"
                 },
                 "senderId": {
                     "type": "string"
@@ -2781,7 +2953,18 @@ const docTemplate = `{
             }
         },
         "notification.UpdateNotificationRequest": {
-            "type": "object"
+            "type": "object",
+            "required": [
+                "notificationsId"
+            ],
+            "properties": {
+                "notificationsId": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
         },
         "notification.UpdatedNotification": {
             "type": "object",
@@ -2838,7 +3021,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "user": {
-                    "$ref": "#/definitions/user.SecureUser"
+                    "$ref": "#/definitions/dto.SecureUser"
                 },
                 "userId": {
                     "type": "string"
@@ -2867,7 +3050,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "user": {
-                    "$ref": "#/definitions/user.SecureUser"
+                    "$ref": "#/definitions/dto.SecureUser"
                 },
                 "userId": {
                     "type": "string"
@@ -2898,7 +3081,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "user": {
-                    "$ref": "#/definitions/user.SecureUser"
+                    "$ref": "#/definitions/dto.SecureUser"
                 },
                 "userId": {
                     "type": "string"
@@ -2942,7 +3125,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "user": {
-                    "$ref": "#/definitions/user.SecureUser"
+                    "$ref": "#/definitions/dto.SecureUser"
                 },
                 "userId": {
                     "type": "string"
@@ -2985,7 +3168,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "user": {
-                    "$ref": "#/definitions/user.SecureUser"
+                    "$ref": "#/definitions/dto.SecureUser"
                 },
                 "userId": {
                     "type": "string"
@@ -3078,6 +3261,32 @@ const docTemplate = `{
                 }
             }
         },
+        "user.Follow": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "follower": {
+                    "$ref": "#/definitions/user.SecureUserFollow"
+                },
+                "followerId": {
+                    "type": "string"
+                },
+                "following": {
+                    "$ref": "#/definitions/user.SecureUserFollow"
+                },
+                "followingId": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "updatedAt": {
+                    "type": "string"
+                }
+            }
+        },
         "user.Follower": {
             "type": "object",
             "properties": {
@@ -3140,47 +3349,6 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "updatedAt": {
-                    "type": "string"
-                }
-            }
-        },
-        "user.SecureUser": {
-            "type": "object",
-            "properties": {
-                "createdAt": {
-                    "type": "string"
-                },
-                "dateOfBirth": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "fullname": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "info": {
-                    "type": "string"
-                },
-                "profileBackgroundUrl": {
-                    "type": "string"
-                },
-                "profileUrl": {
-                    "type": "string"
-                },
-                "providerType": {
-                    "$ref": "#/definitions/models.ProviderType"
-                },
-                "role": {
-                    "$ref": "#/definitions/models.Role"
-                },
-                "updatedAt": {
-                    "type": "string"
-                },
-                "username": {
                     "type": "string"
                 }
             }
@@ -3332,53 +3500,6 @@ const docTemplate = `{
                 }
             }
         },
-        "user.SecureUserWithFollowingRelation": {
-            "type": "object",
-            "properties": {
-                "createdAt": {
-                    "type": "string"
-                },
-                "dateOfBirth": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "followings": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/user.Following"
-                    }
-                },
-                "fullname": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "info": {
-                    "type": "string"
-                },
-                "profileBackgroundUrl": {
-                    "type": "string"
-                },
-                "profileUrl": {
-                    "type": "string"
-                },
-                "providerType": {
-                    "$ref": "#/definitions/models.ProviderType"
-                },
-                "role": {
-                    "$ref": "#/definitions/models.Role"
-                },
-                "updatedAt": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
         "user.UserCursorPagination": {
             "type": "object",
             "properties": {
@@ -3388,7 +3509,7 @@ const docTemplate = `{
                 "users": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/user.SecureUser"
+                        "$ref": "#/definitions/dto.SecureUser"
                     }
                 }
             }

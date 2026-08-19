@@ -19,6 +19,7 @@ import (
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/pkg/errs"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -331,4 +332,27 @@ func ParseUUID(s string) (*uuid.UUID, error) {
 	}
 
 	return &uuid, nil
+}
+
+func GetUserImage(
+	ctx context.Context,
+	presignClient *s3.PresignClient,
+	user *models.User,
+) error {
+	// ไม่ใช่ avater ของ social login
+	// อัพเดต profile url
+	if user.ProfileUrl != nil && !IsExternalURL(*user.ProfileUrl) {
+		req, err := PresignGetObject(
+			ctx,
+			presignClient,
+			*user.ProfileUrl,
+		)
+		if err != nil {
+			return errs.NewInternalServerErrorWithMessage("Failed to presign get user profile url object")
+		}
+
+		user.ProfileUrl = &req.URL
+	}
+
+	return nil
 }

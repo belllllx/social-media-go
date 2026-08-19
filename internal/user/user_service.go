@@ -7,8 +7,12 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/belllllx/social-media-go/internal/dto"
+	"github.com/belllllx/social-media-go/internal/follow"
 	"github.com/belllllx/social-media-go/internal/logs"
 	"github.com/belllllx/social-media-go/internal/models"
+	"github.com/belllllx/social-media-go/internal/notification"
+	"github.com/belllllx/social-media-go/internal/socket"
 	"github.com/belllllx/social-media-go/pkg/errs"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/google/uuid"
@@ -41,9 +45,28 @@ type SecureUserFollow struct {
 	Info                 *string             `json:"info"`
 	Role                 models.Role         `json:"role"`
 	ProviderType         models.ProviderType `json:"providerType"`
-	Followers            []FollowerData      `json:"followers,omitempty"`
+	Followers            []FollowerData      `json:"followers"`
 	CreatedAt            time.Time           `json:"createdAt"`
 	UpdatedAt            time.Time           `json:"updatedAt"`
+}
+
+type Follow struct {
+	ID          int64             `json:"id"`
+	FollowerID  uuid.UUID         `json:"followerId"`
+	Follower    *SecureUserFollow `json:"follower,omitempty"`
+	FollowingID uuid.UUID         `json:"followingId"`
+	Following   *SecureUserFollow `json:"following,omitempty"`
+	CreatedAt   time.Time         `json:"createdAt,omitzero"`
+	UpdatedAt   time.Time         `json:"updatedAt,omitzero"`
+}
+
+type Follower struct {
+	ID           int64             `json:"id"`
+	FollowerID   uuid.UUID         `json:"followerId"`
+	FollowingID  uuid.UUID         `json:"followingId"`
+	FollowerUser *SecureUserFollow `json:"follower,omitempty"`
+	CreatedAt    time.Time         `json:"createdAt"`
+	UpdatedAt    time.Time         `json:"updatedAt"`
 }
 
 type Following struct {
@@ -53,30 +76,6 @@ type Following struct {
 	FollowingUser *SecureUserFollow `json:"following"`
 	CreatedAt     time.Time         `json:"createdAt"`
 	UpdatedAt     time.Time         `json:"updatedAt"`
-}
-
-type Follower struct {
-	ID           int64             `json:"id"`
-	FollowerID   uuid.UUID         `json:"followerId"`
-	FollowingID  uuid.UUID         `json:"followingId"`
-	FollowerUser *SecureUserFollow `json:"follower"`
-	CreatedAt    time.Time         `json:"createdAt"`
-	UpdatedAt    time.Time         `json:"updatedAt"`
-}
-
-type SecureUser struct {
-	ID                   uuid.UUID           `json:"id"`
-	Fullname             string              `json:"fullname"`
-	Username             *string             `json:"username"`
-	Email                string              `json:"email"`
-	DateOfBirth          *time.Time          `json:"dateOfBirth"`
-	ProfileUrl           *string             `json:"profileUrl"`
-	ProfileBackgroundUrl *string             `json:"profileBackgroundUrl"`
-	Info                 *string             `json:"info"`
-	Role                 models.Role         `json:"role"`
-	ProviderType         models.ProviderType `json:"providerType"`
-	CreatedAt            time.Time           `json:"createdAt"`
-	UpdatedAt            time.Time           `json:"updatedAt"`
 }
 
 type SecureUserWithFollowRelations struct {
@@ -112,25 +111,9 @@ type SecureUserWithFollowerRelation struct {
 	UpdatedAt            time.Time           `json:"updatedAt"`
 }
 
-type SecureUserWithFollowingRelation struct {
-	ID                   uuid.UUID           `json:"id"`
-	Fullname             string              `json:"fullname"`
-	Username             *string             `json:"username"`
-	Email                string              `json:"email"`
-	DateOfBirth          *time.Time          `json:"dateOfBirth"`
-	ProfileUrl           *string             `json:"profileUrl"`
-	ProfileBackgroundUrl *string             `json:"profileBackgroundUrl"`
-	Info                 *string             `json:"info"`
-	Role                 models.Role         `json:"role"`
-	ProviderType         models.ProviderType `json:"providerType"`
-	Followings           []Following         `json:"followings"`
-	CreatedAt            time.Time           `json:"createdAt"`
-	UpdatedAt            time.Time           `json:"updatedAt"`
-}
-
 type UserCursorPagination struct {
-	Users      []SecureUser `json:"users"`
-	NextCursor *uuid.UUID   `json:"nextCursor"`
+	Users      []dto.SecureUser `json:"users"`
+	NextCursor *uuid.UUID       `json:"nextCursor"`
 }
 
 type UserWithFollowerRelationCursorPagination struct {
@@ -139,7 +122,7 @@ type UserWithFollowerRelationCursorPagination struct {
 }
 
 type UserService interface {
-	FindByIDWithFollowingRelation(ctx context.Context, userID uuid.UUID) (*SecureUserWithFollowingRelation, error)
+	FindByIDWithFollowingRelation(ctx context.Context, userID uuid.UUID) (*dto.SecureUserWithFollowingRelation, error)
 	FindByIDWithFollowRelations(ctx context.Context, userID string) (*SecureUserWithFollowRelations, error)
 	FindsWithFullnameCursorPagination(
 		ctx context.Context,
@@ -156,28 +139,47 @@ type UserService interface {
 		email,
 		password string,
 	) error
-	GetUserImage(ctx context.Context, user *models.User) error
+	ToggleFollow(
+		ctx context.Context,
+		followerID uuid.UUID,
+		followingID string,
+	) (string, *Follow, error)
 }
 
 type userService struct {
-	db             *gorm.DB
-	presignClient  *s3.PresignClient
-	userRepository UserRepository
+	db                     *gorm.DB
+	presignClient          *s3.PresignClient
+	userRepository         UserRepository
+	followRepository       follow.FollowRepository
+	notificationRepository notification.NotificationRepository
+	notificationService    notification.NotificationService
+	userSocket             socket.UserSocket
+	notificationSocket     socket.NotificationSocket
 }
 
 func NewUserService(
 	db *gorm.DB,
 	presignClient *s3.PresignClient,
 	userRepository UserRepository,
+	followRepository follow.FollowRepository,
+	notificationRepository notification.NotificationRepository,
+	notificationService notification.NotificationService,
+	userSocket socket.UserSocket,
+	notificationSocket socket.NotificationSocket,
 ) UserService {
 	return &userService{
-		db:             db,
-		presignClient:  presignClient,
-		userRepository: userRepository,
+		db:                     db,
+		presignClient:          presignClient,
+		userRepository:         userRepository,
+		followRepository:       followRepository,
+		notificationRepository: notificationRepository,
+		notificationService:    notificationService,
+		userSocket:             userSocket,
+		notificationSocket:     notificationSocket,
 	}
 }
 
-func (s *userService) FindByIDWithFollowingRelation(ctx context.Context, userID uuid.UUID) (*SecureUserWithFollowingRelation, error) {
+func (s *userService) FindByIDWithFollowingRelation(ctx context.Context, userID uuid.UUID) (*dto.SecureUserWithFollowingRelation, error) {
 	user, err := s.userRepository.FindByIDWithFollowingRelation(
 		ctx,
 		s.db,
@@ -193,14 +195,19 @@ func (s *userService) FindByIDWithFollowingRelation(ctx context.Context, userID 
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("User by id %v is not found", userID))
 	}
 
-	err = s.GetUserImage(ctx, user)
+	err = helpers.GetUserImage(
+		ctx,
+		s.presignClient,
+		user,
+	)
 	if err != nil {
+		logs.Error(err)
 		return nil, err
 	}
 
-	followings := []Following{}
+	followings := []dto.Following{}
 	for _, following := range user.Followings {
-		followings = append(followings, Following{
+		followings = append(followings, dto.Following{
 			ID:          following.ID,
 			FollowerID:  following.FollowerID,
 			FollowingID: following.FollowingID,
@@ -209,7 +216,7 @@ func (s *userService) FindByIDWithFollowingRelation(ctx context.Context, userID 
 		})
 	}
 
-	secureUserWithFollowingRelation := &SecureUserWithFollowingRelation{
+	secureUserWithFollowingRelation := &dto.SecureUserWithFollowingRelation{
 		ID:                   user.ID,
 		Fullname:             user.Fullname,
 		Username:             user.Username,
@@ -255,21 +262,31 @@ func (s *userService) FindByIDWithFollowRelations(ctx context.Context, userID st
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("User by id %v is not found", userID))
 	}
 
-	err = s.GetUserImage(ctx, user)
+	err = helpers.GetUserImage(
+		ctx,
+		s.presignClient,
+		user,
+	)
 	if err != nil {
+		logs.Error(err)
 		return nil, err
 	}
 
 	followings := []Following{}
 	for _, following := range user.Followings {
-		err = s.GetUserImage(ctx, &following.Following)
+		err = helpers.GetUserImage(
+			ctx,
+			s.presignClient,
+			&following.Following,
+		)
 		if err != nil {
+			logs.Error(err)
 			return nil, err
 		}
 
-		followerData := []FollowerData{}
+		followersData := []FollowerData{}
 		for _, follower := range following.Following.Followers {
-			followerData = append(followerData, FollowerData{
+			followersData = append(followersData, FollowerData{
 				ID:          follower.ID,
 				FollowerID:  follower.FollowerID,
 				FollowingID: follower.FollowingID,
@@ -289,7 +306,7 @@ func (s *userService) FindByIDWithFollowRelations(ctx context.Context, userID st
 			Info:                 following.Following.Info,
 			Role:                 following.Following.Role,
 			ProviderType:         following.Following.ProviderType,
-			Followers:            followerData,
+			Followers:            followersData,
 			CreatedAt:            following.Following.CreatedAt,
 			UpdatedAt:            following.Following.UpdatedAt,
 		}
@@ -305,14 +322,19 @@ func (s *userService) FindByIDWithFollowRelations(ctx context.Context, userID st
 
 	followers := []Follower{}
 	for _, follower := range user.Followers {
-		err = s.GetUserImage(ctx, &follower.Follower)
+		err = helpers.GetUserImage(
+			ctx,
+			s.presignClient,
+			&follower.Follower,
+		)
 		if err != nil {
+			logs.Error(err)
 			return nil, err
 		}
 
-		followerData := []FollowerData{}
+		followersData := []FollowerData{}
 		for _, follower := range follower.Follower.Followers {
-			followerData = append(followerData, FollowerData{
+			followersData = append(followersData, FollowerData{
 				ID:          follower.ID,
 				FollowerID:  follower.FollowerID,
 				FollowingID: follower.FollowingID,
@@ -332,7 +354,7 @@ func (s *userService) FindByIDWithFollowRelations(ctx context.Context, userID st
 			Info:                 follower.Follower.Info,
 			Role:                 follower.Follower.Role,
 			ProviderType:         follower.Follower.ProviderType,
-			Followers:            followerData,
+			Followers:            followersData,
 			CreatedAt:            follower.Follower.CreatedAt,
 			UpdatedAt:            follower.Follower.UpdatedAt,
 		}
@@ -397,7 +419,7 @@ func (s *userService) FindsWithFullnameCursorPagination(
 	}
 
 	users := []models.User{}
-	usersCursorPagination := []SecureUser{}
+	usersCursorPagination := []dto.SecureUser{}
 	if findsWithFullnameCursorPaginationDTO.Cursor == "" {
 		users, err = s.userRepository.FindsByFullnameCursorPagination(
 			ctx,
@@ -442,12 +464,17 @@ func (s *userService) FindsWithFullnameCursorPagination(
 	}
 
 	for _, user := range users {
-		err = s.GetUserImage(ctx, &user)
+		err = helpers.GetUserImage(
+			ctx,
+			s.presignClient,
+			&user,
+		)
 		if err != nil {
+			logs.Error(err)
 			return nil, err
 		}
 
-		usersCursorPagination = append(usersCursorPagination, SecureUser{
+		usersCursorPagination = append(usersCursorPagination, dto.SecureUser{
 			ID:                   user.ID,
 			Fullname:             user.Fullname,
 			Username:             user.Username,
@@ -550,39 +577,24 @@ func (s *userService) FindsCursorPaginationWithFollowerRelation(
 	}
 
 	for _, user := range users {
-		err = s.GetUserImage(ctx, &user)
+		err = helpers.GetUserImage(
+			ctx,
+			s.presignClient,
+			&user,
+		)
 		if err != nil {
+			logs.Error(err)
 			return nil, err
 		}
 
 		followers := []Follower{}
 		for _, follower := range user.Followers {
-			err = s.GetUserImage(ctx, &follower.Follower)
-			if err != nil {
-				return nil, err
-			}
-
-			secureUserFollower := &SecureUserFollow{
-				ID:                   follower.FollowerID,
-				Fullname:             follower.Follower.Fullname,
-				Username:             follower.Follower.Username,
-				Email:                follower.Follower.Email,
-				DateOfBirth:          follower.Follower.DateOfBirth,
-				ProfileUrl:           follower.Follower.ProfileUrl,
-				ProfileBackgroundUrl: follower.Follower.ProfileBackgroundUrl,
-				Info:                 follower.Follower.Info,
-				Role:                 follower.Follower.Role,
-				ProviderType:         follower.Follower.ProviderType,
-				CreatedAt:            follower.Follower.CreatedAt,
-				UpdatedAt:            follower.Follower.UpdatedAt,
-			}
 			followers = append(followers, Follower{
-				ID:           follower.ID,
-				FollowerID:   follower.FollowerID,
-				FollowingID:  follower.FollowingID,
-				FollowerUser: secureUserFollower,
-				CreatedAt:    follower.CreatedAt,
-				UpdatedAt:    follower.UpdatedAt,
+				ID:          follower.ID,
+				FollowerID:  follower.FollowerID,
+				FollowingID: follower.FollowingID,
+				CreatedAt:   follower.CreatedAt,
+				UpdatedAt:   follower.UpdatedAt,
 			})
 		}
 
@@ -638,22 +650,360 @@ func (s *userService) ResetPassword(
 	return nil
 }
 
-func (s *userService) GetUserImage(ctx context.Context, user *models.User) error {
-	// ไม่ใช่ avater ของ social login
-	// อัพเดต profile url
-	if user.ProfileUrl != nil && !helpers.IsExternalURL(*user.ProfileUrl) {
-		req, err := helpers.PresignGetObject(
+func (s *userService) ToggleFollow(
+	ctx context.Context,
+	followerID uuid.UUID,
+	followingID string,
+) (string, *Follow, error) {
+	err := helpers.ValidateUUID(followingID)
+	if err != nil {
+		logs.Warn(err)
+		return "", nil, err
+	}
+
+	followingIDParse, err := helpers.ParseUUID(followingID)
+	if err != nil {
+		logs.Error(err)
+		return "", nil, err
+	}
+
+	if followerID == *followingIDParse {
+		return "", nil, errs.NewBadRequestErrorWithMessage("You can only follow other users")
+	}
+
+	userByID, err := s.userRepository.FindByID(
+		ctx,
+		s.db,
+		*followingIDParse,
+	)
+	if err != nil && !helpers.IsErrRecordNotFound(err) {
+		logs.Error(err)
+		return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find user by id")
+	}
+
+	if helpers.IsErrRecordNotFound(err) {
+		logs.Warn(err)
+		return "", nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("User by id %v is not found", *followingIDParse))
+	}
+
+	_, err = s.followRepository.FindIsFollowing(
+		ctx,
+		s.db,
+		followerID,
+		userByID.ID,
+	)
+	if err != nil && !helpers.IsErrRecordNotFound(err) {
+		logs.Error(err)
+		return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find is following")
+	}
+
+	// กรณี follow
+	if helpers.IsErrRecordNotFound(err) {
+		createFollow := &models.Follow{
+			FollowerID:  followerID,
+			FollowingID: userByID.ID,
+		}
+		createNotificationDTO := &models.Notification{
+			Type:       models.NotificationTypeFollow,
+			Message:    "Following you",
+			SenderID:   followerID,
+			ReceiverID: userByID.ID,
+		}
+
+		err = s.db.Transaction(func(tx *gorm.DB) error {
+			err = s.followRepository.Create(
+				ctx,
+				tx,
+				createFollow,
+			)
+			if err != nil {
+				logs.Error(err)
+				return errs.NewInternalServerErrorWithMessage("Failed to create follow")
+			}
+
+			err = s.notificationService.CreateNotification(
+				ctx,
+				tx,
+				createNotificationDTO,
+			)
+			if err != nil {
+				return err
+			}
+
+			return nil
+		})
+		if err != nil {
+			_, ok := err.(*errs.AppError)
+			if !ok {
+				logs.Error(err)
+			}
+			return "", nil, err
+		}
+
+		createdFollow, err := s.followRepository.FindByIDWithFollowingAndFollowerRelations(
 			ctx,
-			s.presignClient,
-			*user.ProfileUrl,
+			s.db,
+			createFollow.ID,
 		)
 		if err != nil {
 			logs.Error(err)
-			return errs.NewInternalServerErrorWithMessage("Failed to presign get user profile url object")
+			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find follow by id with following and follower relations")
 		}
 
-		user.ProfileUrl = &req.URL
+		err = helpers.GetUserImage(
+			ctx,
+			s.presignClient,
+			&createdFollow.Follower,
+		)
+		if err != nil {
+			logs.Error(err)
+			return "", nil, err
+		}
+
+		err = helpers.GetUserImage(
+			ctx,
+			s.presignClient,
+			&createdFollow.Following,
+		)
+		if err != nil {
+			logs.Error(err)
+			return "", nil, err
+		}
+
+		createdNotification, err := s.notificationRepository.FindByIDWithSenderRelation(
+			ctx,
+			s.db,
+			createNotificationDTO.ID,
+		)
+		if err != nil {
+			logs.Error(err)
+			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find notification by id with sender relation")
+		}
+
+		err = helpers.GetUserImage(
+			ctx,
+			s.presignClient,
+			&createdNotification.Sender,
+		)
+		if err != nil {
+			logs.Error(err)
+			return "", nil, err
+		}
+
+		followersOfFollower := []socket.FollowerDataDTO{}
+		for _, follower := range createdFollow.Follower.Followers {
+			followersOfFollower = append(followersOfFollower, socket.FollowerDataDTO{
+				ID:          follower.ID,
+				FollowerID:  follower.FollowerID,
+				FollowingID: follower.FollowingID,
+				CreatedAt:   follower.CreatedAt,
+				UpdatedAt:   follower.UpdatedAt,
+			})
+		}
+
+		followersOfFollowing := []socket.FollowerDataDTO{}
+		for _, follower := range createdFollow.Following.Followers {
+			followersOfFollowing = append(followersOfFollowing, socket.FollowerDataDTO{
+				ID:          follower.ID,
+				FollowerID:  follower.FollowerID,
+				FollowingID: follower.FollowingID,
+				CreatedAt:   follower.CreatedAt,
+				UpdatedAt:   follower.UpdatedAt,
+			})
+		}
+
+		secureUserFollower := &socket.SecureUserFollowDTO{
+			ID:                   createdFollow.FollowerID,
+			Fullname:             createdFollow.Follower.Fullname,
+			Username:             createdFollow.Follower.Username,
+			Email:                createdFollow.Follower.Email,
+			DateOfBirth:          createdFollow.Follower.DateOfBirth,
+			ProfileUrl:           createdFollow.Follower.ProfileUrl,
+			ProfileBackgroundUrl: createdFollow.Follower.ProfileBackgroundUrl,
+			Info:                 createdFollow.Follower.Info,
+			Role:                 createdFollow.Follower.Role,
+			ProviderType:         createdFollow.Follower.ProviderType,
+			Followers:            followersOfFollower,
+			CreatedAt:            createdFollow.Follower.CreatedAt,
+			UpdatedAt:            createdFollow.Follower.UpdatedAt,
+		}
+
+		secureUserFollowing := &socket.SecureUserFollowDTO{
+			ID:                   createdFollow.FollowingID,
+			Fullname:             createdFollow.Following.Fullname,
+			Username:             createdFollow.Following.Username,
+			Email:                createdFollow.Following.Email,
+			DateOfBirth:          createdFollow.Following.DateOfBirth,
+			ProfileUrl:           createdFollow.Following.ProfileUrl,
+			ProfileBackgroundUrl: createdFollow.Following.ProfileBackgroundUrl,
+			Info:                 createdFollow.Following.Info,
+			Role:                 createdFollow.Following.Role,
+			ProviderType:         createdFollow.Following.ProviderType,
+			Followers:            followersOfFollowing,
+			CreatedAt:            createdFollow.Following.CreatedAt,
+			UpdatedAt:            createdFollow.Following.UpdatedAt,
+		}
+
+		followDTO := &socket.FollowDTO{
+			ID:          createdFollow.ID,
+			FollowerID:  createdFollow.FollowerID,
+			Follower:    secureUserFollower,
+			FollowingID: createdFollow.FollowingID,
+			Following:   secureUserFollowing,
+			CreatedAt:   createdFollow.CreatedAt,
+			UpdatedAt:   createdFollow.UpdatedAt,
+		}
+
+		go s.userSocket.EmitToggleFollow(followDTO)
+
+		secureUserSender := &dto.SecureUser{
+			ID:                   createdNotification.SenderID,
+			Fullname:             createdNotification.Sender.Fullname,
+			Username:             createdNotification.Sender.Username,
+			Email:                createdNotification.Sender.Email,
+			DateOfBirth:          createdNotification.Sender.DateOfBirth,
+			ProfileUrl:           createdNotification.Sender.ProfileUrl,
+			ProfileBackgroundUrl: createdNotification.Sender.ProfileBackgroundUrl,
+			Info:                 createdNotification.Sender.Info,
+			Role:                 createdNotification.Sender.Role,
+			ProviderType:         createdNotification.Sender.ProviderType,
+			CreatedAt:            createdNotification.Sender.CreatedAt,
+			UpdatedAt:            createdNotification.Sender.UpdatedAt,
+		}
+
+		emitNotificationDTO := &socket.EmitNotificationDTO{
+			ID:         createdNotification.ID,
+			Type:       createdNotification.Type,
+			Message:    createdNotification.Message,
+			IsRead:     createdNotification.IsRead,
+			SenderID:   createdNotification.SenderID,
+			Sender:     secureUserSender,
+			ReceiverID: createdNotification.ReceiverID,
+			CreatedAt:  createdNotification.CreatedAt,
+			UpdatedAt:  createdNotification.UpdatedAt,
+		}
+
+		go s.notificationSocket.EmitNotification(emitNotificationDTO)
+
+		followersOfFollowerResp := []FollowerData{}
+		for _, follower := range createdFollow.Follower.Followers {
+			followersOfFollowerResp = append(followersOfFollowerResp, FollowerData{
+				ID:          follower.ID,
+				FollowerID:  follower.FollowerID,
+				FollowingID: follower.FollowingID,
+				CreatedAt:   follower.CreatedAt,
+				UpdatedAt:   follower.UpdatedAt,
+			})
+		}
+
+		followersOfFollowingResp := []FollowerData{}
+		for _, follower := range createdFollow.Following.Followers {
+			followersOfFollowingResp = append(followersOfFollowingResp, FollowerData{
+				ID:          follower.ID,
+				FollowerID:  follower.FollowerID,
+				FollowingID: follower.FollowingID,
+				CreatedAt:   follower.CreatedAt,
+				UpdatedAt:   follower.UpdatedAt,
+			})
+		}
+
+		secureUserFollowerResp := &SecureUserFollow{
+			ID:                   createdFollow.FollowerID,
+			Fullname:             createdFollow.Follower.Fullname,
+			Username:             createdFollow.Follower.Username,
+			Email:                createdFollow.Follower.Email,
+			DateOfBirth:          createdFollow.Follower.DateOfBirth,
+			ProfileUrl:           createdFollow.Follower.ProfileUrl,
+			ProfileBackgroundUrl: createdFollow.Follower.ProfileBackgroundUrl,
+			Info:                 createdFollow.Follower.Info,
+			Role:                 createdFollow.Follower.Role,
+			ProviderType:         createdFollow.Follower.ProviderType,
+			Followers:            followersOfFollowerResp,
+			CreatedAt:            createdFollow.Follower.CreatedAt,
+			UpdatedAt:            createdFollow.Follower.UpdatedAt,
+		}
+
+		secureUserFollowingResp := &SecureUserFollow{
+			ID:                   createdFollow.FollowingID,
+			Fullname:             createdFollow.Following.Fullname,
+			Username:             createdFollow.Following.Username,
+			Email:                createdFollow.Following.Email,
+			DateOfBirth:          createdFollow.Following.DateOfBirth,
+			ProfileUrl:           createdFollow.Following.ProfileUrl,
+			ProfileBackgroundUrl: createdFollow.Following.ProfileBackgroundUrl,
+			Info:                 createdFollow.Following.Info,
+			Role:                 createdFollow.Following.Role,
+			ProviderType:         createdFollow.Following.ProviderType,
+			Followers:            followersOfFollowingResp,
+			CreatedAt:            createdFollow.Following.CreatedAt,
+			UpdatedAt:            createdFollow.Following.UpdatedAt,
+		}
+
+		followResp := &Follow{
+			ID:          createdFollow.ID,
+			FollowerID:  createdFollow.FollowerID,
+			Follower:    secureUserFollowerResp,
+			FollowingID: createdFollow.FollowingID,
+			Following:   secureUserFollowingResp,
+			CreatedAt:   createdFollow.CreatedAt,
+			UpdatedAt:   createdFollow.UpdatedAt,
+		}
+		return "Follow successfully", followResp, nil
 	}
 
-	return nil
+	// กรณี unfollow
+	deletedFollow := &models.Follow{}
+	deletedNotification := &models.Notification{}
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		deletedFollow, err = s.followRepository.DeleteOfFollow(
+			ctx,
+			tx,
+			followerID,
+			userByID.ID,
+		)
+		if err != nil {
+			logs.Error(err)
+			return errs.NewInternalServerErrorWithMessage("Failed to delete follow")
+		}
+
+		deletedNotification, err = s.notificationRepository.DeleteOfFollow(
+			ctx,
+			tx,
+			followerID,
+			userByID.ID,
+		)
+		if err != nil {
+			logs.Error(err)
+			return errs.NewInternalServerErrorWithMessage("Failed to delete notification of follow")
+		}
+
+		return nil
+	})
+	if err != nil {
+		_, ok := err.(*errs.AppError)
+		if !ok {
+			logs.Error(err)
+		}
+		return "", nil, err
+	}
+
+	followDTO := &socket.FollowDTO{
+		ID:          deletedFollow.ID,
+		FollowerID:  deletedFollow.FollowerID,
+		FollowingID: deletedFollow.FollowingID,
+	}
+	go s.userSocket.EmitToggleFollow(followDTO)
+
+	emitDeleteNotificationDTO := &socket.EmitDeleteNotificationDTO{
+		ID:         deletedNotification.ID,
+		ReceiverID: deletedNotification.ReceiverID,
+	}
+	go s.notificationSocket.EmitDeleteNotification(emitDeleteNotificationDTO)
+
+	followResp := &Follow{
+		ID:          deletedFollow.ID,
+		FollowerID:  deletedFollow.FollowerID,
+		FollowingID: deletedFollow.FollowingID,
+	}
+	return "Unfollow successfully", followResp, nil
 }

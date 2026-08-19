@@ -51,13 +51,6 @@ type NotificationRepository interface {
 		receiverID,
 		postID uuid.UUID,
 	) ([]models.Notification, error)
-	FindOfLikePost(
-		ctx context.Context,
-		db *gorm.DB,
-		senderID,
-		receiverID,
-		postID uuid.UUID,
-	) (*models.Notification, error)
 	FindOfComment(
 		ctx context.Context,
 		db *gorm.DB,
@@ -65,14 +58,6 @@ type NotificationRepository interface {
 		receiverID,
 		commentID uuid.UUID,
 		notificationType models.NotificationType,
-	) (*models.Notification, error)
-	FindOfLikeComment(
-		ctx context.Context,
-		db *gorm.DB,
-		senderID,
-		receiverID,
-		postID,
-		commentID uuid.UUID,
 	) (*models.Notification, error)
 	FindByIDCursor(
 		ctx context.Context,
@@ -92,11 +77,27 @@ type NotificationRepository interface {
 		userID uuid.UUID,
 		notificationsID uuid.UUIDs,
 	) ([]models.Notification, error)
-	Delete(
+	DeleteOfLikePost(
 		ctx context.Context,
 		db *gorm.DB,
-		notificationID uuid.UUID,
-	) error
+		senderID,
+		receiverID,
+		postID uuid.UUID,
+	) (*models.Notification, error)
+	DeleteOfLikeComment(
+		ctx context.Context,
+		db *gorm.DB,
+		senderID,
+		receiverID,
+		postID,
+		commentID uuid.UUID,
+	) (*models.Notification, error)
+	DeleteOfFollow(
+		ctx context.Context,
+		db *gorm.DB,
+		senderID,
+		receiverID uuid.UUID,
+	) (*models.Notification, error)
 }
 
 type notificationRepositoryDB struct {
@@ -206,31 +207,6 @@ func (r *notificationRepositoryDB) FindsOfPost(
 	return *notifications, nil
 }
 
-func (r *notificationRepositoryDB) FindOfLikePost(
-	ctx context.Context,
-	db *gorm.DB,
-	senderID,
-	receiverID,
-	postID uuid.UUID,
-) (*models.Notification, error) {
-	notification := &models.Notification{}
-	err := db.
-		WithContext(ctx).
-		Select("id", "receiver_id").
-		Where(
-			"type = ? AND sender_id = ? AND receiver_id = ? AND post_id = ?",
-			models.NotificationTypeLike,
-			senderID,
-			receiverID,
-			postID,
-		).
-		Take(notification).Error
-	if err != nil {
-		return nil, err
-	}
-	return notification, nil
-}
-
 func (r *notificationRepositoryDB) FindOfComment(
 	ctx context.Context,
 	db *gorm.DB,
@@ -249,33 +225,6 @@ func (r *notificationRepositoryDB) FindOfComment(
 			receiverID,
 			commentID,
 			notificationType,
-		).
-		Take(notification).Error
-	if err != nil {
-		return nil, err
-	}
-	return notification, nil
-}
-
-func (r *notificationRepositoryDB) FindOfLikeComment(
-	ctx context.Context,
-	db *gorm.DB,
-	senderID,
-	receiverID,
-	postID,
-	commentID uuid.UUID,
-) (*models.Notification, error) {
-	notification := &models.Notification{}
-	err := db.
-		WithContext(ctx).
-		Select("id", "receiver_id").
-		Where(
-			"type = ? AND sender_id = ? AND receiver_id = ? AND post_id = ? AND comment_id = ?",
-			models.NotificationTypeLike,
-			senderID,
-			receiverID,
-			postID,
-			commentID,
 		).
 		Take(notification).Error
 	if err != nil {
@@ -365,14 +314,102 @@ func (r *notificationRepositoryDB) UpdateIsRead(
 	return *notifications, nil
 }
 
-func (r *notificationRepositoryDB) Delete(
+func (r *notificationRepositoryDB) DeleteOfLikePost(
 	ctx context.Context,
 	db *gorm.DB,
-	notificationID uuid.UUID,
-) error {
+	senderID,
+	receiverID,
+	postID uuid.UUID,
+) (*models.Notification, error) {
 	notification := &models.Notification{}
-	return db.
+	result := db.
 		WithContext(ctx).
-		Where("id = ?", notificationID).
+		Clauses(clause.Returning{
+			Columns: []clause.Column{
+				{Name: "id"},
+				{Name: "receiver_id"},
+			},
+		}).
+		Where(
+			"type = ? AND sender_id = ? AND receiver_id = ? AND post_id = ?",
+			models.NotificationTypeLike,
+			senderID,
+			receiverID,
+			postID,
+		).
+		Delete(notification)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return nil, nil
+	}
+
+	return notification, nil
+}
+
+func (r *notificationRepositoryDB) DeleteOfLikeComment(
+	ctx context.Context,
+	db *gorm.DB,
+	senderID,
+	receiverID,
+	postID,
+	commentID uuid.UUID,
+) (*models.Notification, error) {
+	notification := &models.Notification{}
+	result := db.
+		WithContext(ctx).
+		Clauses(clause.Returning{
+			Columns: []clause.Column{
+				{Name: "id"},
+				{Name: "receiver_id"},
+			},
+		}).
+		Where(
+			"type = ? AND sender_id = ? AND receiver_id = ? AND post_id = ? AND comment_id = ?",
+			models.NotificationTypeLike,
+			senderID,
+			receiverID,
+			postID,
+			commentID,
+		).
+		Delete(notification)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return nil, nil
+	}
+
+	return notification, nil
+}
+
+func (r *notificationRepositoryDB) DeleteOfFollow(
+	ctx context.Context,
+	db *gorm.DB,
+	senderID,
+	receiverID uuid.UUID,
+) (*models.Notification, error) {
+	notification := &models.Notification{}
+	err := db.
+		WithContext(ctx).
+		Clauses(clause.Returning{
+			Columns: []clause.Column{
+				{Name: "id"},
+				{Name: "receiver_id"},
+			},
+		}).
+		Where(
+			"type = ? AND sender_id = ? AND receiver_id = ?",
+			models.NotificationTypeFollow,
+			senderID,
+			receiverID,
+		).
 		Delete(notification).Error
+	if err != nil {
+		return nil, err
+	}
+	return notification, nil
 }

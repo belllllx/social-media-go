@@ -1,6 +1,7 @@
 package middlewares
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,19 +10,24 @@ import (
 
 	"github.com/belllllx/social-media-go/internal/auth"
 	"github.com/belllllx/social-media-go/internal/configs"
+	"github.com/belllllx/social-media-go/internal/dto"
 	"github.com/belllllx/social-media-go/internal/logs"
 	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/internal/response"
-	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
 	server "github.com/zishang520/socket.io/servers/socket/v3"
 	"go.uber.org/zap"
 )
+
+type UserFinder interface {
+	FindByIDWithFollowingRelation(ctx context.Context, userID uuid.UUID) (*dto.SecureUserWithFollowingRelation, error)
+}
 
 func GlobalErrorsHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -119,7 +125,7 @@ func AuthLogin(authService auth.AuthService) gin.HandlerFunc {
 	}
 }
 
-func RequireAuth(userService user.UserService) gin.HandlerFunc {
+func RequireAuth(userService UserFinder) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 

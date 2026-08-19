@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/belllllx/social-media-go/internal/configs"
 	"github.com/belllllx/social-media-go/internal/logs"
+	"github.com/belllllx/social-media-go/internal/middlewares"
 	"github.com/belllllx/social-media-go/internal/socket"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
@@ -42,7 +43,7 @@ func NewApp() *App {
 
 	router := gin.New()
 	cron := cron.New()
-	socket := socket.NewSocketServer()
+	socket := socket.NewSocketServer(middlewares.SocketRequireAuth)
 
 	return &App{
 		DB:            db,

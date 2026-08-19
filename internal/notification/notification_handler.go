@@ -1,15 +1,15 @@
 package notification
 
 import (
+	"github.com/belllllx/social-media-go/internal/dto"
 	"github.com/belllllx/social-media-go/internal/response"
-	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 type UpdateNotificationRequest struct {
-	NotificationsID uuid.UUIDs `json:"notificationsId" binding:"required"`
+	NotificationsID []uuid.UUID `json:"notificationsId" binding:"required"`
 }
 
 type NotificationHandler interface {
@@ -41,7 +41,7 @@ func NewNotificationHandler(notificationService NotificationService) Notificatio
 func (h *notificationHandler) FindsWithReceiverIDCursorPagination(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	user, ok := c.MustGet("user").(*user.SecureUserWithFollowingRelation)
+	user, ok := c.MustGet("user").(*dto.SecureUserWithFollowingRelation)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
@@ -79,7 +79,7 @@ func (h *notificationHandler) FindsWithReceiverIDCursorPagination(c *gin.Context
 func (h *notificationHandler) UpdateIsRead(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	user, ok := c.MustGet("user").(*user.SecureUserWithFollowingRelation)
+	user, ok := c.MustGet("user").(*dto.SecureUserWithFollowingRelation)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return

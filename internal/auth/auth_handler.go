@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/belllllx/social-media-go/internal/dto"
 	"github.com/belllllx/social-media-go/internal/email"
 	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/internal/response"
@@ -349,12 +350,12 @@ func (h *authHandler) Login(c *gin.Context) {
 //	@Description	authentication and set cookie
 //	@Tags			auth
 //	@Produce		json
-//	@Success		200	{object}	response.SwaggerResponseWithData{data=user.SecureUserWithFollowingRelation}
+//	@Success		200	{object}	response.SwaggerResponseWithData{data=dto.SecureUserWithFollowingRelation}
 //	@Failure		401	{object}	response.SwaggerResponse
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/profile [get]
 func (h *authHandler) Profile(c *gin.Context) {
-	user, ok := c.MustGet("user").(*user.SecureUserWithFollowingRelation)
+	user, ok := c.MustGet("user").(*dto.SecureUserWithFollowingRelation)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return

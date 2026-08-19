@@ -6,9 +6,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/belllllx/social-media-go/internal/dto"
 	"github.com/belllllx/social-media-go/internal/logs"
 	"github.com/belllllx/social-media-go/internal/models"
-	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/belllllx/social-media-go/pkg/errs"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/google/uuid"
@@ -26,7 +27,7 @@ type Notification struct {
 	Message    string                  `json:"message"`
 	IsRead     bool                    `json:"isRead"`
 	SenderID   uuid.UUID               `json:"senderId"`
-	Sender     *user.SecureUser        `json:"sender"`
+	Sender     *dto.SecureUser         `json:"sender"`
 	ReceiverID uuid.UUID               `json:"receiverId"`
 	PostID     *uuid.UUID              `json:"postId,omitempty"`
 	CommentID  *uuid.UUID              `json:"commentId,omitempty"`
@@ -65,19 +66,19 @@ type NotificationService interface {
 
 type notificationService struct {
 	db                     *gorm.DB
+	presignClient          *s3.PresignClient
 	notificationRepository NotificationRepository
-	userService            user.UserService
 }
 
 func NewNotificationService(
 	db *gorm.DB,
+	presignClient *s3.PresignClient,
 	notificationRepository NotificationRepository,
-	userService user.UserService,
 ) NotificationService {
 	return &notificationService{
 		db:                     db,
+		presignClient:          presignClient,
 		notificationRepository: notificationRepository,
-		userService:            userService,
 	}
 }
 
@@ -194,12 +195,17 @@ func (s *notificationService) FindsWithReceiverIDCursorPagination(
 	}
 
 	for _, notification := range notifications {
-		err = s.userService.GetUserImage(ctx, &notification.Sender)
+		err = helpers.GetUserImage(
+			ctx,
+			s.presignClient,
+			&notification.Sender,
+		)
 		if err != nil {
+			logs.Error(err)
 			return nil, err
 		}
 
-		secureSenderNotification := &user.SecureUser{
+		secureSenderNotification := &dto.SecureUser{
 			ID:                   notification.SenderID,
 			Fullname:             notification.Sender.Fullname,
 			Username:             notification.Sender.Username,
@@ -245,6 +251,10 @@ func (s *notificationService) UpdateIsRead(
 	userID uuid.UUID,
 	notificationsID uuid.UUIDs,
 ) ([]UpdatedNotification, error) {
+	if len(notificationsID) == 0 {
+		return nil, errs.NewBadRequestErrorWithMessage("Notification ids cannot be empty")
+	}
+
 	updatedNotifications, err := s.notificationRepository.UpdateIsRead(
 		ctx,
 		s.db,

@@ -356,7 +356,7 @@ func (r *userRepositoryDB) FindsCursorPaginationWithFollowerRelation(
 			"updated_at",
 		).
 		Where("id <> ?", userID).
-		Preload("Followers.Follower", helpers.OmitUserPasswordHash).
+		Preload("Followers").
 		Order("created_at DESC, id DESC").
 		Limit(limit)
 

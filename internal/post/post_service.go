@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/belllllx/social-media-go/internal/dto"
 	"github.com/belllllx/social-media-go/internal/file"
 	"github.com/belllllx/social-media-go/internal/like"
 	"github.com/belllllx/social-media-go/internal/logs"
@@ -54,36 +55,36 @@ type UpdatedPost struct {
 }
 
 type Like struct {
-	ID        int64            `json:"id"`
-	UserID    uuid.UUID        `json:"userId"`
-	User      *user.SecureUser `json:"user,omitempty"`
-	PostID    uuid.UUID        `json:"postId"`
-	CreatedAt time.Time        `json:"createdAt"`
-	UpdatedAt time.Time        `json:"updatedAt"`
+	ID        int64           `json:"id"`
+	UserID    uuid.UUID       `json:"userId"`
+	User      *dto.SecureUser `json:"user,omitempty"`
+	PostID    uuid.UUID       `json:"postId"`
+	CreatedAt time.Time       `json:"createdAt"`
+	UpdatedAt time.Time       `json:"updatedAt"`
 }
 
 type PostParent struct {
-	ID        uuid.UUID        `json:"id"`
-	Message   *string          `json:"message"`
-	UserID    uuid.UUID        `json:"userId"`
-	User      *user.SecureUser `json:"user"`
-	FilesURL  []string         `json:"filesUrl"`
-	CreatedAt time.Time        `json:"createdAt"`
-	UpdatedAt time.Time        `json:"updatedAt"`
+	ID        uuid.UUID       `json:"id"`
+	Message   *string         `json:"message"`
+	UserID    uuid.UUID       `json:"userId"`
+	User      *dto.SecureUser `json:"user"`
+	FilesURL  []string        `json:"filesUrl"`
+	CreatedAt time.Time       `json:"createdAt"`
+	UpdatedAt time.Time       `json:"updatedAt"`
 }
 
 type Post struct {
-	ID            uuid.UUID        `json:"id"`
-	Message       *string          `json:"message"`
-	UserID        uuid.UUID        `json:"userId"`
-	User          *user.SecureUser `json:"user"`
-	ParentID      *uuid.UUID       `json:"parentId"`
-	Parent        *PostParent      `json:"parent"`
-	Likes         []Like           `json:"likes"`
-	FilesURL      []string         `json:"filesUrl,omitempty"`
-	CommentsCount int              `json:"commentsCount"`
-	CreatedAt     time.Time        `json:"createdAt"`
-	UpdatedAt     time.Time        `json:"updatedAt"`
+	ID            uuid.UUID       `json:"id"`
+	Message       *string         `json:"message"`
+	UserID        uuid.UUID       `json:"userId"`
+	User          *dto.SecureUser `json:"user"`
+	ParentID      *uuid.UUID      `json:"parentId"`
+	Parent        *PostParent     `json:"parent"`
+	Likes         []Like          `json:"likes"`
+	FilesURL      []string        `json:"filesUrl,omitempty"`
+	CommentsCount int             `json:"commentsCount"`
+	CreatedAt     time.Time       `json:"createdAt"`
+	UpdatedAt     time.Time       `json:"updatedAt"`
 }
 
 type PostCursorPagination struct {
@@ -92,24 +93,24 @@ type PostCursorPagination struct {
 }
 
 type CreatedSharePost struct {
-	ID        uuid.UUID        `json:"id"`
-	Message   *string          `json:"message"`
-	UserID    uuid.UUID        `json:"userId"`
-	User      *user.SecureUser `json:"user"`
-	ParentID  *uuid.UUID       `json:"parentId"`
-	Parent    *PostParent      `json:"parent"`
-	CreatedAt time.Time        `json:"createdAt"`
-	UpdatedAt time.Time        `json:"updatedAt"`
+	ID        uuid.UUID       `json:"id"`
+	Message   *string         `json:"message"`
+	UserID    uuid.UUID       `json:"userId"`
+	User      *dto.SecureUser `json:"user"`
+	ParentID  *uuid.UUID      `json:"parentId"`
+	Parent    *PostParent     `json:"parent"`
+	CreatedAt time.Time       `json:"createdAt"`
+	UpdatedAt time.Time       `json:"updatedAt"`
 }
 
 type CreatedPost struct {
-	ID        uuid.UUID        `json:"id"`
-	Message   *string          `json:"message"`
-	UserID    uuid.UUID        `json:"userId"`
-	User      *user.SecureUser `json:"user"`
-	FilesURL  []string         `json:"filesUrl,omitempty"`
-	CreatedAt time.Time        `json:"createdAt"`
-	UpdatedAt time.Time        `json:"updatedAt"`
+	ID        uuid.UUID       `json:"id"`
+	Message   *string         `json:"message"`
+	UserID    uuid.UUID       `json:"userId"`
+	User      *dto.SecureUser `json:"user"`
+	FilesURL  []string        `json:"filesUrl,omitempty"`
+	CreatedAt time.Time       `json:"createdAt"`
+	UpdatedAt time.Time       `json:"updatedAt"`
 }
 
 type PostService interface {
@@ -144,6 +145,7 @@ type postService struct {
 	db                     *gorm.DB
 	redisClient            *redis.Client
 	s3Client               *s3.Client
+	presignClient          *s3.PresignClient
 	postRepository         PostRepository
 	userRepository         user.UserRepository
 	fileRepository         file.FileRepository
@@ -160,6 +162,7 @@ func NewPostService(
 	db *gorm.DB,
 	redisClient *redis.Client,
 	s3Client *s3.Client,
+	presignClient *s3.PresignClient,
 	postRepository PostRepository,
 	userRepository user.UserRepository,
 	fileRepository file.FileRepository,
@@ -175,6 +178,7 @@ func NewPostService(
 		db:                     db,
 		redisClient:            redisClient,
 		s3Client:               s3Client,
+		presignClient:          presignClient,
 		postRepository:         postRepository,
 		userRepository:         userRepository,
 		fileRepository:         fileRepository,
@@ -286,8 +290,13 @@ func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostD
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id with user relation")
 	}
 
-	err = s.userService.GetUserImage(ctx, &post.User)
+	err = helpers.GetUserImage(
+		ctx,
+		s.presignClient,
+		&post.User,
+	)
 	if err != nil {
+		logs.Error(err)
 		return nil, err
 	}
 
@@ -301,7 +310,7 @@ func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostD
 		}
 	}
 
-	secureUser := &user.SecureUser{
+	secureUser := &dto.SecureUser{
 		ID:                   post.UserID,
 		Fullname:             post.User.Fullname,
 		Username:             post.User.Username,
@@ -346,15 +355,20 @@ func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostD
 		}
 
 		for i := range notifications {
-			err = s.userService.GetUserImage(ctx, &notifications[i].Sender)
+			err = helpers.GetUserImage(
+				ctx,
+				s.presignClient,
+				&notifications[i].Sender,
+			)
 			if err != nil {
+				logs.Error(err)
 				return nil, err
 			}
 		}
 
 		emitNotificationsDTO := []socket.EmitNotificationDTO{}
 		for _, notification := range notifications {
-			notificationSender := &user.SecureUser{
+			notificationSender := &dto.SecureUser{
 				ID:                   notification.SenderID,
 				Fullname:             notification.Sender.Fullname,
 				Username:             notification.Sender.Username,
@@ -489,13 +503,23 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id with user relation")
 	}
 
-	err = s.userService.GetUserImage(ctx, &sharePost.User)
+	err = helpers.GetUserImage(
+		ctx,
+		s.presignClient,
+		&sharePost.User,
+	)
 	if err != nil {
+		logs.Error(err)
 		return nil, err
 	}
 
-	err = s.userService.GetUserImage(ctx, &post.User)
+	err = helpers.GetUserImage(
+		ctx,
+		s.presignClient,
+		&post.User,
+	)
 	if err != nil {
+		logs.Error(err)
 		return nil, err
 	}
 
@@ -504,7 +528,7 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 		return nil, err
 	}
 
-	postParentSecureUser := &user.SecureUser{
+	postParentSecureUser := &dto.SecureUser{
 		ID:                   post.UserID,
 		Fullname:             post.User.Fullname,
 		Username:             post.User.Username,
@@ -527,7 +551,7 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 		CreatedAt: post.CreatedAt,
 		UpdatedAt: post.UpdatedAt,
 	}
-	secureUser := &user.SecureUser{
+	secureUser := &dto.SecureUser{
 		ID:                   sharePost.UserID,
 		Fullname:             sharePost.User.Fullname,
 		Username:             sharePost.User.Username,
@@ -566,12 +590,17 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification by id with sender relation")
 		}
 
-		err = s.userService.GetUserImage(ctx, &notification.Sender)
+		err = helpers.GetUserImage(
+			ctx,
+			s.presignClient,
+			&notification.Sender,
+		)
 		if err != nil {
+			logs.Error(err)
 			return nil, err
 		}
 
-		notificationSender := &user.SecureUser{
+		notificationSender := &dto.SecureUser{
 			ID:                   notification.SenderID,
 			Fullname:             notification.Sender.Fullname,
 			Username:             notification.Sender.Username,
@@ -697,8 +726,13 @@ func (s *postService) FindsCursorPagination(
 	}
 
 	for _, post := range posts {
-		err = s.userService.GetUserImage(ctx, &post.User)
+		err = helpers.GetUserImage(
+			ctx,
+			s.presignClient,
+			&post.User,
+		)
 		if err != nil {
+			logs.Error(err)
 			return nil, err
 		}
 
@@ -717,12 +751,17 @@ func (s *postService) FindsCursorPagination(
 
 		updateLikes := []Like{}
 		for _, like := range post.Likes {
-			err = s.userService.GetUserImage(ctx, &like.User)
+			err = helpers.GetUserImage(
+				ctx,
+				s.presignClient,
+				&like.User,
+			)
 			if err != nil {
+				logs.Error(err)
 				return nil, err
 			}
 
-			secureUser := &user.SecureUser{
+			secureUser := &dto.SecureUser{
 				ID:                   like.UserID,
 				Fullname:             like.User.Fullname,
 				Username:             like.User.Username,
@@ -746,7 +785,7 @@ func (s *postService) FindsCursorPagination(
 			})
 		}
 
-		secureUser := &user.SecureUser{
+		secureUser := &dto.SecureUser{
 			ID:                   post.UserID,
 			Fullname:             post.User.Fullname,
 			Username:             post.User.Username,
@@ -774,8 +813,13 @@ func (s *postService) FindsCursorPagination(
 		}
 
 		if post.ParentID != nil {
-			err = s.userService.GetUserImage(ctx, &post.Parent.User)
+			err = helpers.GetUserImage(
+				ctx,
+				s.presignClient,
+				&post.Parent.User,
+			)
 			if err != nil {
+				logs.Error(err)
 				return nil, err
 			}
 
@@ -784,7 +828,7 @@ func (s *postService) FindsCursorPagination(
 				return nil, err
 			}
 
-			postParentSecureUser := &user.SecureUser{
+			postParentSecureUser := &dto.SecureUser{
 				ID:                   post.Parent.UserID,
 				Fullname:             post.Parent.User.Fullname,
 				Username:             post.Parent.User.Username,
@@ -927,8 +971,13 @@ func (s *postService) FindsWithUserIDCursorPagination(
 	}
 
 	for _, post := range posts {
-		err = s.userService.GetUserImage(ctx, &post.User)
+		err = helpers.GetUserImage(
+			ctx,
+			s.presignClient,
+			&post.User,
+		)
 		if err != nil {
+			logs.Error(err)
 			return nil, err
 		}
 
@@ -947,12 +996,17 @@ func (s *postService) FindsWithUserIDCursorPagination(
 
 		updateLikes := []Like{}
 		for _, like := range post.Likes {
-			err = s.userService.GetUserImage(ctx, &like.User)
+			err = helpers.GetUserImage(
+				ctx,
+				s.presignClient,
+				&like.User,
+			)
 			if err != nil {
+				logs.Error(err)
 				return nil, err
 			}
 
-			secureUser := &user.SecureUser{
+			secureUser := &dto.SecureUser{
 				ID:                   like.UserID,
 				Fullname:             like.User.Fullname,
 				Username:             like.User.Username,
@@ -976,7 +1030,7 @@ func (s *postService) FindsWithUserIDCursorPagination(
 			})
 		}
 
-		secureUser := &user.SecureUser{
+		secureUser := &dto.SecureUser{
 			ID:                   post.UserID,
 			Fullname:             post.User.Fullname,
 			Username:             post.User.Username,
@@ -1004,8 +1058,13 @@ func (s *postService) FindsWithUserIDCursorPagination(
 		}
 
 		if post.ParentID != nil {
-			err = s.userService.GetUserImage(ctx, &post.Parent.User)
+			err = helpers.GetUserImage(
+				ctx,
+				s.presignClient,
+				&post.Parent.User,
+			)
 			if err != nil {
+				logs.Error(err)
 				return nil, err
 			}
 
@@ -1014,7 +1073,7 @@ func (s *postService) FindsWithUserIDCursorPagination(
 				return nil, err
 			}
 
-			postParentSecureUser := &user.SecureUser{
+			postParentSecureUser := &dto.SecureUser{
 				ID:                   post.Parent.UserID,
 				Fullname:             post.Parent.User.Fullname,
 				Username:             post.Parent.User.Username,
@@ -1103,8 +1162,13 @@ func (s *postService) FindWithID(ctx context.Context, postID string) (*Post, err
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", *postIDParse))
 	}
 
-	err = s.userService.GetUserImage(ctx, &post.User)
+	err = helpers.GetUserImage(
+		ctx,
+		s.presignClient,
+		&post.User,
+	)
 	if err != nil {
+		logs.Error(err)
 		return nil, err
 	}
 
@@ -1123,12 +1187,17 @@ func (s *postService) FindWithID(ctx context.Context, postID string) (*Post, err
 
 	updateLikes := []Like{}
 	for _, like := range post.Likes {
-		err = s.userService.GetUserImage(ctx, &like.User)
+		err = helpers.GetUserImage(
+			ctx,
+			s.presignClient,
+			&like.User,
+		)
 		if err != nil {
+			logs.Error(err)
 			return nil, err
 		}
 
-		secureUser := &user.SecureUser{
+		secureUser := &dto.SecureUser{
 			ID:                   like.UserID,
 			Fullname:             like.User.Fullname,
 			Username:             like.User.Username,
@@ -1152,7 +1221,7 @@ func (s *postService) FindWithID(ctx context.Context, postID string) (*Post, err
 		})
 	}
 
-	secureUser := &user.SecureUser{
+	secureUser := &dto.SecureUser{
 		ID:                   post.UserID,
 		Fullname:             post.User.Fullname,
 		Username:             post.User.Username,
@@ -1180,8 +1249,13 @@ func (s *postService) FindWithID(ctx context.Context, postID string) (*Post, err
 	}
 
 	if post.ParentID != nil {
-		err = s.userService.GetUserImage(ctx, &post.Parent.User)
+		err = helpers.GetUserImage(
+			ctx,
+			s.presignClient,
+			&post.Parent.User,
+		)
 		if err != nil {
+			logs.Error(err)
 			return nil, err
 		}
 
@@ -1190,7 +1264,7 @@ func (s *postService) FindWithID(ctx context.Context, postID string) (*Post, err
 			return nil, err
 		}
 
-		postParentSecureUser := &user.SecureUser{
+		postParentSecureUser := &dto.SecureUser{
 			ID:                   post.Parent.UserID,
 			Fullname:             post.Parent.User.Fullname,
 			Username:             post.Parent.User.Username,
@@ -1670,12 +1744,17 @@ func (s *postService) ToggleLike(
 			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find like of post with user relation")
 		}
 
-		err = s.userService.GetUserImage(ctx, &createdLike.User)
+		err = helpers.GetUserImage(
+			ctx,
+			s.presignClient,
+			&createdLike.User,
+		)
 		if err != nil {
+			logs.Error(err)
 			return "", nil, err
 		}
 
-		secureUserLike := &user.SecureUser{
+		secureUserLike := &dto.SecureUser{
 			ID:                   createdLike.UserID,
 			Fullname:             createdLike.User.Fullname,
 			Username:             createdLike.User.Username,
@@ -1697,7 +1776,7 @@ func (s *postService) ToggleLike(
 			CreatedAt: createdLike.CreatedAt,
 			UpdatedAt: createdLike.UpdatedAt,
 		}
-		go s.postSocket.EmitLikeOrUnlike(postLikeDTO)
+		go s.postSocket.EmitToggleLike(postLikeDTO)
 
 		// ต้องไม่ like post ตัวเองถึง emit notification
 		if postByID.UserID != userID {
@@ -1711,12 +1790,17 @@ func (s *postService) ToggleLike(
 				return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find notification by id with sender relation")
 			}
 
-			err = s.userService.GetUserImage(ctx, &createdNotification.Sender)
+			err = helpers.GetUserImage(
+				ctx,
+				s.presignClient,
+				&createdNotification.Sender,
+			)
 			if err != nil {
+				logs.Error(err)
 				return "", nil, err
 			}
 
-			secureUserNotification := &user.SecureUser{
+			secureUserNotification := &dto.SecureUser{
 				ID:                   createdNotification.SenderID,
 				Fullname:             createdNotification.Sender.Fullname,
 				Username:             createdNotification.Sender.Username,
@@ -1758,7 +1842,7 @@ func (s *postService) ToggleLike(
 
 	// กรณี unlike
 	deletedLike := &models.Like{}
-	notification := &models.Notification{}
+	deletedNotification := &models.Notification{}
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		deletedLike, err = s.likeRepository.DeleteOfPost(
 			ctx,
@@ -1771,28 +1855,16 @@ func (s *postService) ToggleLike(
 			return errs.NewInternalServerErrorWithMessage("Failed to delete like of post")
 		}
 
-		notification, err = s.notificationRepository.FindOfLikePost(
+		deletedNotification, err = s.notificationRepository.DeleteOfLikePost(
 			ctx,
 			tx,
 			userID,
 			postByID.UserID,
 			postByID.ID,
 		)
-		if err != nil && !helpers.IsErrRecordNotFound(err) {
+		if err != nil {
 			logs.Error(err)
-			return errs.NewInternalServerErrorWithMessage("Failed to find notification of like post")
-		}
-
-		if notification != nil {
-			err = s.notificationRepository.Delete(
-				ctx,
-				tx,
-				notification.ID,
-			)
-			if err != nil {
-				logs.Error(err)
-				return errs.NewInternalServerErrorWithMessage("Failed to delete notification by id")
-			}
+			return errs.NewInternalServerErrorWithMessage("Failed to delete notification of like post")
 		}
 
 		return nil
@@ -1812,12 +1884,12 @@ func (s *postService) ToggleLike(
 		CreatedAt: deletedLike.CreatedAt,
 		UpdatedAt: deletedLike.UpdatedAt,
 	}
-	go s.postSocket.EmitLikeOrUnlike(postLikeDTO)
+	go s.postSocket.EmitToggleLike(postLikeDTO)
 
-	if notification != nil {
+	if deletedNotification != nil {
 		emitDeleteNotificationDTO := &socket.EmitDeleteNotificationDTO{
-			ID:         notification.ID,
-			ReceiverID: notification.ReceiverID,
+			ID:         deletedNotification.ID,
+			ReceiverID: deletedNotification.ReceiverID,
 		}
 		go s.notificationSocket.EmitDeleteNotification(emitDeleteNotificationDTO)
 	}

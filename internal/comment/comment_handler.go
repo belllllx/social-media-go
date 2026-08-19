@@ -1,10 +1,10 @@
 package comment
 
 import (
+	"github.com/belllllx/social-media-go/internal/dto"
 	"github.com/belllllx/social-media-go/internal/file"
 	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/internal/response"
-	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/gin-gonic/gin"
 )
@@ -145,7 +145,7 @@ func (h *commentHandler) DeleteFile(c *gin.Context) {
 func (h *commentHandler) CreateComment(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	user, ok := c.MustGet("user").(*user.SecureUserWithFollowingRelation)
+	user, ok := c.MustGet("user").(*dto.SecureUserWithFollowingRelation)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
@@ -192,7 +192,7 @@ func (h *commentHandler) CreateComment(c *gin.Context) {
 func (h *commentHandler) CreateReplyComment(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	user, ok := c.MustGet("user").(*user.SecureUserWithFollowingRelation)
+	user, ok := c.MustGet("user").(*dto.SecureUserWithFollowingRelation)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
@@ -242,7 +242,7 @@ func (h *commentHandler) CreateReplyComment(c *gin.Context) {
 func (h *commentHandler) CreateTagReply(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	user, ok := c.MustGet("user").(*user.SecureUserWithFollowingRelation)
+	user, ok := c.MustGet("user").(*dto.SecureUserWithFollowingRelation)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
@@ -326,7 +326,7 @@ func (h *commentHandler) FindsWithPostIDCursorPagination(c *gin.Context) {
 func (h *commentHandler) UpdateComment(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	user, ok := c.MustGet("user").(*user.SecureUserWithFollowingRelation)
+	user, ok := c.MustGet("user").(*dto.SecureUserWithFollowingRelation)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
@@ -371,7 +371,7 @@ func (h *commentHandler) UpdateComment(c *gin.Context) {
 func (h *commentHandler) DeleteComment(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	user, ok := c.MustGet("user").(*user.SecureUserWithFollowingRelation)
+	user, ok := c.MustGet("user").(*dto.SecureUserWithFollowingRelation)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
@@ -407,7 +407,7 @@ func (h *commentHandler) DeleteComment(c *gin.Context) {
 func (h *commentHandler) ToggleLike(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	user, ok := c.MustGet("user").(*user.SecureUserWithFollowingRelation)
+	user, ok := c.MustGet("user").(*dto.SecureUserWithFollowingRelation)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return

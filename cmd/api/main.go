@@ -11,6 +11,7 @@ import (
 	"github.com/belllllx/social-media-go/internal/configs"
 	"github.com/belllllx/social-media-go/internal/email"
 	"github.com/belllllx/social-media-go/internal/file"
+	"github.com/belllllx/social-media-go/internal/follow"
 	"github.com/belllllx/social-media-go/internal/like"
 	"github.com/belllllx/social-media-go/internal/logs"
 	"github.com/belllllx/social-media-go/internal/middlewares"
@@ -62,10 +63,12 @@ func main() {
 	notificationRepositoryDB := notification.NewNotificationRepositoryDB()
 	likeRepositoryDB := like.NewLikeRepositoryDB()
 	commentRepositoryDB := comment.NewCommentRepositoryDB()
+	followRepositoryDB := follow.NewFollowRepositoryDB()
 
 	notificationSocket := socket.NewNotificationSocket(app.Socket)
 	postSocket := socket.NewPostSocket(app.Socket)
 	commentSocket := socket.NewCommentSocket(app.Socket)
+	userSocket := socket.NewUserSocket(app.Socket)
 
 	emailService := email.NewEmailService(emailRepositoryImpl, otpRepositoryDB)
 	otpService := otp.NewOTPService(otpRepositoryDB)
@@ -80,11 +83,6 @@ func main() {
 		githubConfig,
 		facebookConfig,
 	)
-	userService := user.NewUserService(
-		app.DB,
-		app.PresignClient,
-		userRepositoryDB,
-	)
 	fileService := file.NewFileService(
 		app.DB,
 		fileRepositoryDB,
@@ -93,13 +91,24 @@ func main() {
 	)
 	notificationService := notification.NewNotificationService(
 		app.DB,
+		app.PresignClient,
 		notificationRepositoryDB,
-		userService,
+	)
+	userService := user.NewUserService(
+		app.DB,
+		app.PresignClient,
+		userRepositoryDB,
+		followRepositoryDB,
+		notificationRepositoryDB,
+		notificationService,
+		userSocket,
+		notificationSocket,
 	)
 	postService := post.NewPostService(
 		app.DB,
 		app.RedisClient,
 		app.S3Client,
+		app.PresignClient,
 		postRepositoryDB,
 		userRepositoryDB,
 		fileRepositoryDB,
@@ -115,6 +124,7 @@ func main() {
 		app.DB,
 		app.RedisClient,
 		app.S3Client,
+		app.PresignClient,
 		commentRepositoryDB,
 		userRepositoryDB,
 		postRepositoryDB,
@@ -259,6 +269,7 @@ func main() {
 		user.GET("/finds-with-fullname", userHandler.FindsWithFullnameCursorPagination)
 		user.GET("/finds", userHandler.FindsCursorPaginationWithFollowerRelation)
 		user.GET("/find/:userID", userHandler.FindByIDWithFollowRelations)
+		user.POST("/toggle-follow/:followingID", userHandler.ToggleFollow)
 	}
 
 	app.Run()

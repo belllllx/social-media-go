@@ -1,10 +1,10 @@
 package post
 
 import (
+	"github.com/belllllx/social-media-go/internal/dto"
 	"github.com/belllllx/social-media-go/internal/file"
 	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/internal/response"
-	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/gin-gonic/gin"
 )
@@ -164,7 +164,7 @@ func (h *postHandler) DeleteFile(c *gin.Context) {
 func (h *postHandler) CreatePost(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	user, ok := c.MustGet("user").(*user.SecureUserWithFollowingRelation)
+	user, ok := c.MustGet("user").(*dto.SecureUserWithFollowingRelation)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
@@ -208,7 +208,7 @@ func (h *postHandler) CreatePost(c *gin.Context) {
 func (h *postHandler) CreateSharePost(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	user, ok := c.MustGet("user").(*user.SecureUserWithFollowingRelation)
+	user, ok := c.MustGet("user").(*dto.SecureUserWithFollowingRelation)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
@@ -343,7 +343,7 @@ func (h *postHandler) FindWithID(c *gin.Context) {
 func (h *postHandler) UpdatePost(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	user, ok := c.MustGet("user").(*user.SecureUserWithFollowingRelation)
+	user, ok := c.MustGet("user").(*dto.SecureUserWithFollowingRelation)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
@@ -389,7 +389,7 @@ func (h *postHandler) UpdatePost(c *gin.Context) {
 func (h *postHandler) DeletePost(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	user, ok := c.MustGet("user").(*user.SecureUserWithFollowingRelation)
+	user, ok := c.MustGet("user").(*dto.SecureUserWithFollowingRelation)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
@@ -424,7 +424,7 @@ func (h *postHandler) DeletePost(c *gin.Context) {
 func (h *postHandler) ToggleLike(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	user, ok := c.MustGet("user").(*user.SecureUserWithFollowingRelation)
+	user, ok := c.MustGet("user").(*dto.SecureUserWithFollowingRelation)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return

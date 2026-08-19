@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/belllllx/social-media-go/internal/dto"
 	"github.com/belllllx/social-media-go/internal/file"
 	"github.com/belllllx/social-media-go/internal/like"
 	"github.com/belllllx/social-media-go/internal/logs"
@@ -73,42 +74,42 @@ type UpdatedComment struct {
 }
 
 type Like struct {
-	ID        int64            `json:"id"`
-	UserID    uuid.UUID        `json:"userId"`
-	User      *user.SecureUser `json:"user,omitempty"`
-	CommentID uuid.UUID        `json:"commentId"`
-	CreatedAt time.Time        `json:"createdAt"`
-	UpdatedAt time.Time        `json:"updatedAt"`
+	ID        int64           `json:"id"`
+	UserID    uuid.UUID       `json:"userId"`
+	User      *dto.SecureUser `json:"user,omitempty"`
+	CommentID uuid.UUID       `json:"commentId"`
+	CreatedAt time.Time       `json:"createdAt"`
+	UpdatedAt time.Time       `json:"updatedAt"`
 }
 
 type ReplyOrTag struct {
-	ID            uuid.UUID        `json:"id"`
-	Message       *string          `json:"message"`
-	PostID        uuid.UUID        `json:"postId"`
-	UserID        uuid.UUID        `json:"userId"`
-	User          *user.SecureUser `json:"user"`
-	ParentID      uuid.UUID        `json:"parentId"`
-	ReplyID       *uuid.UUID       `json:"replyId,omitempty"`
-	ReplyToUserID *uuid.UUID       `json:"replyToUserId,omitempty"`
-	ReplyToUser   *user.SecureUser `json:"replyToUser,omitempty"`
-	Likes         []Like           `json:"likes"`
-	FileURL       string           `json:"fileUrl,omitempty"`
-	CreatedAt     time.Time        `json:"createdAt"`
-	UpdatedAt     time.Time        `json:"updatedAt"`
+	ID            uuid.UUID       `json:"id"`
+	Message       *string         `json:"message"`
+	PostID        uuid.UUID       `json:"postId"`
+	UserID        uuid.UUID       `json:"userId"`
+	User          *dto.SecureUser `json:"user"`
+	ParentID      uuid.UUID       `json:"parentId"`
+	ReplyID       *uuid.UUID      `json:"replyId,omitempty"`
+	ReplyToUserID *uuid.UUID      `json:"replyToUserId,omitempty"`
+	ReplyToUser   *dto.SecureUser `json:"replyToUser,omitempty"`
+	Likes         []Like          `json:"likes"`
+	FileURL       string          `json:"fileUrl,omitempty"`
+	CreatedAt     time.Time       `json:"createdAt"`
+	UpdatedAt     time.Time       `json:"updatedAt"`
 }
 
 type Comment struct {
-	ID           uuid.UUID        `json:"id"`
-	Message      *string          `json:"message"`
-	PostID       uuid.UUID        `json:"postId"`
-	UserID       uuid.UUID        `json:"userId"`
-	User         *user.SecureUser `json:"user"`
-	Likes        []Like           `json:"likes"`
-	Replies      []ReplyOrTag     `json:"replies"`
-	FileURL      string           `json:"fileUrl,omitempty"`
-	RepliesCount int              `json:"repliesCount"`
-	CreatedAt    time.Time        `json:"createdAt"`
-	UpdatedAt    time.Time        `json:"updatedAt"`
+	ID           uuid.UUID       `json:"id"`
+	Message      *string         `json:"message"`
+	PostID       uuid.UUID       `json:"postId"`
+	UserID       uuid.UUID       `json:"userId"`
+	User         *dto.SecureUser `json:"user"`
+	Likes        []Like          `json:"likes"`
+	Replies      []ReplyOrTag    `json:"replies"`
+	FileURL      string          `json:"fileUrl,omitempty"`
+	RepliesCount int             `json:"repliesCount"`
+	CreatedAt    time.Time       `json:"createdAt"`
+	UpdatedAt    time.Time       `json:"updatedAt"`
 }
 
 type CommentCursorPagination struct {
@@ -117,19 +118,19 @@ type CommentCursorPagination struct {
 }
 
 type CreatedComment struct {
-	ID            uuid.UUID        `json:"id"`
-	Message       *string          `json:"message"`
-	PostID        uuid.UUID        `json:"postId"`
-	Post          *Post            `json:"post"`
-	UserID        uuid.UUID        `json:"userId"`
-	ParentID      *uuid.UUID       `json:"parentId,omitempty"`
-	ReplyID       *uuid.UUID       `json:"replyId,omitempty"`
-	ReplyToUserID *uuid.UUID       `json:"replyToUserId,omitempty"`
-	ReplyToUser   *user.SecureUser `json:"replyToUser,omitempty"`
-	User          *user.SecureUser `json:"user"`
-	FileURL       string           `json:"fileUrl,omitempty"`
-	CreatedAt     time.Time        `json:"createdAt"`
-	UpdatedAt     time.Time        `json:"updatedAt"`
+	ID            uuid.UUID       `json:"id"`
+	Message       *string         `json:"message"`
+	PostID        uuid.UUID       `json:"postId"`
+	Post          *Post           `json:"post"`
+	UserID        uuid.UUID       `json:"userId"`
+	ParentID      *uuid.UUID      `json:"parentId,omitempty"`
+	ReplyID       *uuid.UUID      `json:"replyId,omitempty"`
+	ReplyToUserID *uuid.UUID      `json:"replyToUserId,omitempty"`
+	ReplyToUser   *dto.SecureUser `json:"replyToUser,omitempty"`
+	User          *dto.SecureUser `json:"user"`
+	FileURL       string          `json:"fileUrl,omitempty"`
+	CreatedAt     time.Time       `json:"createdAt"`
+	UpdatedAt     time.Time       `json:"updatedAt"`
 }
 
 type CommentService interface {
@@ -160,6 +161,7 @@ type commentService struct {
 	db                     *gorm.DB
 	redisClient            *redis.Client
 	s3Client               *s3.Client
+	presignClient          *s3.PresignClient
 	commentRepository      CommentRepository
 	userRepository         user.UserRepository
 	postRepository         post.PostRepository
@@ -177,6 +179,7 @@ func NewCommentService(
 	db *gorm.DB,
 	redisClient *redis.Client,
 	s3Client *s3.Client,
+	presignClient *s3.PresignClient,
 	commentRepository CommentRepository,
 	userRepository user.UserRepository,
 	postRepository post.PostRepository,
@@ -193,6 +196,7 @@ func NewCommentService(
 		db:                     db,
 		redisClient:            redisClient,
 		s3Client:               s3Client,
+		presignClient:          presignClient,
 		commentRepository:      commentRepository,
 		userRepository:         userRepository,
 		postRepository:         postRepository,
@@ -321,12 +325,17 @@ func (s *commentService) CreateComment(ctx context.Context, createCommentDTO *Cr
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find comment by id with user and post relations")
 	}
 
-	err = s.userService.GetUserImage(ctx, &comment.User)
+	err = helpers.GetUserImage(
+		ctx,
+		s.presignClient,
+		&comment.User,
+	)
 	if err != nil {
+		logs.Error(err)
 		return nil, err
 	}
 
-	secureUserComment := &user.SecureUser{
+	secureUserComment := &dto.SecureUser{
 		ID:                   comment.UserID,
 		Fullname:             comment.User.Fullname,
 		Username:             comment.User.Username,
@@ -390,12 +399,17 @@ func (s *commentService) CreateComment(ctx context.Context, createCommentDTO *Cr
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification by id with sender relation")
 		}
 
-		err = s.userService.GetUserImage(ctx, &notification.Sender)
+		err = helpers.GetUserImage(
+			ctx,
+			s.presignClient,
+			&notification.Sender,
+		)
 		if err != nil {
+			logs.Error(err)
 			return nil, err
 		}
 
-		secureSenderNotification := &user.SecureUser{
+		secureSenderNotification := &dto.SecureUser{
 			ID:                   notification.SenderID,
 			Fullname:             notification.Sender.Fullname,
 			Username:             notification.Sender.Username,
@@ -571,12 +585,17 @@ func (s *commentService) CreateReplyComment(ctx context.Context, createReplyComm
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find reply by id with user and post relations")
 	}
 
-	err = s.userService.GetUserImage(ctx, &reply.User)
+	err = helpers.GetUserImage(
+		ctx,
+		s.presignClient,
+		&reply.User,
+	)
 	if err != nil {
+		logs.Error(err)
 		return nil, err
 	}
 
-	secureUserReply := &user.SecureUser{
+	secureUserReply := &dto.SecureUser{
 		ID:                   reply.UserID,
 		Fullname:             reply.User.Fullname,
 		Username:             reply.User.Username,
@@ -642,12 +661,17 @@ func (s *commentService) CreateReplyComment(ctx context.Context, createReplyComm
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification by id with sender relation")
 		}
 
-		err = s.userService.GetUserImage(ctx, &notification.Sender)
+		err = helpers.GetUserImage(
+			ctx,
+			s.presignClient,
+			&notification.Sender,
+		)
 		if err != nil {
+			logs.Error(err)
 			return nil, err
 		}
 
-		secureSenderNotification := &user.SecureUser{
+		secureSenderNotification := &dto.SecureUser{
 			ID:                   notification.SenderID,
 			Fullname:             notification.Sender.Fullname,
 			Username:             notification.Sender.Username,
@@ -852,17 +876,27 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find tag by id with comment relations")
 	}
 
-	err = s.userService.GetUserImage(ctx, &tag.User)
+	err = helpers.GetUserImage(
+		ctx,
+		s.presignClient,
+		&tag.User,
+	)
 	if err != nil {
+		logs.Error(err)
 		return nil, err
 	}
 
-	err = s.userService.GetUserImage(ctx, tag.ReplyToUser)
+	err = helpers.GetUserImage(
+		ctx,
+		s.presignClient,
+		tag.ReplyToUser,
+	)
 	if err != nil {
+		logs.Error(err)
 		return nil, err
 	}
 
-	secureUserTag := &user.SecureUser{
+	secureUserTag := &dto.SecureUser{
 		ID:                   tag.UserID,
 		Fullname:             tag.User.Fullname,
 		Username:             tag.User.Username,
@@ -876,7 +910,7 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 		CreatedAt:            tag.User.CreatedAt,
 		UpdatedAt:            tag.User.UpdatedAt,
 	}
-	secureReplyToUser := &user.SecureUser{
+	secureReplyToUser := &dto.SecureUser{
 		ID:                   *tag.ReplyToUserID,
 		Fullname:             tag.ReplyToUser.Fullname,
 		Username:             tag.ReplyToUser.Username,
@@ -948,12 +982,17 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification by id with sender relation")
 		}
 
-		err = s.userService.GetUserImage(ctx, &notification.Sender)
+		err = helpers.GetUserImage(
+			ctx,
+			s.presignClient,
+			&notification.Sender,
+		)
 		if err != nil {
+			logs.Error(err)
 			return nil, err
 		}
 
-		secureSenderNotification := &user.SecureUser{
+		secureSenderNotification := &dto.SecureUser{
 			ID:                   notification.SenderID,
 			Fullname:             notification.Sender.Fullname,
 			Username:             notification.Sender.Username,
@@ -1091,19 +1130,29 @@ func (s *commentService) FindsWithPostIDCursorPagination(
 	}
 
 	for _, comment := range comments {
-		err = s.userService.GetUserImage(ctx, &comment.User)
+		err = helpers.GetUserImage(
+			ctx,
+			s.presignClient,
+			&comment.User,
+		)
 		if err != nil {
+			logs.Error(err)
 			return nil, err
 		}
 
 		updateUserLikes := []Like{}
 		for _, like := range comment.Likes {
-			err = s.userService.GetUserImage(ctx, &like.User)
+			err = helpers.GetUserImage(
+				ctx,
+				s.presignClient,
+				&like.User,
+			)
 			if err != nil {
+				logs.Error(err)
 				return nil, err
 			}
 
-			secureUserLike := &user.SecureUser{
+			secureUserLike := &dto.SecureUser{
 				ID:                   like.UserID,
 				Fullname:             like.User.Fullname,
 				Username:             like.User.Username,
@@ -1132,7 +1181,7 @@ func (s *commentService) FindsWithPostIDCursorPagination(
 			return nil, err
 		}
 
-		secureUserComment := &user.SecureUser{
+		secureUserComment := &dto.SecureUser{
 			ID:                   comment.UserID,
 			Fullname:             comment.User.Fullname,
 			Username:             comment.User.Username,
@@ -1149,19 +1198,29 @@ func (s *commentService) FindsWithPostIDCursorPagination(
 
 		replyOrTags := []ReplyOrTag{}
 		for _, replyOrTag := range comment.Replies {
-			err = s.userService.GetUserImage(ctx, &replyOrTag.User)
+			err = helpers.GetUserImage(
+				ctx,
+				s.presignClient,
+				&replyOrTag.User,
+			)
 			if err != nil {
+				logs.Error(err)
 				return nil, err
 			}
 
 			updateUserLikes := []Like{}
 			for _, like := range replyOrTag.Likes {
-				err = s.userService.GetUserImage(ctx, &like.User)
+				err = helpers.GetUserImage(
+					ctx,
+					s.presignClient,
+					&like.User,
+				)
 				if err != nil {
+					logs.Error(err)
 					return nil, err
 				}
 
-				secureUserLike := &user.SecureUser{
+				secureUserLike := &dto.SecureUser{
 					ID:                   like.UserID,
 					Fullname:             like.User.Fullname,
 					Username:             like.User.Username,
@@ -1190,7 +1249,7 @@ func (s *commentService) FindsWithPostIDCursorPagination(
 				return nil, err
 			}
 
-			secureUserReplyOrTag := &user.SecureUser{
+			secureUserReplyOrTag := &dto.SecureUser{
 				ID:                   replyOrTag.UserID,
 				Fullname:             replyOrTag.User.Fullname,
 				Username:             replyOrTag.User.Username,
@@ -1219,12 +1278,17 @@ func (s *commentService) FindsWithPostIDCursorPagination(
 				UpdatedAt:     replyOrTag.UpdatedAt,
 			}
 			if replyOrTag.ReplyToUserID != nil {
-				err = s.userService.GetUserImage(ctx, replyOrTag.ReplyToUser)
+				err = helpers.GetUserImage(
+					ctx,
+					s.presignClient,
+					replyOrTag.ReplyToUser,
+				)
 				if err != nil {
+					logs.Error(err)
 					return nil, err
 				}
 
-				secureReplyToUser := &user.SecureUser{
+				secureReplyToUser := &dto.SecureUser{
 					ID:                   *replyOrTag.ReplyToUserID,
 					Fullname:             replyOrTag.ReplyToUser.Fullname,
 					Username:             replyOrTag.ReplyToUser.Username,
@@ -1722,12 +1786,17 @@ func (s *commentService) ToggleLike(
 			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find like of comment with user relation")
 		}
 
-		err = s.userService.GetUserImage(ctx, &createdLike.User)
+		err = helpers.GetUserImage(
+			ctx,
+			s.presignClient,
+			&createdLike.User,
+		)
 		if err != nil {
+			logs.Error(err)
 			return "", nil, err
 		}
 
-		secureUserLike := &user.SecureUser{
+		secureUserLike := &dto.SecureUser{
 			ID:                   createdLike.UserID,
 			Fullname:             createdLike.User.Fullname,
 			Username:             createdLike.User.Username,
@@ -1749,7 +1818,7 @@ func (s *commentService) ToggleLike(
 			CreatedAt: createdLike.CreatedAt,
 			UpdatedAt: createdLike.UpdatedAt,
 		}
-		go s.commentSocket.EmitLikeOrUnlike(commentLikeDTO)
+		go s.commentSocket.EmitToggleLike(commentLikeDTO)
 
 		// ต้องไม่ like comment ตัวเองถึง emit notification
 		if commentByID.UserID != userID {
@@ -1763,12 +1832,17 @@ func (s *commentService) ToggleLike(
 				return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find notification by id with sender relation")
 			}
 
-			err = s.userService.GetUserImage(ctx, &createdNotification.Sender)
+			err = helpers.GetUserImage(
+				ctx,
+				s.presignClient,
+				&createdNotification.Sender,
+			)
 			if err != nil {
+				logs.Error(err)
 				return "", nil, err
 			}
 
-			secureUserNotification := &user.SecureUser{
+			secureUserNotification := &dto.SecureUser{
 				ID:                   createdNotification.SenderID,
 				Fullname:             createdNotification.Sender.Fullname,
 				Username:             createdNotification.Sender.Username,
@@ -1811,7 +1885,7 @@ func (s *commentService) ToggleLike(
 
 	// กรณี unlike
 	deletedLike := &models.Like{}
-	notification := &models.Notification{}
+	deletedNotification := &models.Notification{}
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		deletedLike, err = s.likeRepository.DeleteOfComment(
 			ctx,
@@ -1824,7 +1898,7 @@ func (s *commentService) ToggleLike(
 			return errs.NewInternalServerErrorWithMessage("Failed to delete like of comment")
 		}
 
-		notification, err = s.notificationRepository.FindOfLikeComment(
+		deletedNotification, err = s.notificationRepository.DeleteOfLikeComment(
 			ctx,
 			tx,
 			userID,
@@ -1832,21 +1906,9 @@ func (s *commentService) ToggleLike(
 			postByID.ID,
 			commentByID.ID,
 		)
-		if err != nil && !helpers.IsErrRecordNotFound(err) {
+		if err != nil {
 			logs.Error(err)
-			return errs.NewInternalServerErrorWithMessage("Failed to find notification of like comment")
-		}
-
-		if notification != nil {
-			err = s.notificationRepository.Delete(
-				ctx,
-				tx,
-				notification.ID,
-			)
-			if err != nil {
-				logs.Error(err)
-				return errs.NewInternalServerErrorWithMessage("Failed to delete notification by id")
-			}
+			return errs.NewInternalServerErrorWithMessage("Failed to delete notification of like comment")
 		}
 
 		return nil
@@ -1866,12 +1928,12 @@ func (s *commentService) ToggleLike(
 		CreatedAt: deletedLike.CreatedAt,
 		UpdatedAt: deletedLike.UpdatedAt,
 	}
-	go s.commentSocket.EmitLikeOrUnlike(commentLikeDTO)
+	go s.commentSocket.EmitToggleLike(commentLikeDTO)
 
-	if notification != nil {
+	if deletedNotification != nil {
 		emitDeleteNotificationDTO := &socket.EmitDeleteNotificationDTO{
-			ID:         notification.ID,
-			ReceiverID: notification.ReceiverID,
+			ID:         deletedNotification.ID,
+			ReceiverID: deletedNotification.ReceiverID,
 		}
 		go s.notificationSocket.EmitDeleteNotification(emitDeleteNotificationDTO)
 	}

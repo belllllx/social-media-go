@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/belllllx/social-media-go/internal/dto"
 	"github.com/belllllx/social-media-go/internal/models"
-	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/google/uuid"
 	server "github.com/zishang520/socket.io/servers/socket/v3"
 )
@@ -25,7 +25,7 @@ type EmitNotificationDTO struct {
 	Message    string                  `json:"message"`
 	IsRead     bool                    `json:"isRead"`
 	SenderID   uuid.UUID               `json:"senderId"`
-	Sender     *user.SecureUser        `json:"sender"`
+	Sender     *dto.SecureUser         `json:"sender"`
 	ReceiverID uuid.UUID               `json:"receiverId"`
 	PostID     *uuid.UUID              `json:"postId"`
 	CommentID  *uuid.UUID              `json:"commentId,omitempty"`
