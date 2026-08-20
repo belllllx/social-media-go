@@ -57,25 +57,25 @@ type PostSocket interface {
 }
 
 type postSocket struct {
-	socket *server.Server
+	io *server.Server
 }
 
-func NewPostSocket(socket *server.Server) PostSocket {
-	return &postSocket{socket: socket}
+func NewPostSocket(io *server.Server) PostSocket {
+	return &postSocket{io: io}
 }
 
 func (s *postSocket) EmitCreate(createPostDTO *CreatePostDTO) {
-	s.socket.Emit("newPost", createPostDTO)
+	s.io.Emit("newPost", createPostDTO)
 }
 
 func (s *postSocket) EmitUpdate(updatePostDTO *UpdatePostDTO) {
-	s.socket.Emit("updatePost", updatePostDTO)
+	s.io.Emit("updatePost", updatePostDTO)
 }
 
 func (s *postSocket) EmitDelete(deletePostDTO *DeletePostDTO) {
-	s.socket.Emit("deletePost", deletePostDTO)
+	s.io.Emit("deletePost", deletePostDTO)
 }
 
 func (s *postSocket) EmitToggleLike(postLikeDTO *PostLikeDTO) {
-	s.socket.Emit("toggleLikePost", postLikeDTO)
+	s.io.Emit("toggleLikePost", postLikeDTO)
 }

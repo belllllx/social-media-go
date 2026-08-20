@@ -47,13 +47,13 @@ type UserSocket interface {
 }
 
 type userSocket struct {
-	socket *server.Server
+	io *server.Server
 }
 
-func NewUserSocket(socket *server.Server) UserSocket {
-	return &userSocket{socket: socket}
+func NewUserSocket(io *server.Server) UserSocket {
+	return &userSocket{io: io}
 }
 
 func (s *userSocket) EmitToggleFollow(followDTO *FollowDTO) {
-	s.socket.Emit("toggleFollow", followDTO)
+	s.io.Emit("toggleFollow", followDTO)
 }

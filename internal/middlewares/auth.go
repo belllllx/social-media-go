@@ -6,71 +6,23 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/belllllx/social-media-go/internal/auth"
 	"github.com/belllllx/social-media-go/internal/configs"
 	"github.com/belllllx/social-media-go/internal/dto"
-	"github.com/belllllx/social-media-go/internal/logs"
 	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/internal/response"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
-	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
 	server "github.com/zishang520/socket.io/servers/socket/v3"
-	"go.uber.org/zap"
 )
 
 type UserFinder interface {
 	FindByIDWithFollowingRelation(ctx context.Context, userID uuid.UUID) (*dto.SecureUserWithFollowingRelation, error)
-}
-
-func GlobalErrorsHandler() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Next()
-
-		for _, ginErr := range c.Errors {
-			var validateErrs validator.ValidationErrors
-
-			if errors.As(ginErr.Err, &validateErrs) {
-				errFields := map[string]string{}
-				for _, e := range validateErrs {
-					errFields[e.Field()] = helpers.GetErrorMessages(e)
-				}
-				response.AbortWithBadRequestErrorFields(c, errFields)
-				return
-			}
-		}
-
-		if len(c.Errors) > 0 {
-			logs.Error(c.Errors.Last().Err)
-			response.AbortWithInternalServerError(c, c.Errors.Last().Err)
-		}
-	}
-}
-
-func ZapLogger() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		start := time.Now()
-		path := c.Request.URL.Path
-		query := c.Request.URL.RawQuery
-
-		c.Next()
-
-		logs.Info("request",
-			zap.String("method", c.Request.Method),
-			zap.String("path", path),
-			zap.String("query", query),
-			zap.Int("status", c.Writer.Status()),
-			zap.Duration("latency", time.Since(start)),
-			zap.String("client_ip", c.ClientIP()),
-			zap.Int("body_size", c.Writer.Size()),
-		)
-	}
 }
 
 func AuthRegister() gin.HandlerFunc {

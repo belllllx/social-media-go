@@ -41,33 +41,33 @@ type NotificationSocket interface {
 }
 
 type notificationSocket struct {
-	socket *server.Server
+	io *server.Server
 }
 
-func NewNotificationSocket(socket *server.Server) NotificationSocket {
-	return &notificationSocket{socket: socket}
+func NewNotificationSocket(io *server.Server) NotificationSocket {
+	return &notificationSocket{io: io}
 }
 
 func (s *notificationSocket) EmitNotification(emitNotificationDTO *EmitNotificationDTO) {
-	event := fmt.Sprintf("notification:%v", emitNotificationDTO.ReceiverID)
-	s.socket.Emit(event, emitNotificationDTO)
+	room := fmt.Sprintf("user:%v", emitNotificationDTO.ReceiverID)
+	s.io.To(server.Room(room)).Emit("notification", emitNotificationDTO)
 }
 
 func (s *notificationSocket) EmitNotifications(emitNotificationsDTO []EmitNotificationDTO) {
 	for _, emitNotificationDTO := range emitNotificationsDTO {
-		event := fmt.Sprintf("notification:%v", emitNotificationDTO.ReceiverID)
-		s.socket.Emit(event, emitNotificationDTO)
+		room := fmt.Sprintf("user:%v", emitNotificationDTO.ReceiverID)
+		s.io.To(server.Room(room)).Emit("notification", emitNotificationDTO)
 	}
 }
 
 func (s *notificationSocket) EmitDeleteNotification(emitDeleteNotificationDTO *EmitDeleteNotificationDTO) {
-	event := fmt.Sprintf("notification:%v", emitDeleteNotificationDTO.ReceiverID)
-	s.socket.Emit(event, DeleteNotification{ID: emitDeleteNotificationDTO.ID})
+	room := fmt.Sprintf("user:%v", emitDeleteNotificationDTO.ReceiverID)
+	s.io.To(server.Room(room)).Emit("notification", DeleteNotification{ID: emitDeleteNotificationDTO.ID})
 }
 
 func (s *notificationSocket) EmitDeleteNotifications(emitDeleteNotificationsDTO []EmitDeleteNotificationDTO) {
 	for _, emitDeleteNotificationDTO := range emitDeleteNotificationsDTO {
-		event := fmt.Sprintf("notification:%v", emitDeleteNotificationDTO.ReceiverID)
-		s.socket.Emit(event, DeleteNotification{ID: emitDeleteNotificationDTO.ID})
+		room := fmt.Sprintf("user:%v", emitDeleteNotificationDTO.ReceiverID)
+		s.io.To(server.Room(room)).Emit("notification", DeleteNotification{ID: emitDeleteNotificationDTO.ID})
 	}
 }

@@ -59,25 +59,25 @@ type CommentSocket interface {
 }
 
 type commentSocket struct {
-	socket *server.Server
+	io *server.Server
 }
 
-func NewCommentSocket(socket *server.Server) CommentSocket {
-	return &commentSocket{socket: socket}
+func NewCommentSocket(io *server.Server) CommentSocket {
+	return &commentSocket{io: io}
 }
 
 func (s *commentSocket) EmitCreate(createCommentDTO *CreateCommentDTO) {
-	s.socket.Emit("newComment", createCommentDTO)
+	s.io.Emit("newComment", createCommentDTO)
 }
 
 func (s *commentSocket) EmitUpdate(updateCommentDTO *UpdateCommentDTO) {
-	s.socket.Emit("updateComment", updateCommentDTO)
+	s.io.Emit("updateComment", updateCommentDTO)
 }
 
 func (s *commentSocket) EmitDelete(deleteCommentDTO *DeleteCommentDTO) {
-	s.socket.Emit("deleteComment", deleteCommentDTO)
+	s.io.Emit("deleteComment", deleteCommentDTO)
 }
 
 func (s *commentSocket) EmitToggleLike(commentLikeDTO *CommentLikeDTO) {
-	s.socket.Emit("toggleLikeComment", commentLikeDTO)
+	s.io.Emit("toggleLikeComment", commentLikeDTO)
 }
