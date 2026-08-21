@@ -12,6 +12,8 @@ type UserHandler interface {
 	FindsCursorPaginationWithFollowerRelation(c *gin.Context)
 	FindByIDWithFollowRelations(c *gin.Context)
 	ToggleFollow(c *gin.Context)
+	UploadEditUserAvatar(c *gin.Context)
+	UploadEditUserBackground(c *gin.Context)
 }
 
 type userHandler struct {
@@ -158,4 +160,114 @@ func (h *userHandler) ToggleFollow(c *gin.Context) {
 	}
 
 	response.Ok(c, message, follow)
+}
+
+// UploadEditUserAvatar godoc
+//
+//	@Description	authentication upload file and edit user avatar image
+//	@Tags			user
+//	@Accept			multipart/form-data
+//	@Produce		json
+//	@Param			file	formData	file	true	"single image file"
+//	@Success		200		{object}	response.SwaggerResponseWithData{data=FileURL}
+//	@Failure		400		{object}	response.SwaggerBadRequestResponse
+//	@Failure		401		{object}	response.SwaggerResponse
+//	@Failure		500		{object}	response.SwaggerResponse
+//	@Router			/user/avatar/upload-file [patch]
+func (h *userHandler) UploadEditUserAvatar(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	user, ok := c.MustGet("user").(*dto.SecureUserWithFollowingRelation)
+	if !ok {
+		response.AbortWithUnauthorized(c)
+		return
+	}
+
+	errField := map[string]string{}
+	form, err := c.FormFile("file")
+	if err != nil {
+		errField["file"] = "This field is required"
+		response.AbortWithBadRequestErrorFields(c, errField)
+		return
+	}
+
+	fileOpen, err := form.Open()
+	if err != nil {
+		response.AbortWithInternalServerError(c, err)
+		return
+	}
+
+	fileDataDTO := &FileDataDTO{
+		Filename:    form.Filename,
+		ContentType: form.Header.Get("Content-Type"),
+		Body:        fileOpen,
+		Size:        form.Size,
+	}
+	fileURL, err := h.userService.UploadEditUserFile(
+		ctx,
+		user,
+		fileDataDTO,
+		EditFileTypeAvatar,
+	)
+	if err != nil {
+		helpers.HandleError(c, err)
+		return
+	}
+
+	response.Ok(c, "User avatar upload successfully", fileURL)
+}
+
+// UploadEditUserBackground godoc
+//
+//	@Description	authentication upload file and edit user background image
+//	@Tags			user
+//	@Accept			multipart/form-data
+//	@Produce		json
+//	@Param			file	formData	file	true	"single image file"
+//	@Success		200		{object}	response.SwaggerResponseWithData{data=FileURL}
+//	@Failure		400		{object}	response.SwaggerBadRequestResponse
+//	@Failure		401		{object}	response.SwaggerResponse
+//	@Failure		500		{object}	response.SwaggerResponse
+//	@Router			/user/background/upload-file [patch]
+func (h *userHandler) UploadEditUserBackground(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	user, ok := c.MustGet("user").(*dto.SecureUserWithFollowingRelation)
+	if !ok {
+		response.AbortWithUnauthorized(c)
+		return
+	}
+
+	errField := map[string]string{}
+	form, err := c.FormFile("file")
+	if err != nil {
+		errField["file"] = "This field is required"
+		response.AbortWithBadRequestErrorFields(c, errField)
+		return
+	}
+
+	fileOpen, err := form.Open()
+	if err != nil {
+		response.AbortWithInternalServerError(c, err)
+		return
+	}
+
+	fileDataDTO := &FileDataDTO{
+		Filename:    form.Filename,
+		ContentType: form.Header.Get("Content-Type"),
+		Body:        fileOpen,
+		Size:        form.Size,
+	}
+	fileURL, err := h.userService.UploadEditUserFile(
+		ctx,
+		user,
+		fileDataDTO,
+		EditFileTypeBackground,
+	)
+	if err != nil {
+		helpers.HandleError(c, err)
+		return
+	}
+
+	response.Ok(c, "User background upload successfully", fileURL)
 }

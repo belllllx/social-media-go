@@ -77,6 +77,13 @@ type UserRepository interface {
 		email,
 		passwordHash string,
 	) error
+	UpdateImages(
+		ctx context.Context,
+		db *gorm.DB,
+		userID uuid.UUID,
+		key string,
+		editFileType EditFileType,
+	) error
 }
 
 type userRepositoryDB struct {
@@ -388,4 +395,31 @@ func (r *userRepositoryDB) UpdatePassword(
 		Model(user).
 		Where("email = ?", email).
 		Update("password_hash", passwordHash).Error
+}
+
+func (r *userRepositoryDB) UpdateImages(
+	ctx context.Context,
+	db *gorm.DB,
+	userID uuid.UUID,
+	key string,
+	editFileType EditFileType,
+) error {
+	user := &models.User{}
+	db = db.
+		WithContext(ctx).
+		Model(user).
+		Where("id = ?", userID)
+
+	switch editFileType {
+	case EditFileTypeAvatar:
+		db = db.Update("profile_url", key)
+	case EditFileTypeBackground:
+		db = db.Update("profile_background_url", key)
+	}
+
+	err := db.Error
+	if err != nil {
+		return err
+	}
+	return nil
 }

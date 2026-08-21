@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"fmt"
+	"io"
 	"strconv"
 	"time"
 
@@ -18,6 +19,32 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+const maxFileSize = 30 << 20 // 30 MB
+
+var allowedContentTypesCreateFile = map[string]bool{
+	"image/png":  true,
+	"image/jpeg": true,
+	"image/webp": true,
+}
+
+type FileDataDTO struct {
+	Filename    string
+	ContentType string
+	Body        io.Reader
+	Size        int64
+}
+
+type EditFileType string
+
+const (
+	EditFileTypeAvatar     EditFileType = "AVATAR"
+	EditFileTypeBackground EditFileType = "BACKGROUND"
+)
+
+type FileURL struct {
+	FileURL string `json:"fileUrl"`
+}
 
 type FindsWithFullnameCursorPaginationDTO struct {
 	UserID   uuid.UUID
@@ -40,8 +67,8 @@ type SecureUserFollow struct {
 	Username             *string             `json:"username"`
 	Email                string              `json:"email"`
 	DateOfBirth          *time.Time          `json:"dateOfBirth"`
-	ProfileUrl           *string             `json:"profileUrl"`
-	ProfileBackgroundUrl *string             `json:"profileBackgroundUrl"`
+	ProfileURL           *string             `json:"profileUrl"`
+	ProfileBackgroundURL *string             `json:"profileBackgroundUrl"`
 	Info                 *string             `json:"info"`
 	Role                 models.Role         `json:"role"`
 	ProviderType         models.ProviderType `json:"providerType"`
@@ -84,8 +111,8 @@ type SecureUserWithFollowRelations struct {
 	Username             *string             `json:"username"`
 	Email                string              `json:"email"`
 	DateOfBirth          *time.Time          `json:"dateOfBirth"`
-	ProfileUrl           *string             `json:"profileUrl"`
-	ProfileBackgroundUrl *string             `json:"profileBackgroundUrl"`
+	ProfileURL           *string             `json:"profileUrl"`
+	ProfileBackgroundURL *string             `json:"profileBackgroundUrl"`
 	Info                 *string             `json:"info"`
 	Role                 models.Role         `json:"role"`
 	ProviderType         models.ProviderType `json:"providerType"`
@@ -101,8 +128,8 @@ type SecureUserWithFollowerRelation struct {
 	Username             *string             `json:"username"`
 	Email                string              `json:"email"`
 	DateOfBirth          *time.Time          `json:"dateOfBirth"`
-	ProfileUrl           *string             `json:"profileUrl"`
-	ProfileBackgroundUrl *string             `json:"profileBackgroundUrl"`
+	ProfileURL           *string             `json:"profileUrl"`
+	ProfileBackgroundURL *string             `json:"profileBackgroundUrl"`
 	Info                 *string             `json:"info"`
 	Role                 models.Role         `json:"role"`
 	ProviderType         models.ProviderType `json:"providerType"`
@@ -144,10 +171,17 @@ type UserService interface {
 		followerID uuid.UUID,
 		followingID string,
 	) (string, *Follow, error)
+	UploadEditUserFile(
+		ctx context.Context,
+		user *dto.SecureUserWithFollowingRelation,
+		fileDataDTO *FileDataDTO,
+		editFileType EditFileType,
+	) (*FileURL, error)
 }
 
 type userService struct {
 	db                     *gorm.DB
+	s3Client               *s3.Client
 	presignClient          *s3.PresignClient
 	userRepository         UserRepository
 	followRepository       follow.FollowRepository
@@ -159,6 +193,7 @@ type userService struct {
 
 func NewUserService(
 	db *gorm.DB,
+	s3Client *s3.Client,
 	presignClient *s3.PresignClient,
 	userRepository UserRepository,
 	followRepository follow.FollowRepository,
@@ -169,6 +204,7 @@ func NewUserService(
 ) UserService {
 	return &userService{
 		db:                     db,
+		s3Client:               s3Client,
 		presignClient:          presignClient,
 		userRepository:         userRepository,
 		followRepository:       followRepository,
@@ -194,6 +230,8 @@ func (s *userService) FindByIDWithFollowingRelation(ctx context.Context, userID 
 		logs.Warn(err)
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("User by id %v is not found", userID))
 	}
+
+	rawProfileURL := user.ProfileURL
 
 	err = helpers.GetUserImage(
 		ctx,
@@ -222,8 +260,9 @@ func (s *userService) FindByIDWithFollowingRelation(ctx context.Context, userID 
 		Username:             user.Username,
 		Email:                user.Email,
 		DateOfBirth:          user.DateOfBirth,
-		ProfileUrl:           user.ProfileUrl,
-		ProfileBackgroundUrl: user.ProfileBackgroundUrl,
+		ProfileURL:           user.ProfileURL,
+		RawProfileURL:        rawProfileURL,
+		ProfileBackgroundURL: user.ProfileBackgroundURL,
 		Info:                 user.Info,
 		Role:                 user.Role,
 		ProviderType:         user.ProviderType,
@@ -272,6 +311,16 @@ func (s *userService) FindByIDWithFollowRelations(ctx context.Context, userID st
 		return nil, err
 	}
 
+	err = helpers.GetUserBackgroundImage(
+		ctx,
+		s.presignClient,
+		user,
+	)
+	if err != nil {
+		logs.Error(err)
+		return nil, err
+	}
+
 	followings := []Following{}
 	for _, following := range user.Followings {
 		err = helpers.GetUserImage(
@@ -301,8 +350,8 @@ func (s *userService) FindByIDWithFollowRelations(ctx context.Context, userID st
 			Username:             following.Following.Username,
 			Email:                following.Following.Email,
 			DateOfBirth:          following.Following.DateOfBirth,
-			ProfileUrl:           following.Following.ProfileUrl,
-			ProfileBackgroundUrl: following.Following.ProfileBackgroundUrl,
+			ProfileURL:           following.Following.ProfileURL,
+			ProfileBackgroundURL: following.Following.ProfileBackgroundURL,
 			Info:                 following.Following.Info,
 			Role:                 following.Following.Role,
 			ProviderType:         following.Following.ProviderType,
@@ -349,8 +398,8 @@ func (s *userService) FindByIDWithFollowRelations(ctx context.Context, userID st
 			Username:             follower.Follower.Username,
 			Email:                follower.Follower.Email,
 			DateOfBirth:          follower.Follower.DateOfBirth,
-			ProfileUrl:           follower.Follower.ProfileUrl,
-			ProfileBackgroundUrl: follower.Follower.ProfileBackgroundUrl,
+			ProfileURL:           follower.Follower.ProfileURL,
+			ProfileBackgroundURL: follower.Follower.ProfileBackgroundURL,
 			Info:                 follower.Follower.Info,
 			Role:                 follower.Follower.Role,
 			ProviderType:         follower.Follower.ProviderType,
@@ -374,8 +423,8 @@ func (s *userService) FindByIDWithFollowRelations(ctx context.Context, userID st
 		Username:             user.Username,
 		Email:                user.Email,
 		DateOfBirth:          user.DateOfBirth,
-		ProfileUrl:           user.ProfileUrl,
-		ProfileBackgroundUrl: user.ProfileBackgroundUrl,
+		ProfileURL:           user.ProfileURL,
+		ProfileBackgroundURL: user.ProfileBackgroundURL,
 		Info:                 user.Info,
 		Role:                 user.Role,
 		ProviderType:         user.ProviderType,
@@ -480,8 +529,8 @@ func (s *userService) FindsWithFullnameCursorPagination(
 			Username:             user.Username,
 			Email:                user.Email,
 			DateOfBirth:          user.DateOfBirth,
-			ProfileUrl:           user.ProfileUrl,
-			ProfileBackgroundUrl: user.ProfileBackgroundUrl,
+			ProfileURL:           user.ProfileURL,
+			ProfileBackgroundURL: user.ProfileBackgroundURL,
 			Info:                 user.Info,
 			Role:                 user.Role,
 			ProviderType:         user.ProviderType,
@@ -604,8 +653,8 @@ func (s *userService) FindsCursorPaginationWithFollowerRelation(
 			Username:             user.Username,
 			Email:                user.Email,
 			DateOfBirth:          user.DateOfBirth,
-			ProfileUrl:           user.ProfileUrl,
-			ProfileBackgroundUrl: user.ProfileBackgroundUrl,
+			ProfileURL:           user.ProfileURL,
+			ProfileBackgroundURL: user.ProfileBackgroundURL,
 			Info:                 user.Info,
 			Role:                 user.Role,
 			ProviderType:         user.ProviderType,
@@ -818,8 +867,8 @@ func (s *userService) ToggleFollow(
 			Username:             createdFollow.Follower.Username,
 			Email:                createdFollow.Follower.Email,
 			DateOfBirth:          createdFollow.Follower.DateOfBirth,
-			ProfileUrl:           createdFollow.Follower.ProfileUrl,
-			ProfileBackgroundUrl: createdFollow.Follower.ProfileBackgroundUrl,
+			ProfileURL:           createdFollow.Follower.ProfileURL,
+			ProfileBackgroundURL: createdFollow.Follower.ProfileBackgroundURL,
 			Info:                 createdFollow.Follower.Info,
 			Role:                 createdFollow.Follower.Role,
 			ProviderType:         createdFollow.Follower.ProviderType,
@@ -834,8 +883,8 @@ func (s *userService) ToggleFollow(
 			Username:             createdFollow.Following.Username,
 			Email:                createdFollow.Following.Email,
 			DateOfBirth:          createdFollow.Following.DateOfBirth,
-			ProfileUrl:           createdFollow.Following.ProfileUrl,
-			ProfileBackgroundUrl: createdFollow.Following.ProfileBackgroundUrl,
+			ProfileURL:           createdFollow.Following.ProfileURL,
+			ProfileBackgroundURL: createdFollow.Following.ProfileBackgroundURL,
 			Info:                 createdFollow.Following.Info,
 			Role:                 createdFollow.Following.Role,
 			ProviderType:         createdFollow.Following.ProviderType,
@@ -862,8 +911,8 @@ func (s *userService) ToggleFollow(
 			Username:             createdNotification.Sender.Username,
 			Email:                createdNotification.Sender.Email,
 			DateOfBirth:          createdNotification.Sender.DateOfBirth,
-			ProfileUrl:           createdNotification.Sender.ProfileUrl,
-			ProfileBackgroundUrl: createdNotification.Sender.ProfileBackgroundUrl,
+			ProfileURL:           createdNotification.Sender.ProfileURL,
+			ProfileBackgroundURL: createdNotification.Sender.ProfileBackgroundURL,
 			Info:                 createdNotification.Sender.Info,
 			Role:                 createdNotification.Sender.Role,
 			ProviderType:         createdNotification.Sender.ProviderType,
@@ -918,8 +967,8 @@ func (s *userService) ToggleFollow(
 			Username:             createdFollow.Follower.Username,
 			Email:                createdFollow.Follower.Email,
 			DateOfBirth:          createdFollow.Follower.DateOfBirth,
-			ProfileUrl:           createdFollow.Follower.ProfileUrl,
-			ProfileBackgroundUrl: createdFollow.Follower.ProfileBackgroundUrl,
+			ProfileURL:           createdFollow.Follower.ProfileURL,
+			ProfileBackgroundURL: createdFollow.Follower.ProfileBackgroundURL,
 			Info:                 createdFollow.Follower.Info,
 			Role:                 createdFollow.Follower.Role,
 			ProviderType:         createdFollow.Follower.ProviderType,
@@ -934,8 +983,8 @@ func (s *userService) ToggleFollow(
 			Username:             createdFollow.Following.Username,
 			Email:                createdFollow.Following.Email,
 			DateOfBirth:          createdFollow.Following.DateOfBirth,
-			ProfileUrl:           createdFollow.Following.ProfileUrl,
-			ProfileBackgroundUrl: createdFollow.Following.ProfileBackgroundUrl,
+			ProfileURL:           createdFollow.Following.ProfileURL,
+			ProfileBackgroundURL: createdFollow.Following.ProfileBackgroundURL,
 			Info:                 createdFollow.Following.Info,
 			Role:                 createdFollow.Following.Role,
 			ProviderType:         createdFollow.Following.ProviderType,
@@ -1016,4 +1065,111 @@ func (s *userService) ToggleFollow(
 		FollowingID: deletedFollow.FollowingID,
 	}
 	return "Unfollow successfully", followResp, nil
+}
+
+func (s *userService) UploadEditUserFile(
+	ctx context.Context,
+	user *dto.SecureUserWithFollowingRelation,
+	fileDataDTO *FileDataDTO,
+	editFileType EditFileType,
+) (*FileURL, error) {
+	if editFileType != EditFileTypeAvatar && editFileType != EditFileTypeBackground {
+		logs.Warn("Failed to upload edit user file invalid edit file type")
+		return nil, errs.NewUnexpectedErrorWithMessage("Failed to upload edit user file invalid edit file type")
+	}
+
+	if !allowedContentTypesCreateFile[fileDataDTO.ContentType] {
+		return nil, errs.NewBadRequestErrorWithMessage("Invalid file type")
+	}
+
+	if fileDataDTO.Size > maxFileSize {
+		return nil, errs.NewBadRequestErrorWithMessage("File size exceeds 30 mb")
+	}
+
+	// กรณีมีรูปเก่าลบออก
+	switch editFileType {
+	case EditFileTypeAvatar:
+		if user.RawProfileURL != nil {
+			_, err := helpers.DeleteObject(
+				ctx,
+				s.s3Client,
+				*user.RawProfileURL,
+			)
+			if err != nil {
+				logs.Error(err)
+				return nil, errs.NewInternalServerErrorWithMessage("Failed to delete previous user avatar object from bucket")
+			}
+		}
+	case EditFileTypeBackground:
+		if user.ProfileBackgroundURL != nil {
+			_, err := helpers.DeleteObject(
+				ctx,
+				s.s3Client,
+				*user.ProfileBackgroundURL,
+			)
+			if err != nil {
+				logs.Error(err)
+				return nil, errs.NewInternalServerErrorWithMessage("Failed to delete previous user background object from bucket")
+			}
+		}
+	}
+
+	newFileName := helpers.GenerateFilename(fileDataDTO.Filename)
+	key := ""
+	switch editFileType {
+	case EditFileTypeAvatar:
+		key = fmt.Sprintf("%s/%s", "user-avatar-image", newFileName)
+	case EditFileTypeBackground:
+		key = fmt.Sprintf("%s/%s", "user-background-image", newFileName)
+	}
+
+	_, err := helpers.PutObject(
+		ctx,
+		s.s3Client,
+		key,
+		fileDataDTO.Body,
+		fileDataDTO.ContentType,
+	)
+	if err != nil {
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to upload file to bucket")
+	}
+
+	req, err := helpers.PresignGetObject(
+		ctx,
+		s.presignClient,
+		key,
+	)
+	if err != nil {
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to presign get file object")
+	}
+
+	err = s.userRepository.UpdateImages(
+		ctx,
+		s.db,
+		user.ID,
+		key,
+		editFileType,
+	)
+	if err != nil {
+		logs.Error(err)
+
+		_, err = helpers.DeleteObject(
+			ctx,
+			s.s3Client,
+			key,
+		)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to update user images and delete object from bucket")
+		}
+
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to update user images")
+	}
+
+	fileURLResp := &FileURL{
+		FileURL: req.URL,
+	}
+	return fileURLResp, nil
 }

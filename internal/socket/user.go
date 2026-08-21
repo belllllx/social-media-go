@@ -22,8 +22,8 @@ type SecureUserFollowDTO struct {
 	Username             *string             `json:"username"`
 	Email                string              `json:"email"`
 	DateOfBirth          *time.Time          `json:"dateOfBirth"`
-	ProfileUrl           *string             `json:"profileUrl"`
-	ProfileBackgroundUrl *string             `json:"profileBackgroundUrl"`
+	ProfileURL           *string             `json:"profileUrl"`
+	ProfileBackgroundURL *string             `json:"profileBackgroundUrl"`
 	Info                 *string             `json:"info"`
 	Role                 models.Role         `json:"role"`
 	ProviderType         models.ProviderType `json:"providerType"`

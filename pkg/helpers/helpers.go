@@ -341,17 +341,38 @@ func GetUserImage(
 ) error {
 	// ไม่ใช่ avater ของ social login
 	// อัพเดต profile url
-	if user.ProfileUrl != nil && !IsExternalURL(*user.ProfileUrl) {
+	if user.ProfileURL != nil && !IsExternalURL(*user.ProfileURL) {
 		req, err := PresignGetObject(
 			ctx,
 			presignClient,
-			*user.ProfileUrl,
+			*user.ProfileURL,
 		)
 		if err != nil {
-			return errs.NewInternalServerErrorWithMessage("Failed to presign get user profile url object")
+			return errs.NewInternalServerErrorWithMessage("Failed to presign get user avatar url object")
 		}
 
-		user.ProfileUrl = &req.URL
+		user.ProfileURL = &req.URL
+	}
+
+	return nil
+}
+
+func GetUserBackgroundImage(
+	ctx context.Context,
+	presignClient *s3.PresignClient,
+	user *models.User,
+) error {
+	if user.ProfileBackgroundURL != nil {
+		req, err := PresignGetObject(
+			ctx,
+			presignClient,
+			*user.ProfileBackgroundURL,
+		)
+		if err != nil {
+			return errs.NewInternalServerErrorWithMessage("Failed to presign get user background url object")
+		}
+
+		user.ProfileBackgroundURL = &req.URL
 	}
 
 	return nil

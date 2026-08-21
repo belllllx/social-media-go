@@ -573,7 +573,7 @@ func (s *authService) SocialLoginCallback(ctx context.Context, socialUserDTO *So
 			Fullname:     socialUserDTO.Name,
 			Email:        socialUserDTO.Email,
 			ProviderType: socialUserDTO.ProviderType,
-			ProfileUrl:   &socialUserDTO.AvatarURL,
+			ProfileURL:   &socialUserDTO.AvatarURL,
 		}
 		err = s.userRepository.Create(
 			ctx,

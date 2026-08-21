@@ -26,8 +26,8 @@ type User struct {
 	Email                 string    `gorm:"type:varchar(30);uniqueIndex"`
 	PasswordHash          *string
 	DateOfBirth           *time.Time
-	ProfileUrl            *string
-	ProfileBackgroundUrl  *string
+	ProfileURL            *string
+	ProfileBackgroundURL  *string
 	Info                  *string      `gorm:"type:varchar(30)"`
 	Role                  Role         `gorm:"type:user_role;default:'USER'"`
 	ProviderType          ProviderType `gorm:"type:provider_type;default:'LOCAL'"`

@@ -72,22 +72,22 @@ type FileService interface {
 
 type fileService struct {
 	db             *gorm.DB
-	fileRepository FileRepository
 	s3Client       *s3.Client
 	presignClient  *s3.PresignClient
+	fileRepository FileRepository
 }
 
 func NewFileService(
 	db *gorm.DB,
-	fileRepository FileRepository,
 	s3Client *s3.Client,
 	presignClient *s3.PresignClient,
+	fileRepository FileRepository,
 ) FileService {
 	return &fileService{
 		db:             db,
-		fileRepository: fileRepository,
 		s3Client:       s3Client,
 		presignClient:  presignClient,
+		fileRepository: fileRepository,
 	}
 }
 

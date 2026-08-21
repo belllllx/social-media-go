@@ -85,9 +85,9 @@ func main() {
 	)
 	fileService := file.NewFileService(
 		app.DB,
-		fileRepositoryDB,
 		app.S3Client,
 		app.PresignClient,
+		fileRepositoryDB,
 	)
 	notificationService := notification.NewNotificationService(
 		app.DB,
@@ -96,6 +96,7 @@ func main() {
 	)
 	userService := user.NewUserService(
 		app.DB,
+		app.S3Client,
 		app.PresignClient,
 		userRepositoryDB,
 		followRepositoryDB,
@@ -270,6 +271,8 @@ func main() {
 		user.GET("/finds", userHandler.FindsCursorPaginationWithFollowerRelation)
 		user.GET("/find/:userID", userHandler.FindByIDWithFollowRelations)
 		user.POST("/toggle-follow/:followingID", userHandler.ToggleFollow)
+		user.PATCH("/avatar/upload-file", userHandler.UploadEditUserAvatar)
+		user.PATCH("/background/upload-file", userHandler.UploadEditUserBackground)
 	}
 
 	app.Run()
