@@ -883,7 +883,12 @@ func (s *userService) ToggleFollow(
 			UpdatedAt:  createdNotification.UpdatedAt,
 		}
 
-		go s.notificationSocket.EmitNotification(emitNotificationDTO)
+		go func() {
+			err := s.notificationSocket.EmitNotification(emitNotificationDTO)
+			if err != nil {
+				logs.Error(err)
+			}
+		}()
 
 		followersOfFollowerResp := []FollowerData{}
 		for _, follower := range createdFollow.Follower.Followers {
@@ -998,7 +1003,12 @@ func (s *userService) ToggleFollow(
 		ID:         deletedNotification.ID,
 		ReceiverID: deletedNotification.ReceiverID,
 	}
-	go s.notificationSocket.EmitDeleteNotification(emitDeleteNotificationDTO)
+	go func() {
+		err := s.notificationSocket.EmitDeleteNotification(emitDeleteNotificationDTO)
+		if err != nil {
+			logs.Error(err)
+		}
+	}()
 
 	followResp := &Follow{
 		ID:          deletedFollow.ID,

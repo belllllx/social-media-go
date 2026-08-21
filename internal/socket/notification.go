@@ -34,10 +34,10 @@ type EmitNotificationDTO struct {
 }
 
 type NotificationSocket interface {
-	EmitNotification(emitNotificationDTO *EmitNotificationDTO)
-	EmitNotifications(emitNotificationsDTO []EmitNotificationDTO)
-	EmitDeleteNotification(emitDeleteNotificationDTO *EmitDeleteNotificationDTO)
-	EmitDeleteNotifications(emitDeleteNotificationsDTO []EmitDeleteNotificationDTO)
+	EmitNotification(emitNotificationDTO *EmitNotificationDTO) error
+	EmitNotifications(emitNotificationsDTO []EmitNotificationDTO) error
+	EmitDeleteNotification(emitDeleteNotificationDTO *EmitDeleteNotificationDTO) error
+	EmitDeleteNotifications(emitDeleteNotificationsDTO []EmitDeleteNotificationDTO) error
 }
 
 type notificationSocket struct {
@@ -48,26 +48,34 @@ func NewNotificationSocket(io *server.Server) NotificationSocket {
 	return &notificationSocket{io: io}
 }
 
-func (s *notificationSocket) EmitNotification(emitNotificationDTO *EmitNotificationDTO) {
+func (s *notificationSocket) EmitNotification(emitNotificationDTO *EmitNotificationDTO) error {
 	room := fmt.Sprintf("user:%v", emitNotificationDTO.ReceiverID)
-	s.io.To(server.Room(room)).Emit("notification", emitNotificationDTO)
+	return s.io.To(server.Room(room)).Emit("notification", emitNotificationDTO)
 }
 
-func (s *notificationSocket) EmitNotifications(emitNotificationsDTO []EmitNotificationDTO) {
+func (s *notificationSocket) EmitNotifications(emitNotificationsDTO []EmitNotificationDTO) error {
 	for _, emitNotificationDTO := range emitNotificationsDTO {
 		room := fmt.Sprintf("user:%v", emitNotificationDTO.ReceiverID)
-		s.io.To(server.Room(room)).Emit("notification", emitNotificationDTO)
+		err := s.io.To(server.Room(room)).Emit("notification", emitNotificationDTO)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-func (s *notificationSocket) EmitDeleteNotification(emitDeleteNotificationDTO *EmitDeleteNotificationDTO) {
+func (s *notificationSocket) EmitDeleteNotification(emitDeleteNotificationDTO *EmitDeleteNotificationDTO) error {
 	room := fmt.Sprintf("user:%v", emitDeleteNotificationDTO.ReceiverID)
-	s.io.To(server.Room(room)).Emit("notification", DeleteNotification{ID: emitDeleteNotificationDTO.ID})
+	return s.io.To(server.Room(room)).Emit("notification", DeleteNotification{ID: emitDeleteNotificationDTO.ID})
 }
 
-func (s *notificationSocket) EmitDeleteNotifications(emitDeleteNotificationsDTO []EmitDeleteNotificationDTO) {
+func (s *notificationSocket) EmitDeleteNotifications(emitDeleteNotificationsDTO []EmitDeleteNotificationDTO) error {
 	for _, emitDeleteNotificationDTO := range emitDeleteNotificationsDTO {
 		room := fmt.Sprintf("user:%v", emitDeleteNotificationDTO.ReceiverID)
-		s.io.To(server.Room(room)).Emit("notification", DeleteNotification{ID: emitDeleteNotificationDTO.ID})
+		err := s.io.To(server.Room(room)).Emit("notification", DeleteNotification{ID: emitDeleteNotificationDTO.ID})
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }

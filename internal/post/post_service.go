@@ -396,7 +396,12 @@ func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostD
 				UpdatedAt:  notification.UpdatedAt,
 			})
 		}
-		go s.notificationSocket.EmitNotifications(emitNotificationsDTO)
+		go func() {
+			err := s.notificationSocket.EmitNotifications(emitNotificationsDTO)
+			if err != nil {
+				logs.Error(err)
+			}
+		}()
 	}
 
 	respPost := &CreatedPost{
@@ -626,7 +631,12 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 			CreatedAt:  notification.CreatedAt,
 			UpdatedAt:  notification.UpdatedAt,
 		}
-		go s.notificationSocket.EmitNotification(emitNotificationsDTO)
+		go func() {
+			err := s.notificationSocket.EmitNotification(emitNotificationsDTO)
+			if err != nil {
+				logs.Error(err)
+			}
+		}()
 	}
 
 	postParent := &PostParent{
@@ -1616,7 +1626,12 @@ func (s *postService) DeletePost(
 				ID:         notification.ID,
 				ReceiverID: notification.ReceiverID,
 			}
-			go s.notificationSocket.EmitDeleteNotification(emitDeleteNotificationDTO)
+			go func() {
+				err := s.notificationSocket.EmitDeleteNotification(emitDeleteNotificationDTO)
+				if err != nil {
+					logs.Error(err)
+				}
+			}()
 		}
 	} else {
 		// กรณีโพสปกติ
@@ -1629,7 +1644,12 @@ func (s *postService) DeletePost(
 		}
 		// กรณีมีแจ้งเตือน emit กลับไปหา client เพื่อลบออก
 		if len(emitDeleteNotificationsDTO) > 0 {
-			go s.notificationSocket.EmitDeleteNotifications(emitDeleteNotificationsDTO)
+			go func() {
+				err := s.notificationSocket.EmitDeleteNotifications(emitDeleteNotificationsDTO)
+				if err != nil {
+					logs.Error(err)
+				}
+			}()
 		}
 	}
 
@@ -1826,7 +1846,12 @@ func (s *postService) ToggleLike(
 				CreatedAt:  createdNotification.CreatedAt,
 				UpdatedAt:  createdNotification.UpdatedAt,
 			}
-			go s.notificationSocket.EmitNotification(emitNotificationDTO)
+			go func() {
+				err := s.notificationSocket.EmitNotification(emitNotificationDTO)
+				if err != nil {
+					logs.Error(err)
+				}
+			}()
 		}
 
 		likeResp := &Like{
@@ -1891,7 +1916,12 @@ func (s *postService) ToggleLike(
 			ID:         deletedNotification.ID,
 			ReceiverID: deletedNotification.ReceiverID,
 		}
-		go s.notificationSocket.EmitDeleteNotification(emitDeleteNotificationDTO)
+		go func() {
+			err := s.notificationSocket.EmitDeleteNotification(emitDeleteNotificationDTO)
+			if err != nil {
+				logs.Error(err)
+			}
+		}()
 	}
 
 	likeResp := &Like{

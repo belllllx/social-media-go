@@ -437,7 +437,12 @@ func (s *commentService) CreateComment(ctx context.Context, createCommentDTO *Cr
 			UpdatedAt:  notification.UpdatedAt,
 		}
 
-		go s.notificationSocket.EmitNotification(emitNotificationDTO)
+		go func() {
+			err := s.notificationSocket.EmitNotification(emitNotificationDTO)
+			if err != nil {
+				logs.Error(err)
+			}
+		}()
 	}
 
 	return commentResp, nil
@@ -699,7 +704,12 @@ func (s *commentService) CreateReplyComment(ctx context.Context, createReplyComm
 			UpdatedAt:  notification.UpdatedAt,
 		}
 
-		go s.notificationSocket.EmitNotification(emitNotificationDTO)
+		go func() {
+			err := s.notificationSocket.EmitNotification(emitNotificationDTO)
+			if err != nil {
+				logs.Error(err)
+			}
+		}()
 	}
 
 	return replyResp, nil
@@ -1020,7 +1030,12 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 			UpdatedAt:  notification.UpdatedAt,
 		}
 
-		go s.notificationSocket.EmitNotification(emitNotificationDTO)
+		go func() {
+			err := s.notificationSocket.EmitNotification(emitNotificationDTO)
+			if err != nil {
+				logs.Error(err)
+			}
+		}()
 	}
 
 	return tagResp, nil
@@ -1638,7 +1653,12 @@ func (s *commentService) DeleteComment(
 			ID:         notification.ID,
 			ReceiverID: notification.ReceiverID,
 		}
-		go s.notificationSocket.EmitDeleteNotification(emitDeleteNotificationDTO)
+		go func() {
+			err := s.notificationSocket.EmitDeleteNotification(emitDeleteNotificationDTO)
+			if err != nil {
+				logs.Error(err)
+			}
+		}()
 	}
 
 	deleteCommentResp := &DeletedComment{
@@ -1869,7 +1889,13 @@ func (s *commentService) ToggleLike(
 				CreatedAt:  createdNotification.CreatedAt,
 				UpdatedAt:  createdNotification.UpdatedAt,
 			}
-			go s.notificationSocket.EmitNotification(emitNotificationDTO)
+
+			go func() {
+				err := s.notificationSocket.EmitNotification(emitNotificationDTO)
+				if err != nil {
+					logs.Error(err)
+				}
+			}()
 		}
 
 		likeResp := &Like{
@@ -1935,7 +1961,12 @@ func (s *commentService) ToggleLike(
 			ID:         deletedNotification.ID,
 			ReceiverID: deletedNotification.ReceiverID,
 		}
-		go s.notificationSocket.EmitDeleteNotification(emitDeleteNotificationDTO)
+		go func() {
+			err := s.notificationSocket.EmitDeleteNotification(emitDeleteNotificationDTO)
+			if err != nil {
+				logs.Error(err)
+			}
+		}()
 	}
 
 	likeResp := &Like{
