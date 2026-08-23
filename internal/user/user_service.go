@@ -20,12 +20,26 @@ import (
 	"gorm.io/gorm"
 )
 
+type EditFileType string
+
+const (
+	EditFileTypeAvatar     EditFileType = "AVATAR"
+	EditFileTypeBackground EditFileType = "BACKGROUND"
+)
+
 const maxFileSize = 30 << 20 // 30 MB
 
 var allowedContentTypesCreateFile = map[string]bool{
 	"image/png":  true,
 	"image/jpeg": true,
 	"image/webp": true,
+}
+
+type UpdatesInfoDTO struct {
+	UserID      uuid.UUID
+	Fullname    *string
+	DateOfBirth *string
+	Info        *string
 }
 
 type FileDataDTO struct {
@@ -35,22 +49,21 @@ type FileDataDTO struct {
 	Size        int64
 }
 
-type EditFileType string
-
-const (
-	EditFileTypeAvatar     EditFileType = "AVATAR"
-	EditFileTypeBackground EditFileType = "BACKGROUND"
-)
-
-type FileURL struct {
-	FileURL string `json:"fileUrl"`
-}
-
 type FindsWithFullnameCursorPaginationDTO struct {
 	UserID   uuid.UUID
 	Fullname string
 	Cursor   string
 	Limit    string
+}
+
+type UpdatedUserInfo struct {
+	Fullname    string     `json:"fullname"`
+	DateOfBirth *time.Time `json:"dateOfBirth"`
+	Info        *string    `json:"info"`
+}
+
+type FileURL struct {
+	FileURL string `json:"fileUrl"`
 }
 
 type FollowerData struct {
@@ -177,6 +190,16 @@ type UserService interface {
 		fileDataDTO *FileDataDTO,
 		editFileType EditFileType,
 	) (*FileURL, error)
+	ClearUserImages(
+		ctx context.Context,
+		userID uuid.UUID,
+		fileURL string,
+		editFileType EditFileType,
+	) error
+	UpdatesInfo(
+		ctx context.Context,
+		updatesInfoDTO *UpdatesInfoDTO,
+	) (*UpdatedUserInfo, error)
 }
 
 type userService struct {
@@ -1172,4 +1195,86 @@ func (s *userService) UploadEditUserFile(
 		FileURL: req.URL,
 	}
 	return fileURLResp, nil
+}
+
+func (s *userService) ClearUserImages(
+	ctx context.Context,
+	userID uuid.UUID,
+	fileURL string,
+	editFileType EditFileType,
+) error {
+	if editFileType != EditFileTypeAvatar && editFileType != EditFileTypeBackground {
+		logs.Warn("Failed to clear user image invalid edit file type")
+		return errs.NewUnexpectedErrorWithMessage("Failed to clear user image invalid edit file type")
+	}
+
+	fileDIR, filename, err := helpers.SplitPresignedURL(fileURL)
+	if err != nil {
+		logs.Error(err)
+		return errs.NewUnexpectedErrorWithMessage("Failed to split presigned url")
+	}
+
+	key := fmt.Sprintf("%s/%s", fileDIR, filename)
+
+	err = s.userRepository.ClearImages(
+		ctx,
+		s.db,
+		userID,
+		editFileType,
+	)
+	if err != nil {
+		logs.Error(err)
+		return errs.NewInternalServerErrorWithMessage("Failed to clear user image")
+	}
+
+	_, err = helpers.DeleteObject(
+		ctx,
+		s.s3Client,
+		key,
+	)
+	if err != nil {
+		logs.Error(err)
+		return errs.NewInternalServerErrorWithMessage("Failed to delete object from bucket")
+	}
+
+	return nil
+}
+
+func (s *userService) UpdatesInfo(
+	ctx context.Context,
+	updatesInfoDTO *UpdatesInfoDTO,
+) (*UpdatedUserInfo, error) {
+	updatesUserInfo := map[string]any{
+		"info": updatesInfoDTO.Info,
+	}
+
+	// กรณีอัพเดด fullname
+	if updatesInfoDTO.Fullname != nil {
+		updatesUserInfo["fullname"] = *updatesInfoDTO.Fullname
+	}
+
+	if updatesInfoDTO.DateOfBirth != nil {
+		dob, _ := time.Parse("2006-01-02", *updatesInfoDTO.DateOfBirth)
+		updatesUserInfo["date_of_birth"] = dob
+	} else {
+		updatesUserInfo["date_of_birth"] = nil
+	}
+
+	user, err := s.userRepository.UpdatesInfo(
+		ctx,
+		s.db,
+		updatesInfoDTO.UserID,
+		updatesUserInfo,
+	)
+	if err != nil {
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to updates user info")
+	}
+
+	updateUserInfoResp := &UpdatedUserInfo{
+		Fullname:    user.Fullname,
+		DateOfBirth: user.DateOfBirth,
+		Info:        user.Info,
+	}
+	return updateUserInfoResp, nil
 }

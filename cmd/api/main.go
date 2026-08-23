@@ -273,6 +273,9 @@ func main() {
 		user.POST("/toggle-follow/:followingID", userHandler.ToggleFollow)
 		user.PATCH("/avatar/upload-file", userHandler.UploadEditUserAvatar)
 		user.PATCH("/background/upload-file", userHandler.UploadEditUserBackground)
+		user.PATCH("/avatar/delete-file", userHandler.ClearUserAvatar)
+		user.PATCH("/background/delete-file", userHandler.ClearUserBackground)
+		user.PUT("/edit-info", userHandler.UpdatesInfo)
 	}
 
 	app.Run()

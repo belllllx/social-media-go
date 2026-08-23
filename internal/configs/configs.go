@@ -105,6 +105,7 @@ func InitValidator() {
 	})
 
 	v.RegisterValidation("presignedurl", helpers.ValidatePresignedURL)
+	v.RegisterValidation("dateofbirth", helpers.ValidateDateOfBirth)
 }
 
 func InitOAuth2GoogleConfig() *oauth2.Config {

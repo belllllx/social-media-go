@@ -142,6 +142,8 @@ func GetErrorMessages(err validator.FieldError) string {
 		return fmt.Sprintf("This field does not match the %s field", strings.ToLower(err.Param()))
 	case "presignedurl":
 		return "This field invalid presigned url"
+	case "dateofbirth":
+		return "This field invalid date of birth"
 	default:
 		return "Invalid value"
 	}
@@ -293,7 +295,9 @@ func ValidatePresignedURL(fl validator.FieldLevel) bool {
 	if !strings.HasPrefix(u.Path, "/post-image/") &&
 		!strings.HasPrefix(u.Path, "/post-video/") &&
 		!strings.HasPrefix(u.Path, "/comment-image/") &&
-		!strings.HasPrefix(u.Path, "/reply-image/") {
+		!strings.HasPrefix(u.Path, "/reply-image/") &&
+		!strings.HasPrefix(u.Path, "/user-avatar-image/") &&
+		!strings.HasPrefix(u.Path, "/user-background-image/") {
 		return false
 	}
 
@@ -314,6 +318,14 @@ func ValidatePresignedURL(fl validator.FieldLevel) bool {
 	}
 
 	return true
+}
+
+func ValidateDateOfBirth(fl validator.FieldLevel) bool {
+	value := fl.Field().String()
+
+	_, err := time.Parse("2006-01-02", value)
+
+	return err == nil
 }
 
 func ValidateUUID(s string) error {

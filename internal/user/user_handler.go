@@ -7,6 +7,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type UpdatesUserInfoRequest struct {
+	Fullname    *string `json:"fullname"`
+	DateOfBirth *string `json:"dateOfBirth" binding:"omitempty,dateofbirth"`
+	Info        *string `json:"info"`
+}
+
+type ClearUserImagesRequest struct {
+	FileURL string `json:"fileUrl" binding:"presignedurl"`
+}
+
 type UserHandler interface {
 	FindsWithFullnameCursorPagination(c *gin.Context)
 	FindsCursorPaginationWithFollowerRelation(c *gin.Context)
@@ -14,6 +24,9 @@ type UserHandler interface {
 	ToggleFollow(c *gin.Context)
 	UploadEditUserAvatar(c *gin.Context)
 	UploadEditUserBackground(c *gin.Context)
+	ClearUserAvatar(c *gin.Context)
+	ClearUserBackground(c *gin.Context)
+	UpdatesInfo(c *gin.Context)
 }
 
 type userHandler struct {
@@ -270,4 +283,134 @@ func (h *userHandler) UploadEditUserBackground(c *gin.Context) {
 	}
 
 	response.Ok(c, "User background upload successfully", fileURL)
+}
+
+// ClearUserAvatar godoc
+//
+//	@Description	authentication and clear user avatar image
+//	@Tags			user
+//	@Accept			json
+//	@Produce		json
+//	@Param			payload	body		ClearUserImagesRequest	true	"clear user avatar payload"
+//	@Success		200		{object}	response.SwaggerResponse
+//	@Failure		400		{object}	response.SwaggerBadRequestResponse
+//	@Failure		401		{object}	response.SwaggerResponse
+//	@Failure		404		{object}	response.SwaggerResponse
+//	@Failure		500		{object}	response.SwaggerResponse
+//	@Router			/user/avatar/delete-file [patch]
+func (h *userHandler) ClearUserAvatar(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	user, ok := c.MustGet("user").(*dto.SecureUserWithFollowingRelation)
+	if !ok {
+		response.AbortWithUnauthorized(c)
+		return
+	}
+
+	clearUserImagesRequest := &ClearUserImagesRequest{}
+	err := c.ShouldBind(clearUserImagesRequest)
+	if err != nil {
+		response.AbortWithError(c, err)
+		return
+	}
+
+	err = h.userService.ClearUserImages(
+		ctx,
+		user.ID,
+		clearUserImagesRequest.FileURL,
+		EditFileTypeAvatar,
+	)
+	if err != nil {
+		helpers.HandleError(c, err)
+		return
+	}
+
+	response.Ok(c, "Clear user avatar successfully", nil)
+}
+
+// ClearUserBackground godoc
+//
+//	@Description	authentication and clear user background image
+//	@Tags			user
+//	@Accept			json
+//	@Produce		json
+//	@Param			payload	body		ClearUserImagesRequest	true	"clear user background payload"
+//	@Success		200		{object}	response.SwaggerResponse
+//	@Failure		400		{object}	response.SwaggerBadRequestResponse
+//	@Failure		401		{object}	response.SwaggerResponse
+//	@Failure		404		{object}	response.SwaggerResponse
+//	@Failure		500		{object}	response.SwaggerResponse
+//	@Router			/user/background/delete-file [patch]
+func (h *userHandler) ClearUserBackground(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	user, ok := c.MustGet("user").(*dto.SecureUserWithFollowingRelation)
+	if !ok {
+		response.AbortWithUnauthorized(c)
+		return
+	}
+
+	clearUserImagesRequest := &ClearUserImagesRequest{}
+	err := c.ShouldBind(clearUserImagesRequest)
+	if err != nil {
+		response.AbortWithError(c, err)
+		return
+	}
+
+	err = h.userService.ClearUserImages(
+		ctx,
+		user.ID,
+		clearUserImagesRequest.FileURL,
+		EditFileTypeBackground,
+	)
+	if err != nil {
+		helpers.HandleError(c, err)
+		return
+	}
+
+	response.Ok(c, "Clear user background successfully", nil)
+}
+
+// UpdatesInfo godoc
+//
+//	@Description	authentication and updates user info
+//	@Tags			user
+//	@Accept			json
+//	@Produce		json
+//	@Param			payload	body		UpdatesUserInfoRequest	true	"updates user info payload"
+//	@Success		200		{object}	response.SwaggerResponseWithData{data=UpdatedUserInfo}
+//	@Failure		400		{object}	response.SwaggerBadRequestResponse
+//	@Failure		401		{object}	response.SwaggerResponse
+//	@Failure		404		{object}	response.SwaggerResponse
+//	@Failure		500		{object}	response.SwaggerResponse
+//	@Router			/user/edit-info [put]
+func (h *userHandler) UpdatesInfo(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	user, ok := c.MustGet("user").(*dto.SecureUserWithFollowingRelation)
+	if !ok {
+		response.AbortWithUnauthorized(c)
+		return
+	}
+
+	updatesUserInfoRequest := &UpdatesUserInfoRequest{}
+	err := c.ShouldBind(updatesUserInfoRequest)
+	if err != nil {
+		response.AbortWithError(c, err)
+		return
+	}
+
+	updatesInfoDTO := &UpdatesInfoDTO{
+		UserID:      user.ID,
+		Fullname:    updatesUserInfoRequest.Fullname,
+		DateOfBirth: updatesUserInfoRequest.DateOfBirth,
+		Info:        updatesUserInfoRequest.Info,
+	}
+	updatedUserInfo, err := h.userService.UpdatesInfo(ctx, updatesInfoDTO)
+	if err != nil {
+		helpers.HandleError(c, err)
+		return
+	}
+
+	response.Ok(c, "Updates user info successfully", updatedUserInfo)
 }

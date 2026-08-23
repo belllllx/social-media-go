@@ -588,6 +588,11 @@ definitions:
       success:
         type: boolean
     type: object
+  user.ClearUserImagesRequest:
+    properties:
+      fileUrl:
+        type: string
+    type: object
   user.FileURL:
     properties:
       fileUrl:
@@ -748,6 +753,24 @@ definitions:
       updatedAt:
         type: string
       username:
+        type: string
+    type: object
+  user.UpdatedUserInfo:
+    properties:
+      dateOfBirth:
+        type: string
+      fullname:
+        type: string
+      info:
+        type: string
+    type: object
+  user.UpdatesUserInfoRequest:
+    properties:
+      dateOfBirth:
+        type: string
+      fullname:
+        type: string
+      info:
         type: string
     type: object
   user.UserCursorPagination:
@@ -2093,6 +2116,43 @@ paths:
             $ref: '#/definitions/response.SwaggerResponse'
       tags:
       - post
+  /user/avatar/delete-file:
+    patch:
+      consumes:
+      - application/json
+      description: authentication and clear user avatar image
+      parameters:
+      - description: clear user avatar payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/user.ClearUserImagesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - user
   /user/avatar/upload-file:
     patch:
       consumes:
@@ -2130,6 +2190,43 @@ paths:
             $ref: '#/definitions/response.SwaggerResponse'
       tags:
       - user
+  /user/background/delete-file:
+    patch:
+      consumes:
+      - application/json
+      description: authentication and clear user background image
+      parameters:
+      - description: clear user background payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/user.ClearUserImagesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - user
   /user/background/upload-file:
     patch:
       consumes:
@@ -2159,6 +2256,48 @@ paths:
             $ref: '#/definitions/response.SwaggerBadRequestResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+      tags:
+      - user
+  /user/edit-info:
+    put:
+      consumes:
+      - application/json
+      description: authentication and updates user info
+      parameters:
+      - description: updates user info payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/user.UpdatesUserInfoRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SwaggerResponseWithData'
+            - properties:
+                data:
+                  $ref: '#/definitions/user.UpdatedUserInfo'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SwaggerBadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SwaggerResponse'
+        "404":
+          description: Not Found
           schema:
             $ref: '#/definitions/response.SwaggerResponse'
         "500":

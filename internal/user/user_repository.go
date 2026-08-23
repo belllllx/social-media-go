@@ -8,6 +8,7 @@ import (
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Cursor struct {
@@ -77,11 +78,23 @@ type UserRepository interface {
 		email,
 		passwordHash string,
 	) error
+	UpdatesInfo(
+		ctx context.Context,
+		db *gorm.DB,
+		userID uuid.UUID,
+		updatesUserInfo map[string]any,
+	) (*models.User, error)
 	UpdateImages(
 		ctx context.Context,
 		db *gorm.DB,
 		userID uuid.UUID,
 		key string,
+		editFileType EditFileType,
+	) error
+	ClearImages(
+		ctx context.Context,
+		db *gorm.DB,
+		userID uuid.UUID,
 		editFileType EditFileType,
 	) error
 }
@@ -397,6 +410,31 @@ func (r *userRepositoryDB) UpdatePassword(
 		Update("password_hash", passwordHash).Error
 }
 
+func (r *userRepositoryDB) UpdatesInfo(
+	ctx context.Context,
+	db *gorm.DB,
+	userID uuid.UUID,
+	updatesUserInfo map[string]any,
+) (*models.User, error) {
+	user := &models.User{}
+	err := db.
+		WithContext(ctx).
+		Model(user).
+		Clauses(clause.Returning{
+			Columns: []clause.Column{
+				{Name: "fullname"},
+				{Name: "date_of_birth"},
+				{Name: "info"},
+			},
+		}).
+		Where("id = ?", userID).
+		Updates(updatesUserInfo).Error
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
 func (r *userRepositoryDB) UpdateImages(
 	ctx context.Context,
 	db *gorm.DB,
@@ -415,6 +453,32 @@ func (r *userRepositoryDB) UpdateImages(
 		db = db.Update("profile_url", key)
 	case EditFileTypeBackground:
 		db = db.Update("profile_background_url", key)
+	}
+
+	err := db.Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *userRepositoryDB) ClearImages(
+	ctx context.Context,
+	db *gorm.DB,
+	userID uuid.UUID,
+	editFileType EditFileType,
+) error {
+	user := &models.User{}
+	db = db.
+		WithContext(ctx).
+		Model(user).
+		Where("id = ?", userID)
+
+	switch editFileType {
+	case EditFileTypeAvatar:
+		db = db.Update("profile_url", nil)
+	case EditFileTypeBackground:
+		db = db.Update("profile_background_url", nil)
 	}
 
 	err := db.Error
