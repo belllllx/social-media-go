@@ -19,6 +19,10 @@ import (
 	"github.com/belllllx/social-media-go/internal/otp"
 	"github.com/belllllx/social-media-go/internal/post"
 	"github.com/belllllx/social-media-go/internal/socket"
+	commentSocket "github.com/belllllx/social-media-go/internal/socket/comment"
+	notificationSocket "github.com/belllllx/social-media-go/internal/socket/notification"
+	postSocket "github.com/belllllx/social-media-go/internal/socket/post"
+	userSocket "github.com/belllllx/social-media-go/internal/socket/user"
 	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
@@ -65,10 +69,18 @@ func main() {
 	commentRepositoryDB := comment.NewCommentRepositoryDB()
 	followRepositoryDB := follow.NewFollowRepositoryDB()
 
-	notificationSocket := socket.NewNotificationSocket(app.Socket)
-	postSocket := socket.NewPostSocket(app.Socket)
-	commentSocket := socket.NewCommentSocket(app.Socket)
-	userSocket := socket.NewUserSocket(app.Socket)
+	userSocketService := userSocket.NewUserSocketService(
+		app.DB,
+		app.PresignClient,
+		userRepositoryDB,
+	)
+	socket := socket.NewSocketServer(middlewares.SocketRequireAuth, userSocketService)
+	defer socket.Close(nil)
+
+	notificationSocket := notificationSocket.NewNotificationSocket(socket)
+	postSocket := postSocket.NewPostSocket(socket)
+	commentSocket := commentSocket.NewCommentSocket(socket)
+	userSocket := userSocket.NewUserSocket(socket)
 
 	emailService := email.NewEmailService(emailRepositoryImpl, otpRepositoryDB)
 	otpService := otp.NewOTPService(otpRepositoryDB)
@@ -177,8 +189,8 @@ func main() {
 	{
 		socketIO := app.Router.Group("/socket.io")
 
-		socketIO.GET("/*any", gin.WrapH(app.Socket.ServeHandler(nil)))
-		socketIO.POST("/*any", gin.WrapH(app.Socket.ServeHandler(nil)))
+		socketIO.GET("/*any", gin.WrapH(socket.ServeHandler(nil)))
+		socketIO.POST("/*any", gin.WrapH(socket.ServeHandler(nil)))
 	}
 
 	{

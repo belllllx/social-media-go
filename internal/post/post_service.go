@@ -14,7 +14,8 @@ import (
 	"github.com/belllllx/social-media-go/internal/logs"
 	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/internal/notification"
-	"github.com/belllllx/social-media-go/internal/socket"
+	notificationSocket "github.com/belllllx/social-media-go/internal/socket/notification"
+	postSocket "github.com/belllllx/social-media-go/internal/socket/post"
 	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/belllllx/social-media-go/pkg/errs"
 	"github.com/belllllx/social-media-go/pkg/helpers"
@@ -154,8 +155,8 @@ type postService struct {
 	userService            user.UserService
 	notificationService    notification.NotificationService
 	fileService            file.FileService
-	notificationSocket     socket.NotificationSocket
-	postSocket             socket.PostSocket
+	notificationSocket     notificationSocket.NotificationSocket
+	postSocket             postSocket.PostSocket
 }
 
 func NewPostService(
@@ -171,8 +172,8 @@ func NewPostService(
 	userService user.UserService,
 	notificationService notification.NotificationService,
 	fileService file.FileService,
-	notificationSocket socket.NotificationSocket,
-	postSocket socket.PostSocket,
+	notificationSocket notificationSocket.NotificationSocket,
+	postSocket postSocket.PostSocket,
 ) PostService {
 	return &postService{
 		db:                     db,
@@ -327,7 +328,7 @@ func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostD
 
 	// มี user ถึง emit notifications กับ post
 	if len(usersExcept) > 0 {
-		createPostDTOSocket := &socket.CreatePostDTO{
+		createPostDTOSocket := &postSocket.CreatePostDTO{
 			ID:        post.ID,
 			Message:   post.Message,
 			UserID:    post.UserID,
@@ -366,7 +367,7 @@ func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostD
 			}
 		}
 
-		emitNotificationsDTO := []socket.EmitNotificationDTO{}
+		emitNotificationsDTO := []notificationSocket.EmitNotificationDTO{}
 		for _, notification := range notifications {
 			notificationSender := &dto.SecureUser{
 				ID:                   notification.SenderID,
@@ -383,7 +384,7 @@ func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostD
 				UpdatedAt:            notification.Sender.UpdatedAt,
 			}
 
-			emitNotificationsDTO = append(emitNotificationsDTO, socket.EmitNotificationDTO{
+			emitNotificationsDTO = append(emitNotificationsDTO, notificationSocket.EmitNotificationDTO{
 				ID:         notification.ID,
 				Type:       notification.Type,
 				Message:    notification.Message,
@@ -547,7 +548,7 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 		CreatedAt:            post.User.CreatedAt,
 		UpdatedAt:            post.User.UpdatedAt,
 	}
-	postParentDTO := &socket.PostParentDTO{
+	postParentDTO := &postSocket.PostParentDTO{
 		ID:        post.ID,
 		Message:   post.Message,
 		UserID:    post.UserID,
@@ -570,7 +571,7 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 		CreatedAt:            sharePost.User.CreatedAt,
 		UpdatedAt:            sharePost.User.UpdatedAt,
 	}
-	createSharePostDTOSocket := &socket.CreatePostDTO{
+	createSharePostDTOSocket := &postSocket.CreatePostDTO{
 		ID:        sharePost.ID,
 		Message:   sharePost.Message,
 		UserID:    sharePost.UserID,
@@ -619,7 +620,7 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 			CreatedAt:            notification.Sender.CreatedAt,
 			UpdatedAt:            notification.Sender.UpdatedAt,
 		}
-		emitNotificationsDTO := &socket.EmitNotificationDTO{
+		emitNotificationsDTO := &notificationSocket.EmitNotificationDTO{
 			ID:         notification.ID,
 			Type:       notification.Type,
 			Message:    notification.Message,
@@ -1454,7 +1455,7 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 		return nil, err
 	}
 
-	updatePostDTOSocket := &socket.UpdatePostDTO{
+	updatePostDTOSocket := &postSocket.UpdatePostDTO{
 		ID:       updatedPost.ID,
 		Message:  updatedPost.Message,
 		FilesURL: filesURL,
@@ -1613,7 +1614,7 @@ func (s *postService) DeletePost(
 		}
 	}
 
-	deletePostDTOSocket := &socket.DeletePostDTO{
+	deletePostDTOSocket := &postSocket.DeletePostDTO{
 		ID: deletedPost.ID,
 	}
 	go s.postSocket.EmitDelete(deletePostDTOSocket)
@@ -1622,7 +1623,7 @@ func (s *postService) DeletePost(
 	if post.ParentID != nil {
 		// กรณีมีแจ้งเตือน emit กลับไปหา client เพื่อลบออก
 		if notification != nil {
-			emitDeleteNotificationDTO := &socket.EmitDeleteNotificationDTO{
+			emitDeleteNotificationDTO := &notificationSocket.EmitDeleteNotificationDTO{
 				ID:         notification.ID,
 				ReceiverID: notification.ReceiverID,
 			}
@@ -1635,9 +1636,9 @@ func (s *postService) DeletePost(
 		}
 	} else {
 		// กรณีโพสปกติ
-		emitDeleteNotificationsDTO := []socket.EmitDeleteNotificationDTO{}
+		emitDeleteNotificationsDTO := []notificationSocket.EmitDeleteNotificationDTO{}
 		for _, notification := range notifications {
-			emitDeleteNotificationsDTO = append(emitDeleteNotificationsDTO, socket.EmitDeleteNotificationDTO{
+			emitDeleteNotificationsDTO = append(emitDeleteNotificationsDTO, notificationSocket.EmitDeleteNotificationDTO{
 				ID:         notification.ID,
 				ReceiverID: notification.ReceiverID,
 			})
@@ -1788,7 +1789,7 @@ func (s *postService) ToggleLike(
 			CreatedAt:            createdLike.User.CreatedAt,
 			UpdatedAt:            createdLike.User.UpdatedAt,
 		}
-		postLikeDTO := &socket.PostLikeDTO{
+		postLikeDTO := &postSocket.PostLikeDTO{
 			ID:        createdLike.ID,
 			UserID:    createdLike.UserID,
 			User:      secureUserLike,
@@ -1834,7 +1835,7 @@ func (s *postService) ToggleLike(
 				CreatedAt:            createdNotification.Sender.CreatedAt,
 				UpdatedAt:            createdNotification.Sender.UpdatedAt,
 			}
-			emitNotificationDTO := &socket.EmitNotificationDTO{
+			emitNotificationDTO := &notificationSocket.EmitNotificationDTO{
 				ID:         createdNotification.ID,
 				Type:       createdNotification.Type,
 				Message:    createdNotification.Message,
@@ -1902,7 +1903,7 @@ func (s *postService) ToggleLike(
 		return "", nil, err
 	}
 
-	postLikeDTO := &socket.PostLikeDTO{
+	postLikeDTO := &postSocket.PostLikeDTO{
 		ID:        deletedLike.ID,
 		UserID:    deletedLike.UserID,
 		PostID:    *deletedLike.PostID,
@@ -1912,7 +1913,7 @@ func (s *postService) ToggleLike(
 	go s.postSocket.EmitToggleLike(postLikeDTO)
 
 	if deletedNotification != nil {
-		emitDeleteNotificationDTO := &socket.EmitDeleteNotificationDTO{
+		emitDeleteNotificationDTO := &notificationSocket.EmitDeleteNotificationDTO{
 			ID:         deletedNotification.ID,
 			ReceiverID: deletedNotification.ReceiverID,
 		}

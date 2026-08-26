@@ -1,4 +1,4 @@
-package socket
+package comment
 
 import (
 	"time"

@@ -13,7 +13,8 @@ import (
 	"github.com/belllllx/social-media-go/internal/logs"
 	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/internal/notification"
-	"github.com/belllllx/social-media-go/internal/socket"
+	notificationSocket "github.com/belllllx/social-media-go/internal/socket/notification"
+	userSocket "github.com/belllllx/social-media-go/internal/socket/user"
 	"github.com/belllllx/social-media-go/pkg/errs"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/google/uuid"
@@ -210,8 +211,8 @@ type userService struct {
 	followRepository       follow.FollowRepository
 	notificationRepository notification.NotificationRepository
 	notificationService    notification.NotificationService
-	userSocket             socket.UserSocket
-	notificationSocket     socket.NotificationSocket
+	userSocket             userSocket.UserSocket
+	notificationSocket     notificationSocket.NotificationSocket
 }
 
 func NewUserService(
@@ -222,8 +223,8 @@ func NewUserService(
 	followRepository follow.FollowRepository,
 	notificationRepository notification.NotificationRepository,
 	notificationService notification.NotificationService,
-	userSocket socket.UserSocket,
-	notificationSocket socket.NotificationSocket,
+	userSocket userSocket.UserSocket,
+	notificationSocket notificationSocket.NotificationSocket,
 ) UserService {
 	return &userService{
 		db:                     db,
@@ -862,9 +863,9 @@ func (s *userService) ToggleFollow(
 			return "", nil, err
 		}
 
-		followersOfFollower := []socket.FollowerDataDTO{}
+		followersOfFollower := []userSocket.FollowerDataDTO{}
 		for _, follower := range createdFollow.Follower.Followers {
-			followersOfFollower = append(followersOfFollower, socket.FollowerDataDTO{
+			followersOfFollower = append(followersOfFollower, userSocket.FollowerDataDTO{
 				ID:          follower.ID,
 				FollowerID:  follower.FollowerID,
 				FollowingID: follower.FollowingID,
@@ -873,9 +874,9 @@ func (s *userService) ToggleFollow(
 			})
 		}
 
-		followersOfFollowing := []socket.FollowerDataDTO{}
+		followersOfFollowing := []userSocket.FollowerDataDTO{}
 		for _, follower := range createdFollow.Following.Followers {
-			followersOfFollowing = append(followersOfFollowing, socket.FollowerDataDTO{
+			followersOfFollowing = append(followersOfFollowing, userSocket.FollowerDataDTO{
 				ID:          follower.ID,
 				FollowerID:  follower.FollowerID,
 				FollowingID: follower.FollowingID,
@@ -884,7 +885,7 @@ func (s *userService) ToggleFollow(
 			})
 		}
 
-		secureUserFollower := &socket.SecureUserFollowDTO{
+		secureUserFollower := &userSocket.SecureUserFollowDTO{
 			ID:                   createdFollow.FollowerID,
 			Fullname:             createdFollow.Follower.Fullname,
 			Username:             createdFollow.Follower.Username,
@@ -900,7 +901,7 @@ func (s *userService) ToggleFollow(
 			UpdatedAt:            createdFollow.Follower.UpdatedAt,
 		}
 
-		secureUserFollowing := &socket.SecureUserFollowDTO{
+		secureUserFollowing := &userSocket.SecureUserFollowDTO{
 			ID:                   createdFollow.FollowingID,
 			Fullname:             createdFollow.Following.Fullname,
 			Username:             createdFollow.Following.Username,
@@ -916,7 +917,7 @@ func (s *userService) ToggleFollow(
 			UpdatedAt:            createdFollow.Following.UpdatedAt,
 		}
 
-		followDTO := &socket.FollowDTO{
+		followDTO := &userSocket.FollowDTO{
 			ID:          createdFollow.ID,
 			FollowerID:  createdFollow.FollowerID,
 			Follower:    secureUserFollower,
@@ -943,7 +944,7 @@ func (s *userService) ToggleFollow(
 			UpdatedAt:            createdNotification.Sender.UpdatedAt,
 		}
 
-		emitNotificationDTO := &socket.EmitNotificationDTO{
+		emitNotificationDTO := &notificationSocket.EmitNotificationDTO{
 			ID:         createdNotification.ID,
 			Type:       createdNotification.Type,
 			Message:    createdNotification.Message,
@@ -1064,14 +1065,14 @@ func (s *userService) ToggleFollow(
 		return "", nil, err
 	}
 
-	followDTO := &socket.FollowDTO{
+	followDTO := &userSocket.FollowDTO{
 		ID:          deletedFollow.ID,
 		FollowerID:  deletedFollow.FollowerID,
 		FollowingID: deletedFollow.FollowingID,
 	}
 	go s.userSocket.EmitToggleFollow(followDTO)
 
-	emitDeleteNotificationDTO := &socket.EmitDeleteNotificationDTO{
+	emitDeleteNotificationDTO := &notificationSocket.EmitDeleteNotificationDTO{
 		ID:         deletedNotification.ID,
 		ReceiverID: deletedNotification.ReceiverID,
 	}

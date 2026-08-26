@@ -14,7 +14,8 @@ import (
 	"github.com/belllllx/social-media-go/internal/models"
 	"github.com/belllllx/social-media-go/internal/notification"
 	"github.com/belllllx/social-media-go/internal/post"
-	"github.com/belllllx/social-media-go/internal/socket"
+	commentSocket "github.com/belllllx/social-media-go/internal/socket/comment"
+	notificationSocket "github.com/belllllx/social-media-go/internal/socket/notification"
 	"github.com/belllllx/social-media-go/internal/user"
 	"github.com/belllllx/social-media-go/pkg/errs"
 	"github.com/belllllx/social-media-go/pkg/helpers"
@@ -171,8 +172,8 @@ type commentService struct {
 	notificationService    notification.NotificationService
 	userService            user.UserService
 	fileService            file.FileService
-	commentSocket          socket.CommentSocket
-	notificationSocket     socket.NotificationSocket
+	commentSocket          commentSocket.CommentSocket
+	notificationSocket     notificationSocket.NotificationSocket
 }
 
 func NewCommentService(
@@ -189,8 +190,8 @@ func NewCommentService(
 	notificationService notification.NotificationService,
 	userService user.UserService,
 	fileService file.FileService,
-	commentSocket socket.CommentSocket,
-	notificationSocket socket.NotificationSocket,
+	commentSocket commentSocket.CommentSocket,
+	notificationSocket notificationSocket.NotificationSocket,
 ) CommentService {
 	return &commentService{
 		db:                     db,
@@ -349,11 +350,11 @@ func (s *commentService) CreateComment(ctx context.Context, createCommentDTO *Cr
 		CreatedAt:            comment.User.CreatedAt,
 		UpdatedAt:            comment.User.UpdatedAt,
 	}
-	createCommentDTOSocket := &socket.CreateCommentDTO{
+	createCommentDTOSocket := &commentSocket.CreateCommentDTO{
 		ID:      comment.ID,
 		Message: comment.Message,
 		PostID:  comment.PostID,
-		Post: &socket.PostDTO{
+		Post: &commentSocket.PostDTO{
 			UserID: comment.Post.UserID,
 		},
 		UserID:    comment.UserID,
@@ -423,7 +424,7 @@ func (s *commentService) CreateComment(ctx context.Context, createCommentDTO *Cr
 			CreatedAt:            notification.Sender.CreatedAt,
 			UpdatedAt:            notification.Sender.UpdatedAt,
 		}
-		emitNotificationDTO := &socket.EmitNotificationDTO{
+		emitNotificationDTO := &notificationSocket.EmitNotificationDTO{
 			ID:         notification.ID,
 			Type:       notification.Type,
 			Message:    notification.Message,
@@ -614,11 +615,11 @@ func (s *commentService) CreateReplyComment(ctx context.Context, createReplyComm
 		CreatedAt:            reply.User.CreatedAt,
 		UpdatedAt:            reply.User.UpdatedAt,
 	}
-	createReplyDTOSocket := &socket.CreateCommentDTO{
+	createReplyDTOSocket := &commentSocket.CreateCommentDTO{
 		ID:      reply.ID,
 		Message: reply.Message,
 		PostID:  reply.PostID,
-		Post: &socket.PostDTO{
+		Post: &commentSocket.PostDTO{
 			UserID: reply.Post.UserID,
 		},
 		UserID:    reply.UserID,
@@ -690,7 +691,7 @@ func (s *commentService) CreateReplyComment(ctx context.Context, createReplyComm
 			CreatedAt:            notification.Sender.CreatedAt,
 			UpdatedAt:            notification.Sender.UpdatedAt,
 		}
-		emitNotificationDTO := &socket.EmitNotificationDTO{
+		emitNotificationDTO := &notificationSocket.EmitNotificationDTO{
 			ID:         notification.ID,
 			Type:       notification.Type,
 			Message:    notification.Message,
@@ -934,11 +935,11 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 		CreatedAt:            tag.ReplyToUser.CreatedAt,
 		UpdatedAt:            tag.ReplyToUser.UpdatedAt,
 	}
-	createTagDTOSocket := &socket.CreateCommentDTO{
+	createTagDTOSocket := &commentSocket.CreateCommentDTO{
 		ID:      tag.ID,
 		Message: tag.Message,
 		PostID:  tag.PostID,
-		Post: &socket.PostDTO{
+		Post: &commentSocket.PostDTO{
 			UserID: tag.Post.UserID,
 		},
 		UserID:        tag.UserID,
@@ -1016,7 +1017,7 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 			CreatedAt:            notification.Sender.CreatedAt,
 			UpdatedAt:            notification.Sender.UpdatedAt,
 		}
-		emitNotificationDTO := &socket.EmitNotificationDTO{
+		emitNotificationDTO := &notificationSocket.EmitNotificationDTO{
 			ID:         notification.ID,
 			Type:       notification.Type,
 			Message:    notification.Message,
@@ -1478,7 +1479,7 @@ func (s *commentService) UpdateComment(ctx context.Context, updateCommentDTO *Up
 		return nil, err
 	}
 
-	updateCommentSocketDTO := &socket.UpdateCommentDTO{
+	updateCommentSocketDTO := &commentSocket.UpdateCommentDTO{
 		ID:      updatedComment.ID,
 		Message: updatedComment.Message,
 		PostID:  updatedComment.PostID,
@@ -1638,10 +1639,10 @@ func (s *commentService) DeleteComment(
 		}
 	}
 
-	deleteCommentDTOSocket := &socket.DeleteCommentDTO{
+	deleteCommentDTOSocket := &commentSocket.DeleteCommentDTO{
 		ID:     deletedComment.ID,
 		PostID: deletedComment.PostID,
-		Post: &socket.PostDTO{
+		Post: &commentSocket.PostDTO{
 			UserID: commentByID.Post.UserID,
 		},
 		ParentID: deletedComment.ParentID,
@@ -1649,7 +1650,7 @@ func (s *commentService) DeleteComment(
 	go s.commentSocket.EmitDelete(deleteCommentDTOSocket)
 
 	if notification != nil {
-		emitDeleteNotificationDTO := &socket.EmitDeleteNotificationDTO{
+		emitDeleteNotificationDTO := &notificationSocket.EmitDeleteNotificationDTO{
 			ID:         notification.ID,
 			ReceiverID: notification.ReceiverID,
 		}
@@ -1830,7 +1831,7 @@ func (s *commentService) ToggleLike(
 			CreatedAt:            createdLike.User.CreatedAt,
 			UpdatedAt:            createdLike.User.UpdatedAt,
 		}
-		commentLikeDTO := &socket.CommentLikeDTO{
+		commentLikeDTO := &commentSocket.CommentLikeDTO{
 			ID:        createdLike.ID,
 			UserID:    createdLike.UserID,
 			User:      secureUserLike,
@@ -1876,7 +1877,7 @@ func (s *commentService) ToggleLike(
 				CreatedAt:            createdNotification.Sender.CreatedAt,
 				UpdatedAt:            createdNotification.Sender.UpdatedAt,
 			}
-			emitNotificationDTO := &socket.EmitNotificationDTO{
+			emitNotificationDTO := &notificationSocket.EmitNotificationDTO{
 				ID:         createdNotification.ID,
 				Type:       createdNotification.Type,
 				Message:    createdNotification.Message,
@@ -1947,7 +1948,7 @@ func (s *commentService) ToggleLike(
 		return "", nil, err
 	}
 
-	commentLikeDTO := &socket.CommentLikeDTO{
+	commentLikeDTO := &commentSocket.CommentLikeDTO{
 		ID:        deletedLike.ID,
 		UserID:    deletedLike.UserID,
 		CommentID: *deletedLike.CommentID,
@@ -1957,7 +1958,7 @@ func (s *commentService) ToggleLike(
 	go s.commentSocket.EmitToggleLike(commentLikeDTO)
 
 	if deletedNotification != nil {
-		emitDeleteNotificationDTO := &socket.EmitDeleteNotificationDTO{
+		emitDeleteNotificationDTO := &notificationSocket.EmitDeleteNotificationDTO{
 			ID:         deletedNotification.ID,
 			ReceiverID: deletedNotification.ReceiverID,
 		}

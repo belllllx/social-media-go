@@ -389,3 +389,21 @@ func GetUserBackgroundImage(
 
 	return nil
 }
+
+func ParseUserID(args []any) (string, error) {
+	if len(args) == 0 {
+		return "", errs.NewBadRequestErrorWithMessage("User cannot be empty")
+	}
+
+	user, ok := args[0].(map[string]any)
+	if !ok {
+		return "", errs.NewBadRequestErrorWithMessage("Invalid user")
+	}
+
+	userID, ok := user["id"].(string)
+	if !ok {
+		return "", errs.NewBadRequestErrorWithMessage("Invalid user id")
+	}
+
+	return userID, nil
+}

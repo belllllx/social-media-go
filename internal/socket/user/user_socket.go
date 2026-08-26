@@ -1,4 +1,4 @@
-package socket
+package user
 
 import (
 	"time"
