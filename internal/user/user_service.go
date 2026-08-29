@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strconv"
@@ -244,6 +245,34 @@ func NewUserService(
 }
 
 func (s *userService) FindByIDWithFollowingRelation(ctx context.Context, userID uuid.UUID) (*dto.SecureUserWithFollowingRelation, error) {
+	key := fmt.Sprintf("user:auth:%v", userID)
+	data, err := helpers.RedisGet(
+		ctx,
+		s.redisClient,
+		key,
+	)
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
+		if err != redis.Nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to get data from redis")
+		}
+	}
+
+	if err == nil {
+		secureUserWithFollowingRelation := &dto.SecureUserWithFollowingRelation{}
+		err = json.Unmarshal([]byte(data), secureUserWithFollowingRelation)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewUnexpectedErrorWithMessage("Failed to unmarshal json data")
+		}
+
+		return secureUserWithFollowingRelation, nil
+	}
 
 	user, err := s.userRepository.FindByIDWithFollowingRelation(
 		ctx,
@@ -309,6 +338,30 @@ func (s *userService) FindByIDWithFollowingRelation(ctx context.Context, userID 
 		CreatedAt:            user.CreatedAt,
 		UpdatedAt:            user.UpdatedAt,
 	}
+
+	value, err := json.Marshal(secureUserWithFollowingRelation)
+	if err != nil {
+		logs.Error(err)
+		return nil, errs.NewUnexpectedErrorWithMessage("Failed to marshal json data")
+	}
+
+	err = helpers.RedisSet(
+		ctx,
+		s.redisClient,
+		key,
+		value,
+		time.Minute*10,
+	)
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to set data from redis")
+	}
+
 	return secureUserWithFollowingRelation, nil
 }
 
@@ -323,6 +376,35 @@ func (s *userService) FindByIDWithFollowRelations(ctx context.Context, userID st
 	if err != nil {
 		logs.Error(err)
 		return nil, err
+	}
+
+	key := fmt.Sprintf("user:find:%v", *userIDParse)
+	data, err := helpers.RedisGet(
+		ctx,
+		s.redisClient,
+		key,
+	)
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
+		if err != redis.Nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to get data from redis")
+		}
+	}
+
+	if err == nil {
+		secureUserWithFollowRelations := &SecureUserWithFollowRelations{}
+		err = json.Unmarshal([]byte(data), secureUserWithFollowRelations)
+		if err != nil {
+			logs.Error(err)
+			return nil, errs.NewUnexpectedErrorWithMessage("Failed to unmarshal json data")
+		}
+
+		return secureUserWithFollowRelations, nil
 	}
 
 	user, err := s.userRepository.FindByIDWithFollowRelations(
@@ -497,6 +579,30 @@ func (s *userService) FindByIDWithFollowRelations(ctx context.Context, userID st
 		CreatedAt:            user.CreatedAt,
 		UpdatedAt:            user.UpdatedAt,
 	}
+
+	value, err := json.Marshal(secureUserWithFollowRelations)
+	if err != nil {
+		logs.Error(err)
+		return nil, errs.NewUnexpectedErrorWithMessage("Failed to marshal json data")
+	}
+
+	err = helpers.RedisSet(
+		ctx,
+		s.redisClient,
+		key,
+		value,
+		time.Minute*10,
+	)
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to set data from redis")
+	}
+
 	return secureUserWithFollowRelations, nil
 }
 
@@ -994,6 +1100,51 @@ func (s *userService) ToggleFollow(
 			return "", nil, err
 		}
 
+		err = helpers.RedisDelete(
+			ctx,
+			s.redisClient,
+			fmt.Sprintf("user:auth:%v", followerID),
+		)
+		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return "", nil, err
+			}
+
+			logs.Error(err)
+			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to delete key from redis")
+		}
+
+		err = helpers.RedisDelete(
+			ctx,
+			s.redisClient,
+			fmt.Sprintf("user:find:%v", followerID),
+		)
+		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return "", nil, err
+			}
+
+			logs.Error(err)
+			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to delete key from redis")
+		}
+
+		err = helpers.RedisDelete(
+			ctx,
+			s.redisClient,
+			fmt.Sprintf("user:find:%v", userByID.ID),
+		)
+		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return "", nil, err
+			}
+
+			logs.Error(err)
+			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to delete key from redis")
+		}
+
 		followersOfFollower := []userSocket.FollowerDataDTO{}
 		for _, follower := range createdFollow.Follower.Followers {
 			followersOfFollower = append(followersOfFollower, userSocket.FollowerDataDTO{
@@ -1212,6 +1363,51 @@ func (s *userService) ToggleFollow(
 		return "", nil, err
 	}
 
+	err = helpers.RedisDelete(
+		ctx,
+		s.redisClient,
+		fmt.Sprintf("user:auth:%v", followerID),
+	)
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return "", nil, err
+		}
+
+		logs.Error(err)
+		return "", nil, errs.NewInternalServerErrorWithMessage("Failed to delete key from redis")
+	}
+
+	err = helpers.RedisDelete(
+		ctx,
+		s.redisClient,
+		fmt.Sprintf("user:find:%v", followerID),
+	)
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return "", nil, err
+		}
+
+		logs.Error(err)
+		return "", nil, errs.NewInternalServerErrorWithMessage("Failed to delete key from redis")
+	}
+
+	err = helpers.RedisDelete(
+		ctx,
+		s.redisClient,
+		fmt.Sprintf("user:find:%v", userByID.ID),
+	)
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return "", nil, err
+		}
+
+		logs.Error(err)
+		return "", nil, errs.NewInternalServerErrorWithMessage("Failed to delete key from redis")
+	}
+
 	followDTO := &userSocket.FollowDTO{
 		ID:          deletedFollow.ID,
 		FollowerID:  deletedFollow.FollowerID,
@@ -1369,6 +1565,36 @@ func (s *userService) UploadEditUserFile(
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to update user images")
 	}
 
+	err = helpers.RedisDelete(
+		ctx,
+		s.redisClient,
+		fmt.Sprintf("user:auth:%v", user.ID),
+	)
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to delete key from redis")
+	}
+
+	err = helpers.RedisDelete(
+		ctx,
+		s.redisClient,
+		fmt.Sprintf("user:find:%v", user.ID),
+	)
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to delete key from redis")
+	}
+
 	fileURLResp := &FileURL{
 		FileURL: req.URL,
 	}
@@ -1425,6 +1651,36 @@ func (s *userService) ClearUserImages(
 		return errs.NewInternalServerErrorWithMessage("Failed to delete object from bucket")
 	}
 
+	err = helpers.RedisDelete(
+		ctx,
+		s.redisClient,
+		fmt.Sprintf("user:auth:%v", userID),
+	)
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return err
+		}
+
+		logs.Error(err)
+		return errs.NewInternalServerErrorWithMessage("Failed to delete key from redis")
+	}
+
+	err = helpers.RedisDelete(
+		ctx,
+		s.redisClient,
+		fmt.Sprintf("user:find:%v", userID),
+	)
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return err
+		}
+
+		logs.Error(err)
+		return errs.NewInternalServerErrorWithMessage("Failed to delete key from redis")
+	}
+
 	return nil
 }
 
@@ -1462,6 +1718,36 @@ func (s *userService) UpdatesInfo(
 
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to updates user info")
+	}
+
+	err = helpers.RedisDelete(
+		ctx,
+		s.redisClient,
+		fmt.Sprintf("user:auth:%v", updatesInfoDTO.UserID),
+	)
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to delete key from redis")
+	}
+
+	err = helpers.RedisDelete(
+		ctx,
+		s.redisClient,
+		fmt.Sprintf("user:find:%v", updatesInfoDTO.UserID),
+	)
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to delete key from redis")
 	}
 
 	updateUserInfoResp := &UpdatedUserInfo{
