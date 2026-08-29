@@ -135,7 +135,7 @@ type AuthService interface {
 		otp string,
 	) (token string, err error)
 	ValidateUserLogin(ctx context.Context, loginDTO *LoginDTO) (userID *uuid.UUID, err error)
-	CreateTokens(userID uuid.UUID) (tokens *Tokens, err error)
+	CreateTokens(ctx context.Context, userID uuid.UUID) (tokens *Tokens, err error)
 	SocialLogin(ctx context.Context, providerType models.ProviderType) (url string, err error)
 	SocialLoginCallback(ctx context.Context, socialUserDTO *SocialUserDTO) (tokens *Tokens, url string, err error)
 }
@@ -182,10 +182,18 @@ func (s *authService) SendEmailRegister(ctx context.Context, sendEmailRegisterDT
 		s.db,
 		sendEmailRegisterDTO.Username,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return "", errs.NewInternalServerErrorWithMessage("Failed to find user")
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return "", err
+		}
+
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return "", errs.NewInternalServerErrorWithMessage("Failed to find user")
+		}
 	}
+
 	if userExist != nil {
 		logs.Warn(errors.New("Username is already exist"))
 		return "", errs.NewBadRequestErrorWithMessage("Username is already exist")
@@ -196,10 +204,18 @@ func (s *authService) SendEmailRegister(ctx context.Context, sendEmailRegisterDT
 		s.db,
 		sendEmailRegisterDTO.Email,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return "", errs.NewInternalServerErrorWithMessage("Failed to find user")
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return "", err
+		}
+
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return "", errs.NewInternalServerErrorWithMessage("Failed to find user")
+		}
 	}
+
 	if userExist != nil {
 		logs.Warn(errors.New("Email is already exist"))
 		return "", errs.NewBadRequestErrorWithMessage("Email is already exist")
@@ -249,6 +265,7 @@ func (s *authService) SendEmailRegister(ctx context.Context, sendEmailRegisterDT
 		logs.Error(err)
 		return "", errs.NewUnexpectedErrorWithMessage("Failed to marshal json")
 	}
+
 	err = helpers.RedisSet(
 		ctx,
 		s.redisClient,
@@ -257,6 +274,11 @@ func (s *authService) SendEmailRegister(ctx context.Context, sendEmailRegisterDT
 		time.Minute*15,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return "", err
+		}
+
 		logs.Error(err)
 		return "", errs.NewInternalServerErrorWithMessage("Failed to set redis")
 	}
@@ -270,12 +292,17 @@ func (s *authService) SendEmailForgotPassword(ctx context.Context, email string)
 		s.db,
 		email,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return "", errs.NewInternalServerErrorWithMessage("Failed to find user by email")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return "", err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return "", errs.NewInternalServerErrorWithMessage("Failed to find user by email")
+		}
+
 		logs.Warn(err)
 		return "", errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Email %s is not found", email))
 	}
@@ -350,10 +377,17 @@ func (s *authService) VerifyOTPRegister(
 		s.redisClient,
 		key,
 	)
-	if err == redis.Nil {
-		logs.Warn(err)
-		return errs.NewUnexpectedErrorWithMessage("Failed to get does not exist key redis")
-	} else if err != nil {
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return err
+		}
+
+		if err == redis.Nil {
+			logs.Warn(err)
+			return errs.NewUnexpectedErrorWithMessage("Failed to get does not exist key redis")
+		}
+
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to get value redis")
 	}
@@ -364,12 +398,15 @@ func (s *authService) VerifyOTPRegister(
 		logs.Error(err)
 		return errs.NewUnexpectedErrorWithMessage("Failed to unmarshal json")
 	}
+
 	user := &models.User{
 		Fullname:     registerPayload.Fullname,
 		Username:     &registerPayload.Username,
 		Email:        registerPayload.Email,
 		PasswordHash: &registerPayload.PasswordHash,
 	}
+
+	var txCallbackErr bool
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		err = s.userRepository.Create(
@@ -378,6 +415,13 @@ func (s *authService) VerifyOTPRegister(
 			user,
 		)
 		if err != nil {
+			txCallbackErr = true
+
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return err
+			}
+
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to create user")
 		}
@@ -388,6 +432,13 @@ func (s *authService) VerifyOTPRegister(
 			email,
 		)
 		if err != nil {
+			txCallbackErr = true
+
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return err
+			}
+
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to delete otp")
 		}
@@ -395,10 +446,11 @@ func (s *authService) VerifyOTPRegister(
 		return nil
 	})
 	if err != nil {
-		_, ok := err.(*errs.AppError)
-		if !ok {
+		if !txCallbackErr {
 			logs.Error(err)
+			return err
 		}
+
 		return err
 	}
 
@@ -408,6 +460,11 @@ func (s *authService) VerifyOTPRegister(
 		key,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return err
+		}
+
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to delete key redis")
 	}
@@ -452,6 +509,11 @@ func (s *authService) VerifyOTPForgotPassword(
 		email,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return "", err
+		}
+
 		logs.Error(err)
 		return "", errs.NewInternalServerErrorWithMessage("Failed to delete otp")
 	}
@@ -465,12 +527,17 @@ func (s *authService) ValidateUserLogin(ctx context.Context, loginDTO *LoginDTO)
 		s.db,
 		loginDTO.Username,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return nil, errs.NewInternalServerError()
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find user by username")
+		}
+
 		return nil, errs.NewUnauthorizedError()
 	}
 
@@ -482,7 +549,13 @@ func (s *authService) ValidateUserLogin(ctx context.Context, loginDTO *LoginDTO)
 	return &userExist.ID, nil
 }
 
-func (s *authService) CreateTokens(userID uuid.UUID) (*Tokens, error) {
+func (s *authService) CreateTokens(ctx context.Context, userID uuid.UUID) (*Tokens, error) {
+	err := ctx.Err()
+	if err != nil {
+		logs.Warn(err)
+		return nil, err
+	}
+
 	accessToken, err := helpers.NewJWT(
 		&UserAccessTokenClaims{
 			UserID:       userID,
@@ -537,6 +610,11 @@ func (s *authService) SocialLogin(ctx context.Context, providerType models.Provi
 		time.Minute*5,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return "", err
+		}
+
 		logs.Error(err)
 		return "", errs.NewInternalServerErrorWithMessage("Failed to set redis")
 	}
@@ -554,21 +632,26 @@ func (s *authService) SocialLogin(ctx context.Context, providerType models.Provi
 }
 
 func (s *authService) SocialLoginCallback(ctx context.Context, socialUserDTO *SocialUserDTO) (*Tokens, string, error) {
+	authSuccessURL := fmt.Sprintf("%s%s", viper.GetString("app.client_url"), viper.GetString("app.client_redirect_auth_success_path"))
+	authErrorURL := fmt.Sprintf("%s%s", viper.GetString("app.client_url"), viper.GetString("app.client_redirect_auth_error_path"))
+
 	userExist, err := s.userRepository.FindByEmail(
 		ctx,
 		s.db,
 		socialUserDTO.Email,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return nil, "", errs.NewInternalServerErrorWithMessage("Failed to find user")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, "", err
+		}
 
-	authSuccessURL := fmt.Sprintf("%s%s", viper.GetString("app.client_url"), viper.GetString("app.client_redirect_auth_success_path"))
-	authErrorURL := fmt.Sprintf("%s%s", viper.GetString("app.client_url"), viper.GetString("app.client_redirect_auth_error_path"))
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, "", errs.NewInternalServerErrorWithMessage("Failed to find user")
+		}
 
-	// ยังไม่มี account -> create
-	if helpers.IsErrRecordNotFound(err) {
+		// ยังไม่มี account -> create
 		createUser := &models.User{
 			Fullname:     socialUserDTO.Name,
 			Email:        socialUserDTO.Email,
@@ -581,11 +664,16 @@ func (s *authService) SocialLoginCallback(ctx context.Context, socialUserDTO *So
 			createUser,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, "", err
+			}
+
 			logs.Error(err)
 			return nil, "", errs.NewInternalServerErrorWithMessage("Failed to create social account")
 		}
 
-		tokens, err := s.CreateTokens(createUser.ID)
+		tokens, err := s.CreateTokens(ctx, createUser.ID)
 		if err != nil {
 			return nil, "", err
 		}
@@ -593,6 +681,7 @@ func (s *authService) SocialLoginCallback(ctx context.Context, socialUserDTO *So
 		return tokens, authSuccessURL, nil
 	}
 
+	// กรณีมี account
 	// กรณี provider ไม่ตรงกับ social login ที่ใช้
 	if userExist != nil && userExist.ProviderType != socialUserDTO.ProviderType {
 		socialAuthErrToken, err := helpers.NewJWT(
@@ -614,7 +703,7 @@ func (s *authService) SocialLoginCallback(ctx context.Context, socialUserDTO *So
 		return nil, fmt.Sprintf("%s?message=%s&error_token=%s", authErrorURL, url.PathEscape(msg), socialAuthErrToken), nil
 	}
 
-	tokens, err := s.CreateTokens(userExist.ID)
+	tokens, err := s.CreateTokens(ctx, userExist.ID)
 	if err != nil {
 		return nil, "", err
 	}

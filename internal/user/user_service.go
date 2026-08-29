@@ -18,6 +18,7 @@ import (
 	"github.com/belllllx/social-media-go/pkg/errs"
 	"github.com/belllllx/social-media-go/pkg/helpers"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
@@ -205,6 +206,7 @@ type UserService interface {
 
 type userService struct {
 	db                     *gorm.DB
+	redisClient            *redis.Client
 	s3Client               *s3.Client
 	presignClient          *s3.PresignClient
 	userRepository         UserRepository
@@ -217,6 +219,7 @@ type userService struct {
 
 func NewUserService(
 	db *gorm.DB,
+	redisClient *redis.Client,
 	s3Client *s3.Client,
 	presignClient *s3.PresignClient,
 	userRepository UserRepository,
@@ -228,6 +231,7 @@ func NewUserService(
 ) UserService {
 	return &userService{
 		db:                     db,
+		redisClient:            redisClient,
 		s3Client:               s3Client,
 		presignClient:          presignClient,
 		userRepository:         userRepository,
@@ -240,17 +244,23 @@ func NewUserService(
 }
 
 func (s *userService) FindByIDWithFollowingRelation(ctx context.Context, userID uuid.UUID) (*dto.SecureUserWithFollowingRelation, error) {
+
 	user, err := s.userRepository.FindByIDWithFollowingRelation(
 		ctx,
 		s.db,
 		userID,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find user by id with following relation")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find user by id with following relation")
+		}
+
 		logs.Warn(err)
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("User by id %v is not found", userID))
 	}
@@ -263,6 +273,11 @@ func (s *userService) FindByIDWithFollowingRelation(ctx context.Context, userID 
 		user,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, err
 	}
@@ -315,12 +330,17 @@ func (s *userService) FindByIDWithFollowRelations(ctx context.Context, userID st
 		s.db,
 		*userIDParse,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find user by id with follow relations")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find user by id with follow relations")
+		}
+
 		logs.Warn(err)
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("User by id %v is not found", userID))
 	}
@@ -331,6 +351,11 @@ func (s *userService) FindByIDWithFollowRelations(ctx context.Context, userID st
 		user,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, err
 	}
@@ -341,6 +366,11 @@ func (s *userService) FindByIDWithFollowRelations(ctx context.Context, userID st
 		user,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, err
 	}
@@ -353,6 +383,11 @@ func (s *userService) FindByIDWithFollowRelations(ctx context.Context, userID st
 			&following.Following,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, err
 		}
@@ -401,6 +436,11 @@ func (s *userService) FindByIDWithFollowRelations(ctx context.Context, userID st
 			&follower.Follower,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, err
 		}
@@ -503,6 +543,11 @@ func (s *userService) FindsWithFullnameCursorPagination(
 			limitInt,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find users by fullname cursor pagination")
 		}
@@ -512,12 +557,17 @@ func (s *userService) FindsWithFullnameCursorPagination(
 			s.db,
 			findsWithFullnameCursorPaginationDTO.UserID,
 		)
-		if err != nil && !helpers.IsErrRecordNotFound(err) {
-			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find user cursor by user id")
-		}
+		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
 
-		if helpers.IsErrRecordNotFound(err) {
+			if !helpers.IsErrRecordNotFound(err) {
+				logs.Error(err)
+				return nil, errs.NewInternalServerErrorWithMessage("Failed to find user cursor by user id")
+			}
+
 			logs.Warn(err)
 			return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Cursor by user id %v is not found", *cursorID))
 		}
@@ -531,6 +581,11 @@ func (s *userService) FindsWithFullnameCursorPagination(
 			limitInt,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find users by fullname cursor pagination")
 		}
@@ -543,6 +598,11 @@ func (s *userService) FindsWithFullnameCursorPagination(
 			&user,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, err
 		}
@@ -617,6 +677,11 @@ func (s *userService) FindsCursorPaginationWithFollowerRelation(
 			limitInt,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find users cursor pagination with follower relation")
 		}
@@ -626,12 +691,17 @@ func (s *userService) FindsCursorPaginationWithFollowerRelation(
 			s.db,
 			*cursorID,
 		)
-		if err != nil && !helpers.IsErrRecordNotFound(err) {
-			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find user cursor by user id")
-		}
+		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
 
-		if helpers.IsErrRecordNotFound(err) {
+			if !helpers.IsErrRecordNotFound(err) {
+				logs.Error(err)
+				return nil, errs.NewInternalServerErrorWithMessage("Failed to find user cursor by user id")
+			}
+
 			logs.Warn(err)
 			return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Cursor by user id %v is not found", *cursorID))
 		}
@@ -644,6 +714,11 @@ func (s *userService) FindsCursorPaginationWithFollowerRelation(
 			limitInt,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find users cursor pagination with follower relation")
 		}
@@ -656,6 +731,11 @@ func (s *userService) FindsCursorPaginationWithFollowerRelation(
 			&user,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, err
 		}
@@ -716,6 +796,11 @@ func (s *userService) ResetPassword(
 		passwordHash,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return err
+		}
+
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to update user password")
 	}
@@ -749,15 +834,22 @@ func (s *userService) ToggleFollow(
 		s.db,
 		*followingIDParse,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find user by id")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return "", nil, err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find user by id")
+		}
+
 		logs.Warn(err)
 		return "", nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("User by id %v is not found", *followingIDParse))
 	}
+
+	var txCallbackErr bool
 
 	_, err = s.followRepository.FindIsFollowing(
 		ctx,
@@ -765,13 +857,18 @@ func (s *userService) ToggleFollow(
 		followerID,
 		userByID.ID,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find is following")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return "", nil, err
+		}
 
-	// กรณี follow
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find is following")
+		}
+
+		// กรณี follow
 		createFollow := &models.Follow{
 			FollowerID:  followerID,
 			FollowingID: userByID.ID,
@@ -790,6 +887,13 @@ func (s *userService) ToggleFollow(
 				createFollow,
 			)
 			if err != nil {
+				txCallbackErr = true
+
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return err
+				}
+
 				logs.Error(err)
 				return errs.NewInternalServerErrorWithMessage("Failed to create follow")
 			}
@@ -800,16 +904,18 @@ func (s *userService) ToggleFollow(
 				createNotificationDTO,
 			)
 			if err != nil {
+				txCallbackErr = true
 				return err
 			}
 
 			return nil
 		})
 		if err != nil {
-			_, ok := err.(*errs.AppError)
-			if !ok {
+			if !txCallbackErr {
 				logs.Error(err)
+				return "", nil, err
 			}
+
 			return "", nil, err
 		}
 
@@ -819,6 +925,11 @@ func (s *userService) ToggleFollow(
 			createFollow.ID,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return "", nil, err
+			}
+
 			logs.Error(err)
 			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find follow by id with following and follower relations")
 		}
@@ -829,6 +940,11 @@ func (s *userService) ToggleFollow(
 			&createdFollow.Follower,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return "", nil, err
+			}
+
 			logs.Error(err)
 			return "", nil, err
 		}
@@ -839,6 +955,11 @@ func (s *userService) ToggleFollow(
 			&createdFollow.Following,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return "", nil, err
+			}
+
 			logs.Error(err)
 			return "", nil, err
 		}
@@ -849,6 +970,11 @@ func (s *userService) ToggleFollow(
 			createNotificationDTO.ID,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return "", nil, err
+			}
+
 			logs.Error(err)
 			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find notification by id with sender relation")
 		}
@@ -859,6 +985,11 @@ func (s *userService) ToggleFollow(
 			&createdNotification.Sender,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return "", nil, err
+			}
+
 			logs.Error(err)
 			return "", nil, err
 		}
@@ -1032,6 +1163,7 @@ func (s *userService) ToggleFollow(
 	// กรณี unfollow
 	deletedFollow := &models.Follow{}
 	deletedNotification := &models.Notification{}
+
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		deletedFollow, err = s.followRepository.DeleteOfFollow(
 			ctx,
@@ -1040,6 +1172,13 @@ func (s *userService) ToggleFollow(
 			userByID.ID,
 		)
 		if err != nil {
+			txCallbackErr = true
+
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return err
+			}
+
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to delete follow")
 		}
@@ -1051,6 +1190,13 @@ func (s *userService) ToggleFollow(
 			userByID.ID,
 		)
 		if err != nil {
+			txCallbackErr = true
+
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return err
+			}
+
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to delete notification of follow")
 		}
@@ -1058,10 +1204,11 @@ func (s *userService) ToggleFollow(
 		return nil
 	})
 	if err != nil {
-		_, ok := err.(*errs.AppError)
-		if !ok {
+		if !txCallbackErr {
 			logs.Error(err)
+			return "", nil, err
 		}
+
 		return "", nil, err
 	}
 
@@ -1120,6 +1267,11 @@ func (s *userService) UploadEditUserFile(
 				*user.RawProfileURL,
 			)
 			if err != nil {
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return nil, err
+				}
+
 				logs.Error(err)
 				return nil, errs.NewInternalServerErrorWithMessage("Failed to delete previous user avatar object from bucket")
 			}
@@ -1132,6 +1284,11 @@ func (s *userService) UploadEditUserFile(
 				*user.ProfileBackgroundURL,
 			)
 			if err != nil {
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return nil, err
+				}
+
 				logs.Error(err)
 				return nil, errs.NewInternalServerErrorWithMessage("Failed to delete previous user background object from bucket")
 			}
@@ -1155,6 +1312,11 @@ func (s *userService) UploadEditUserFile(
 		fileDataDTO.ContentType,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to upload file to bucket")
 	}
@@ -1165,6 +1327,11 @@ func (s *userService) UploadEditUserFile(
 		key,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to presign get file object")
 	}
@@ -1177,6 +1344,11 @@ func (s *userService) UploadEditUserFile(
 		editFileType,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 
 		_, err = helpers.DeleteObject(
@@ -1185,6 +1357,11 @@ func (s *userService) UploadEditUserFile(
 			key,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to update user images and delete object from bucket")
 		}
@@ -1224,6 +1401,11 @@ func (s *userService) ClearUserImages(
 		editFileType,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return err
+		}
+
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to clear user image")
 	}
@@ -1234,6 +1416,11 @@ func (s *userService) ClearUserImages(
 		key,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return err
+		}
+
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to delete object from bucket")
 	}
@@ -1268,6 +1455,11 @@ func (s *userService) UpdatesInfo(
 		updatesUserInfo,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to updates user info")
 	}

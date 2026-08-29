@@ -73,3 +73,10 @@ func NewNotFoundErrorWithMessage(msg string) *AppError {
 		Message: msg,
 	}
 }
+
+func NewRequestTimeoutError() *AppError {
+	return &AppError{
+		Status:  http.StatusRequestTimeout,
+		Message: "Request time out",
+	}
+}

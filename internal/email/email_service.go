@@ -48,18 +48,31 @@ func (s *emailService) SendEmail(
 		db,
 		email,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return errs.NewInternalServerErrorWithMessage("Failed to send email")
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return err
+		}
+
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return errs.NewInternalServerErrorWithMessage("Failed to send email")
+		}
 	}
 
 	// ลบ otp ของเก่าถ้าเจอ
 	if isOTPExist != nil {
-		if err := s.otpRepository.Delete(
+		err = s.otpRepository.Delete(
 			ctx,
 			db,
 			isOTPExist.Email,
-		); err != nil {
+		)
+		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return err
+			}
+
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to delete otp")
 		}
@@ -70,6 +83,7 @@ func (s *emailService) SendEmail(
 		logs.Error(err)
 		return errs.NewUnexpectedErrorWithMessage("Failed to generate otp")
 	}
+
 	otpHash, err := helpers.HashSecret(otpString)
 	if err != nil {
 		logs.Error(err)
@@ -87,6 +101,11 @@ func (s *emailService) SendEmail(
 		&createOTP,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return err
+		}
+
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to create otp")
 	}
@@ -98,13 +117,26 @@ func (s *emailService) SendEmail(
 		sendEmailType,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return err
+		}
+
 		logs.Error(err)
-		if err := s.otpRepository.Delete(
+
+		err = s.otpRepository.Delete(
 			ctx,
 			db,
 			email,
-		); err != nil {
+		)
+		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return err
+			}
+
 			logs.Error(err)
+			return errs.NewInternalServerErrorWithMessage(fmt.Sprintf("Cannot send email to %s and delete otp", email))
 		}
 
 		return errs.NewInternalServerErrorWithMessage(fmt.Sprintf("Cannot send email to %s", email))

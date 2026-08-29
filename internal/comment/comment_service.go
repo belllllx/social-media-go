@@ -234,12 +234,17 @@ func (s *commentService) CreateComment(ctx context.Context, createCommentDTO *Cr
 		s.db,
 		*postIDParse,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id")
+		}
+
 		logs.Warn(err)
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", *postIDParse))
 	}
@@ -250,6 +255,7 @@ func (s *commentService) CreateComment(ctx context.Context, createCommentDTO *Cr
 		UserID:  createCommentDTO.UserID,
 	}
 	var notificationID uuid.UUID
+	var txCallbackErr bool
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		err = s.commentRepository.Create(
@@ -258,6 +264,13 @@ func (s *commentService) CreateComment(ctx context.Context, createCommentDTO *Cr
 			createComment,
 		)
 		if err != nil {
+			txCallbackErr = true
+
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return err
+			}
+
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to create comment")
 		}
@@ -266,6 +279,8 @@ func (s *commentService) CreateComment(ctx context.Context, createCommentDTO *Cr
 		if createCommentDTO.FileURL != "" {
 			fileDIR, filename, err := helpers.SplitPresignedURL(createCommentDTO.FileURL)
 			if err != nil {
+				txCallbackErr = true
+
 				logs.Error(err)
 				return errs.NewUnexpectedErrorWithMessage("Failed to split presigned url")
 			}
@@ -279,6 +294,13 @@ func (s *commentService) CreateComment(ctx context.Context, createCommentDTO *Cr
 				models.FileTypeComment,
 			)
 			if err != nil {
+				txCallbackErr = true
+
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return err
+				}
+
 				logs.Error(err)
 				return errs.NewInternalServerErrorWithMessage("Failed to update file of comment")
 			}
@@ -300,6 +322,7 @@ func (s *commentService) CreateComment(ctx context.Context, createCommentDTO *Cr
 				createNotificationDTO,
 			)
 			if err != nil {
+				txCallbackErr = true
 				return err
 			}
 
@@ -309,10 +332,11 @@ func (s *commentService) CreateComment(ctx context.Context, createCommentDTO *Cr
 		return nil
 	})
 	if err != nil {
-		_, ok := err.(*errs.AppError)
-		if !ok {
+		if !txCallbackErr {
 			logs.Error(err)
+			return nil, err
 		}
+
 		return nil, err
 	}
 
@@ -322,6 +346,11 @@ func (s *commentService) CreateComment(ctx context.Context, createCommentDTO *Cr
 		createComment.ID,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find comment by id with user and post relations")
 	}
@@ -332,6 +361,11 @@ func (s *commentService) CreateComment(ctx context.Context, createCommentDTO *Cr
 		&comment.User,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, err
 	}
@@ -396,6 +430,11 @@ func (s *commentService) CreateComment(ctx context.Context, createCommentDTO *Cr
 			notificationID,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification by id with sender relation")
 		}
@@ -406,6 +445,11 @@ func (s *commentService) CreateComment(ctx context.Context, createCommentDTO *Cr
 			&notification.Sender,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, err
 		}
@@ -483,12 +527,17 @@ func (s *commentService) CreateReplyComment(ctx context.Context, createReplyComm
 		s.db,
 		*postIDParse,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id")
+		}
+
 		logs.Warn(err)
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", *postIDParse))
 	}
@@ -498,12 +547,17 @@ func (s *commentService) CreateReplyComment(ctx context.Context, createReplyComm
 		s.db,
 		*parentIDParse,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find comment by id")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find comment by id")
+		}
+
 		logs.Warn(err)
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Comment by id %v is not found", *parentIDParse))
 	}
@@ -515,6 +569,7 @@ func (s *commentService) CreateReplyComment(ctx context.Context, createReplyComm
 		ParentID: &commentByID.ID,
 	}
 	var notificationID uuid.UUID
+	var txCallbackErr bool
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		err = s.commentRepository.Create(
@@ -523,6 +578,13 @@ func (s *commentService) CreateReplyComment(ctx context.Context, createReplyComm
 			createReplyComment,
 		)
 		if err != nil {
+			txCallbackErr = true
+
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return err
+			}
+
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to create reply comment")
 		}
@@ -531,6 +593,8 @@ func (s *commentService) CreateReplyComment(ctx context.Context, createReplyComm
 		if createReplyCommentDTO.FileURL != "" {
 			fileDIR, filename, err := helpers.SplitPresignedURL(createReplyCommentDTO.FileURL)
 			if err != nil {
+				txCallbackErr = true
+
 				logs.Error(err)
 				return errs.NewUnexpectedErrorWithMessage("Failed to split presigned url")
 			}
@@ -544,6 +608,13 @@ func (s *commentService) CreateReplyComment(ctx context.Context, createReplyComm
 				models.FileTypeComment,
 			)
 			if err != nil {
+				txCallbackErr = true
+
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return err
+				}
+
 				logs.Error(err)
 				return errs.NewInternalServerErrorWithMessage("Failed to update file of reply")
 			}
@@ -565,6 +636,7 @@ func (s *commentService) CreateReplyComment(ctx context.Context, createReplyComm
 				createNotificationDTO,
 			)
 			if err != nil {
+				txCallbackErr = true
 				return err
 			}
 
@@ -574,10 +646,11 @@ func (s *commentService) CreateReplyComment(ctx context.Context, createReplyComm
 		return nil
 	})
 	if err != nil {
-		_, ok := err.(*errs.AppError)
-		if !ok {
+		if !txCallbackErr {
 			logs.Error(err)
+			return nil, err
 		}
+
 		return nil, err
 	}
 
@@ -587,6 +660,11 @@ func (s *commentService) CreateReplyComment(ctx context.Context, createReplyComm
 		createReplyComment.ID,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find reply by id with user and post relations")
 	}
@@ -597,6 +675,11 @@ func (s *commentService) CreateReplyComment(ctx context.Context, createReplyComm
 		&reply.User,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, err
 	}
@@ -663,6 +746,11 @@ func (s *commentService) CreateReplyComment(ctx context.Context, createReplyComm
 			notificationID,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification by id with sender relation")
 		}
@@ -673,6 +761,11 @@ func (s *commentService) CreateReplyComment(ctx context.Context, createReplyComm
 			&notification.Sender,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, err
 		}
@@ -762,12 +855,17 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 		s.db,
 		*postIDParse,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id")
+		}
+
 		logs.Warn(err)
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", *postIDParse))
 	}
@@ -777,12 +875,17 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 		s.db,
 		*parentIDParse,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find comment by id")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find comment by id")
+		}
+
 		logs.Warn(err)
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Comment by id %v is not found", *parentIDParse))
 	}
@@ -792,12 +895,17 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 		s.db,
 		*replyIDParse,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find reply by id")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find reply by id")
+		}
+
 		logs.Warn(err)
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Reply by id %v is not found", *replyIDParse))
 	}
@@ -811,6 +919,7 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 		ReplyToUserID: &replyByID.UserID,
 	}
 	var notificationID uuid.UUID
+	var txCallbackErr bool
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		err = s.commentRepository.Create(
@@ -819,6 +928,13 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 			createTagReply,
 		)
 		if err != nil {
+			txCallbackErr = true
+
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return err
+			}
+
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to create tag reply")
 		}
@@ -827,6 +943,8 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 		if createTagReplyDTO.FileURL != "" {
 			fileDIR, filename, err := helpers.SplitPresignedURL(createTagReplyDTO.FileURL)
 			if err != nil {
+				txCallbackErr = true
+
 				logs.Error(err)
 				return errs.NewUnexpectedErrorWithMessage("Failed to split presigned url")
 			}
@@ -840,6 +958,13 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 				models.FileTypeComment,
 			)
 			if err != nil {
+				txCallbackErr = true
+
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return err
+				}
+
 				logs.Error(err)
 				return errs.NewInternalServerErrorWithMessage("Failed to update file of tag")
 			}
@@ -861,6 +986,7 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 				createNotificationDTO,
 			)
 			if err != nil {
+				txCallbackErr = true
 				return err
 			}
 
@@ -870,10 +996,11 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 		return nil
 	})
 	if err != nil {
-		_, ok := err.(*errs.AppError)
-		if !ok {
+		if !txCallbackErr {
 			logs.Error(err)
+			return nil, err
 		}
+
 		return nil, err
 	}
 
@@ -883,6 +1010,11 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 		createTagReply.ID,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find tag by id with comment relations")
 	}
@@ -893,6 +1025,11 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 		&tag.User,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, err
 	}
@@ -903,6 +1040,11 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 		tag.ReplyToUser,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, err
 	}
@@ -989,6 +1131,11 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 			notificationID,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification by id with sender relation")
 		}
@@ -999,6 +1146,11 @@ func (s *commentService) CreateTagReply(ctx context.Context, createTagReplyDTO *
 			&notification.Sender,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, err
 		}
@@ -1092,12 +1244,17 @@ func (s *commentService) FindsWithPostIDCursorPagination(
 		s.db,
 		*postIDParse,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id")
+		}
+
 		logs.Warn(err)
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", *postIDParse))
 	}
@@ -1113,6 +1270,11 @@ func (s *commentService) FindsWithPostIDCursorPagination(
 			limitInt,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find comments cursor pagination with comment relations")
 		}
@@ -1122,12 +1284,17 @@ func (s *commentService) FindsWithPostIDCursorPagination(
 			s.db,
 			*cursorID,
 		)
-		if err != nil && !helpers.IsErrRecordNotFound(err) {
-			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find comment cursor by comment id")
-		}
+		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
 
-		if helpers.IsErrRecordNotFound(err) {
+			if !helpers.IsErrRecordNotFound(err) {
+				logs.Error(err)
+				return nil, errs.NewInternalServerErrorWithMessage("Failed to find comment cursor by comment id")
+			}
+
 			logs.Warn(err)
 			return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Cursor by comment id %v is not found", *cursorID))
 		}
@@ -1140,6 +1307,11 @@ func (s *commentService) FindsWithPostIDCursorPagination(
 			limitInt,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find comments cursor pagination with comment relations")
 		}
@@ -1152,6 +1324,11 @@ func (s *commentService) FindsWithPostIDCursorPagination(
 			&comment.User,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, err
 		}
@@ -1164,6 +1341,11 @@ func (s *commentService) FindsWithPostIDCursorPagination(
 				&like.User,
 			)
 			if err != nil {
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return nil, err
+				}
+
 				logs.Error(err)
 				return nil, err
 			}
@@ -1220,6 +1402,11 @@ func (s *commentService) FindsWithPostIDCursorPagination(
 				&replyOrTag.User,
 			)
 			if err != nil {
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return nil, err
+				}
+
 				logs.Error(err)
 				return nil, err
 			}
@@ -1232,6 +1419,11 @@ func (s *commentService) FindsWithPostIDCursorPagination(
 					&like.User,
 				)
 				if err != nil {
+					if helpers.IsErrContextCanceled(err) {
+						logs.Warn(err)
+						return nil, err
+					}
+
 					logs.Error(err)
 					return nil, err
 				}
@@ -1300,6 +1492,11 @@ func (s *commentService) FindsWithPostIDCursorPagination(
 					replyOrTag.ReplyToUser,
 				)
 				if err != nil {
+					if helpers.IsErrContextCanceled(err) {
+						logs.Warn(err)
+						return nil, err
+					}
+
 					logs.Error(err)
 					return nil, err
 				}
@@ -1373,12 +1570,17 @@ func (s *commentService) UpdateComment(ctx context.Context, updateCommentDTO *Up
 		s.db,
 		*commentIDParse,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find comment by id")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find comment by id")
+		}
+
 		logs.Warn(err)
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Comment by id %v is not found", *commentIDParse))
 	}
@@ -1390,6 +1592,8 @@ func (s *commentService) UpdateComment(ctx context.Context, updateCommentDTO *Up
 
 	updatedComment := &models.Comment{}
 	var file *models.File
+	var txCallbackErr bool
+
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		updateComment := &models.Comment{
 			Message: updateCommentDTO.Message,
@@ -1402,6 +1606,13 @@ func (s *commentService) UpdateComment(ctx context.Context, updateCommentDTO *Up
 			updateComment,
 		)
 		if err != nil {
+			txCallbackErr = true
+
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return err
+			}
+
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to update comment")
 		}
@@ -1413,9 +1624,18 @@ func (s *commentService) UpdateComment(ctx context.Context, updateCommentDTO *Up
 				tx,
 				updatedComment.ID,
 			)
-			if err != nil && !helpers.IsErrRecordNotFound(err) {
-				logs.Error(err)
-				return errs.NewInternalServerErrorWithMessage("Failed to find file of comment")
+			if err != nil {
+				txCallbackErr = true
+
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return err
+				}
+
+				if !helpers.IsErrRecordNotFound(err) {
+					logs.Error(err)
+					return errs.NewInternalServerErrorWithMessage("Failed to find file of comment")
+				}
 			}
 
 			if file != nil {
@@ -1427,6 +1647,13 @@ func (s *commentService) UpdateComment(ctx context.Context, updateCommentDTO *Up
 					file.FileType,
 				)
 				if err != nil {
+					txCallbackErr = true
+
+					if helpers.IsErrContextCanceled(err) {
+						logs.Warn(err)
+						return err
+					}
+
 					logs.Error(err)
 					return errs.NewInternalServerErrorWithMessage("Failed to delete file of comment")
 				}
@@ -1434,6 +1661,8 @@ func (s *commentService) UpdateComment(ctx context.Context, updateCommentDTO *Up
 
 			fileDIR, filename, err := helpers.SplitPresignedURL(updateCommentDTO.FileURL)
 			if err != nil {
+				txCallbackErr = true
+
 				logs.Error(err)
 				return errs.NewUnexpectedErrorWithMessage("Failed to split presigned url")
 			}
@@ -1447,6 +1676,13 @@ func (s *commentService) UpdateComment(ctx context.Context, updateCommentDTO *Up
 				models.FileTypeComment,
 			)
 			if err != nil {
+				txCallbackErr = true
+
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return err
+				}
+
 				logs.Error(err)
 				return errs.NewInternalServerErrorWithMessage("Failed to update file of comment")
 			}
@@ -1455,10 +1691,11 @@ func (s *commentService) UpdateComment(ctx context.Context, updateCommentDTO *Up
 		return nil
 	})
 	if err != nil {
-		_, ok := err.(*errs.AppError)
-		if !ok {
+		if !txCallbackErr {
 			logs.Error(err)
+			return nil, err
 		}
+
 		return nil, err
 	}
 
@@ -1469,6 +1706,11 @@ func (s *commentService) UpdateComment(ctx context.Context, updateCommentDTO *Up
 			file.Filename,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to delete file from bucket")
 		}
@@ -1518,12 +1760,17 @@ func (s *commentService) DeleteComment(
 		s.db,
 		*commentIDParse,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find comment by id with post and parent relations")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find comment by id with post and parent relations")
+		}
+
 		logs.Warn(err)
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Comment by id %v is not found", *commentIDParse))
 	}
@@ -1538,9 +1785,16 @@ func (s *commentService) DeleteComment(
 		s.db,
 		commentByID.ID,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find file of comment")
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find file of comment")
+		}
 	}
 
 	var notification *models.Notification
@@ -1555,9 +1809,16 @@ func (s *commentService) DeleteComment(
 			commentByID.ID,
 			models.NotificationTypeComment,
 		)
-		if err != nil && !helpers.IsErrRecordNotFound(err) {
-			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification of comment")
+		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
+			if !helpers.IsErrRecordNotFound(err) {
+				logs.Error(err)
+				return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification of comment")
+			}
 		}
 	} else if commentByID.ParentID != nil && commentByID.ReplyID == nil && commentByID.ReplyToUserID == nil {
 		// กรณี reply
@@ -1569,9 +1830,16 @@ func (s *commentService) DeleteComment(
 			commentByID.ID,
 			models.NotificationTypeReply,
 		)
-		if err != nil && !helpers.IsErrRecordNotFound(err) {
-			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification of reply")
+		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
+			if !helpers.IsErrRecordNotFound(err) {
+				logs.Error(err)
+				return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification of reply")
+			}
 		}
 	} else {
 		// กรณี tag
@@ -1583,13 +1851,22 @@ func (s *commentService) DeleteComment(
 			commentByID.ID,
 			models.NotificationTypeTag,
 		)
-		if err != nil && !helpers.IsErrRecordNotFound(err) {
-			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification of tag")
+		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
+			if !helpers.IsErrRecordNotFound(err) {
+				logs.Error(err)
+				return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification of tag")
+			}
 		}
 	}
 
 	deletedComment := &models.Comment{}
+	var txCallbackErr bool
+
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		// กรณีมีไฟล์
 		if file != nil {
@@ -1601,6 +1878,13 @@ func (s *commentService) DeleteComment(
 				file.FileType,
 			)
 			if err != nil {
+				txCallbackErr = true
+
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return err
+				}
+
 				logs.Error(err)
 				return errs.NewInternalServerErrorWithMessage("Failed to delete file of comment")
 			}
@@ -1613,6 +1897,13 @@ func (s *commentService) DeleteComment(
 			commentByID.ID,
 		)
 		if err != nil {
+			txCallbackErr = true
+
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return err
+			}
+
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to delete comment")
 		}
@@ -1620,10 +1911,11 @@ func (s *commentService) DeleteComment(
 		return nil
 	})
 	if err != nil {
-		_, ok := err.(*errs.AppError)
-		if !ok {
+		if !txCallbackErr {
 			logs.Error(err)
+			return nil, err
 		}
+
 		return nil, err
 	}
 
@@ -1634,6 +1926,11 @@ func (s *commentService) DeleteComment(
 			file.Filename,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to delete file from bucket")
 		}
@@ -1708,12 +2005,17 @@ func (s *commentService) ToggleLike(
 		s.db,
 		*postIDParse,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return "", nil, err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id")
+		}
+
 		logs.Warn(err)
 		return "", nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", *postIDParse))
 	}
@@ -1723,15 +2025,22 @@ func (s *commentService) ToggleLike(
 		s.db,
 		*commentIDParse,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find comment by id")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return "", nil, err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find comment by id")
+		}
+
 		logs.Warn(err)
 		return "", nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Comment by id %v is not found", *commentIDParse))
 	}
+
+	var txCallbackErr bool
 
 	_, err = s.likeRepository.FindOfComment(
 		ctx,
@@ -1739,13 +2048,18 @@ func (s *commentService) ToggleLike(
 		userID,
 		commentByID.ID,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find like of comment")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return "", nil, err
+		}
 
-	// กรณี like
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find like of comment")
+		}
+
+		// กรณี like
 		var createNotificationDTO *models.Notification
 
 		if commentByID.UserID != userID {
@@ -1770,6 +2084,13 @@ func (s *commentService) ToggleLike(
 				createLike,
 			)
 			if err != nil {
+				txCallbackErr = true
+
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return err
+				}
+
 				logs.Error(err)
 				return errs.NewInternalServerErrorWithMessage("Failed to create like of comment")
 			}
@@ -1782,6 +2103,7 @@ func (s *commentService) ToggleLike(
 					createNotificationDTO,
 				)
 				if err != nil {
+					txCallbackErr = true
 					return err
 				}
 			}
@@ -1789,10 +2111,11 @@ func (s *commentService) ToggleLike(
 			return nil
 		})
 		if err != nil {
-			_, ok := err.(*errs.AppError)
-			if !ok {
+			if !txCallbackErr {
 				logs.Error(err)
+				return "", nil, err
 			}
+
 			return "", nil, err
 		}
 
@@ -1803,6 +2126,11 @@ func (s *commentService) ToggleLike(
 			commentByID.ID,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return "", nil, err
+			}
+
 			logs.Error(err)
 			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find like of comment with user relation")
 		}
@@ -1813,6 +2141,11 @@ func (s *commentService) ToggleLike(
 			&createdLike.User,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return "", nil, err
+			}
+
 			logs.Error(err)
 			return "", nil, err
 		}
@@ -1849,6 +2182,11 @@ func (s *commentService) ToggleLike(
 				createNotificationDTO.ID,
 			)
 			if err != nil {
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return "", nil, err
+				}
+
 				logs.Error(err)
 				return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find notification by id with sender relation")
 			}
@@ -1859,6 +2197,11 @@ func (s *commentService) ToggleLike(
 				&createdNotification.Sender,
 			)
 			if err != nil {
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return "", nil, err
+				}
+
 				logs.Error(err)
 				return "", nil, err
 			}
@@ -1913,6 +2256,7 @@ func (s *commentService) ToggleLike(
 	// กรณี unlike
 	deletedLike := &models.Like{}
 	deletedNotification := &models.Notification{}
+
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		deletedLike, err = s.likeRepository.DeleteOfComment(
 			ctx,
@@ -1921,6 +2265,13 @@ func (s *commentService) ToggleLike(
 			commentByID.ID,
 		)
 		if err != nil {
+			txCallbackErr = true
+
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return err
+			}
+
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to delete like of comment")
 		}
@@ -1934,6 +2285,13 @@ func (s *commentService) ToggleLike(
 			commentByID.ID,
 		)
 		if err != nil {
+			txCallbackErr = true
+
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return err
+			}
+
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to delete notification of like comment")
 		}
@@ -1941,10 +2299,11 @@ func (s *commentService) ToggleLike(
 		return nil
 	})
 	if err != nil {
-		_, ok := err.(*errs.AppError)
-		if !ok {
+		if !txCallbackErr {
 			logs.Error(err)
+			return "", nil, err
 		}
+
 		return "", nil, err
 	}
 

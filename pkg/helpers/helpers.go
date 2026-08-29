@@ -57,6 +57,14 @@ func IsErrRecordNotFound(err error) bool {
 	return errors.Is(err, gorm.ErrRecordNotFound)
 }
 
+func IsErrContextCanceled(err error) bool {
+	return errors.Is(err, context.Canceled)
+}
+
+func IsErrContextDeadlineExceeded(err error) bool {
+	return errors.Is(err, context.DeadlineExceeded)
+}
+
 func SendEmail(
 	email,
 	otp,
@@ -150,6 +158,19 @@ func GetErrorMessages(err validator.FieldError) string {
 }
 
 func HandleError(c *gin.Context, err error) {
+	if IsErrContextCanceled(err) {
+		return
+	}
+
+	if IsErrContextDeadlineExceeded(err) {
+		c.AbortWithStatusJSON(http.StatusRequestTimeout, gin.H{
+			"status":  http.StatusRequestTimeout,
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
 	switch e := err.(type) {
 	case *errs.AppError:
 		c.AbortWithStatusJSON(e.Status, gin.H{

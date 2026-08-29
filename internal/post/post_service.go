@@ -209,11 +209,17 @@ func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostD
 		createPostDTO.UserID,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find users by id except")
 	}
 
 	createNotificationsDTO := []models.Notification{}
+	var txCallbackErr bool
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		err := s.postRepository.Create(
@@ -222,6 +228,13 @@ func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostD
 			createPost,
 		)
 		if err != nil {
+			txCallbackErr = true
+
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return err
+			}
+
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to create post")
 		}
@@ -231,6 +244,8 @@ func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostD
 			for _, fileURL := range createPostDTO.FilesURL {
 				fileDIR, filename, err := helpers.SplitPresignedURL(fileURL)
 				if err != nil {
+					txCallbackErr = true
+
 					logs.Error(err)
 					return errs.NewUnexpectedErrorWithMessage("Failed to split presigned url")
 				}
@@ -243,6 +258,13 @@ func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostD
 					models.FileTypePost,
 				)
 				if err != nil {
+					txCallbackErr = true
+
+					if helpers.IsErrContextCanceled(err) {
+						logs.Warn(err)
+						return err
+					}
+
 					logs.Error(err)
 					return errs.NewInternalServerErrorWithMessage("Failed to update file of post")
 				}
@@ -267,6 +289,7 @@ func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostD
 				createNotificationsDTO,
 			)
 			if err != nil {
+				txCallbackErr = true
 				return err
 			}
 		}
@@ -274,10 +297,11 @@ func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostD
 		return nil
 	})
 	if err != nil {
-		_, ok := err.(*errs.AppError)
-		if !ok {
+		if !txCallbackErr {
 			logs.Error(err)
+			return nil, err
 		}
+
 		return nil, err
 	}
 
@@ -287,6 +311,11 @@ func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostD
 		createPost.ID,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id with user relation")
 	}
@@ -297,6 +326,11 @@ func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostD
 		&post.User,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, err
 	}
@@ -351,6 +385,11 @@ func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostD
 			notificationsID,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notifications by id with sender relation")
 		}
@@ -362,6 +401,11 @@ func (s *postService) CreatePost(ctx context.Context, createPostDTO *CreatePostD
 				&notifications[i].Sender,
 			)
 			if err != nil {
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return nil, err
+				}
+
 				logs.Error(err)
 				return nil, err
 			}
@@ -439,12 +483,17 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 		s.db,
 		*parentID,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id with user relation")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id with user relation")
+		}
+
 		logs.Warn(err)
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post id %v to share is not found", parentID))
 	}
@@ -456,6 +505,7 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 	}
 
 	var notificationID uuid.UUID
+	var txCallbackErr bool
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		err = s.postRepository.Create(
@@ -464,6 +514,13 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 			createSharePost,
 		)
 		if err != nil {
+			txCallbackErr = true
+
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return err
+			}
+
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to create share post")
 		}
@@ -483,6 +540,7 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 				createNotificationDTO,
 			)
 			if err != nil {
+				txCallbackErr = true
 				return err
 			}
 
@@ -492,10 +550,11 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 		return nil
 	})
 	if err != nil {
-		_, ok := err.(*errs.AppError)
-		if !ok {
+		if !txCallbackErr {
 			logs.Error(err)
+			return nil, err
 		}
+
 		return nil, err
 	}
 
@@ -505,6 +564,11 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 		createSharePost.ID,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id with user relation")
 	}
@@ -515,6 +579,11 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 		&sharePost.User,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, err
 	}
@@ -525,6 +594,11 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 		&post.User,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, err
 	}
@@ -592,6 +666,11 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 			notificationID,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification by id with sender relation")
 		}
@@ -602,6 +681,11 @@ func (s *postService) CreateSharePost(ctx context.Context, createSharePostDTO *C
 			&notification.Sender,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, err
 		}
@@ -705,6 +789,11 @@ func (s *postService) FindsCursorPagination(
 			limitInt,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts cursor pagination with post relations")
 		}
@@ -714,12 +803,17 @@ func (s *postService) FindsCursorPagination(
 			s.db,
 			*cursorID,
 		)
-		if err != nil && !helpers.IsErrRecordNotFound(err) {
-			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find post cursor by post id")
-		}
+		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
 
-		if helpers.IsErrRecordNotFound(err) {
+			if !helpers.IsErrRecordNotFound(err) {
+				logs.Error(err)
+				return nil, errs.NewInternalServerErrorWithMessage("Failed to find post cursor by post id")
+			}
+
 			logs.Warn(err)
 			return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Cursor by post id %v is not found", *cursorID))
 		}
@@ -731,6 +825,11 @@ func (s *postService) FindsCursorPagination(
 			limitInt,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts cursor pagination with post relations")
 		}
@@ -743,6 +842,11 @@ func (s *postService) FindsCursorPagination(
 			&post.User,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, err
 		}
@@ -768,6 +872,11 @@ func (s *postService) FindsCursorPagination(
 				&like.User,
 			)
 			if err != nil {
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return nil, err
+				}
+
 				logs.Error(err)
 				return nil, err
 			}
@@ -830,6 +939,11 @@ func (s *postService) FindsCursorPagination(
 				&post.Parent.User,
 			)
 			if err != nil {
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return nil, err
+				}
+
 				logs.Error(err)
 				return nil, err
 			}
@@ -904,12 +1018,17 @@ func (s *postService) FindsWithUserIDCursorPagination(
 		s.db,
 		*userIDParse,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find user by id")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find user by id")
+		}
+
 		logs.Warn(err)
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("User by id %v is not found", *userIDParse))
 	}
@@ -949,6 +1068,11 @@ func (s *postService) FindsWithUserIDCursorPagination(
 			limitInt,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts by user id cursor pagination with post relations")
 		}
@@ -958,12 +1082,17 @@ func (s *postService) FindsWithUserIDCursorPagination(
 			s.db,
 			*cursorID,
 		)
-		if err != nil && !helpers.IsErrRecordNotFound(err) {
-			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find post cursor by post id")
-		}
+		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
 
-		if helpers.IsErrRecordNotFound(err) {
+			if !helpers.IsErrRecordNotFound(err) {
+				logs.Error(err)
+				return nil, errs.NewInternalServerErrorWithMessage("Failed to find post cursor by post id")
+			}
+
 			logs.Warn(err)
 			return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Cursor by post id %v is not found", *cursorID))
 		}
@@ -976,6 +1105,11 @@ func (s *postService) FindsWithUserIDCursorPagination(
 			limitInt,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find posts by user id cursor pagination with post relations")
 		}
@@ -988,6 +1122,11 @@ func (s *postService) FindsWithUserIDCursorPagination(
 			&post.User,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, err
 		}
@@ -1013,6 +1152,11 @@ func (s *postService) FindsWithUserIDCursorPagination(
 				&like.User,
 			)
 			if err != nil {
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return nil, err
+				}
+
 				logs.Error(err)
 				return nil, err
 			}
@@ -1075,6 +1219,11 @@ func (s *postService) FindsWithUserIDCursorPagination(
 				&post.Parent.User,
 			)
 			if err != nil {
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return nil, err
+				}
+
 				logs.Error(err)
 				return nil, err
 			}
@@ -1142,9 +1291,16 @@ func (s *postService) FindWithID(ctx context.Context, postID string) (*Post, err
 		s.redisClient,
 		key,
 	)
-	if err != nil && err != redis.Nil {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to get post from redis")
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
+		if err != redis.Nil {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to get post from redis")
+		}
 	}
 
 	if err == nil {
@@ -1163,12 +1319,17 @@ func (s *postService) FindWithID(ctx context.Context, postID string) (*Post, err
 		s.db,
 		*postIDParse,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id with post relations")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id with post relations")
+		}
+
 		logs.Warn(err)
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", *postIDParse))
 	}
@@ -1179,6 +1340,11 @@ func (s *postService) FindWithID(ctx context.Context, postID string) (*Post, err
 		&post.User,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, err
 	}
@@ -1204,6 +1370,11 @@ func (s *postService) FindWithID(ctx context.Context, postID string) (*Post, err
 			&like.User,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, err
 		}
@@ -1266,6 +1437,11 @@ func (s *postService) FindWithID(ctx context.Context, postID string) (*Post, err
 			&post.Parent.User,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, err
 		}
@@ -1315,6 +1491,11 @@ func (s *postService) FindWithID(ctx context.Context, postID string) (*Post, err
 		time.Minute*10,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to set post from redis")
 	}
@@ -1344,12 +1525,17 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 		s.db,
 		*postID,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id")
+		}
+
 		logs.Warn(err)
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", *postID))
 	}
@@ -1361,6 +1547,8 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 
 	updatedPost := &models.Post{}
 	files := []models.File{}
+	var txCallbackErr bool
+
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		updatePost := &models.Post{
 			Message: updatePostDTO.Message,
@@ -1373,6 +1561,13 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 			updatePost,
 		)
 		if err != nil {
+			txCallbackErr = true
+
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return err
+			}
+
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to update post")
 		}
@@ -1385,6 +1580,13 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 				updatedPost.ID,
 			)
 			if err != nil {
+				txCallbackErr = true
+
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return err
+				}
+
 				logs.Error(err)
 				return errs.NewInternalServerErrorWithMessage("Failed to find files of post")
 			}
@@ -1396,6 +1598,13 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 					files,
 				)
 				if err != nil {
+					txCallbackErr = true
+
+					if helpers.IsErrContextCanceled(err) {
+						logs.Warn(err)
+						return err
+					}
+
 					logs.Error(err)
 					return errs.NewInternalServerErrorWithMessage("Failed to delete files of post")
 				}
@@ -1404,6 +1613,8 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 			for _, fileURL := range updatePostDTO.FilesURL {
 				fileDIR, filename, err := helpers.SplitPresignedURL(fileURL)
 				if err != nil {
+					txCallbackErr = true
+
 					logs.Error(err)
 					return errs.NewUnexpectedErrorWithMessage("Failed to split presigned url")
 				}
@@ -1417,6 +1628,13 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 					models.FileTypePost,
 				)
 				if err != nil {
+					txCallbackErr = true
+
+					if helpers.IsErrContextCanceled(err) {
+						logs.Warn(err)
+						return err
+					}
+
 					logs.Error(err)
 					return errs.NewInternalServerErrorWithMessage("Failed to update file of post")
 				}
@@ -1426,10 +1644,11 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 		return nil
 	})
 	if err != nil {
-		_, ok := err.(*errs.AppError)
-		if !ok {
+		if !txCallbackErr {
 			logs.Error(err)
+			return nil, err
 		}
+
 		return nil, err
 	}
 
@@ -1445,6 +1664,11 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 			keys,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to delete files from bucket")
 		}
@@ -1464,6 +1688,21 @@ func (s *postService) UpdatePost(ctx context.Context, updatePostDTO *UpdatePostD
 		ID:       updatedPost.ID,
 		Message:  updatedPost.Message,
 		FilesURL: filesURL,
+	}
+
+	err = helpers.RedisDelete(
+		ctx,
+		s.redisClient,
+		fmt.Sprintf("post:find:%v", postByID.ID),
+	)
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to delete key from redis")
 	}
 
 	go s.postSocket.EmitUpdate(updatePostDTOSocket)
@@ -1492,12 +1731,17 @@ func (s *postService) DeletePost(
 		s.db,
 		*postIDParse,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id with parent relation")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id with parent relation")
+		}
+
 		logs.Warn(err)
 		return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", *postIDParse))
 	}
@@ -1513,6 +1757,11 @@ func (s *postService) DeletePost(
 		post.ID,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find files of post")
 	}
@@ -1529,9 +1778,16 @@ func (s *postService) DeletePost(
 			post.Parent.UserID,
 			post.ID,
 		)
-		if err != nil && !helpers.IsErrRecordNotFound(err) {
-			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification of share post")
+		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
+			if !helpers.IsErrRecordNotFound(err) {
+				logs.Error(err)
+				return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification of share post")
+			}
 		}
 	} else {
 		// กรณีโพสปกติ
@@ -1541,6 +1797,11 @@ func (s *postService) DeletePost(
 			post.UserID,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find users except")
 		}
@@ -1554,6 +1815,11 @@ func (s *postService) DeletePost(
 				post.ID,
 			)
 			if err != nil {
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return nil, err
+				}
+
 				logs.Error(err)
 				return nil, errs.NewInternalServerErrorWithMessage("Failed to find notifications of post")
 			}
@@ -1563,6 +1829,8 @@ func (s *postService) DeletePost(
 	}
 
 	deletedPost := &models.Post{}
+	var txCallbackErr bool
+
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		if len(files) > 0 {
 			err = s.fileRepository.DeleteMany(
@@ -1571,6 +1839,13 @@ func (s *postService) DeletePost(
 				files,
 			)
 			if err != nil {
+				txCallbackErr = true
+
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return err
+				}
+
 				logs.Error(err)
 				return errs.NewInternalServerErrorWithMessage("Failed to delete files of post")
 			}
@@ -1583,6 +1858,13 @@ func (s *postService) DeletePost(
 			post.ID,
 		)
 		if err != nil {
+			txCallbackErr = true
+
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return err
+			}
+
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to delete post")
 		}
@@ -1590,10 +1872,11 @@ func (s *postService) DeletePost(
 		return nil
 	})
 	if err != nil {
-		_, ok := err.(*errs.AppError)
-		if !ok {
+		if !txCallbackErr {
 			logs.Error(err)
+			return nil, err
 		}
+
 		return nil, err
 	}
 
@@ -1609,9 +1892,29 @@ func (s *postService) DeletePost(
 			keys,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to delete files from bucket")
 		}
+	}
+
+	err = helpers.RedisDelete(
+		ctx,
+		s.redisClient,
+		fmt.Sprintf("post:find:%v", post.ID),
+	)
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
+		logs.Error(err)
+		return nil, errs.NewInternalServerErrorWithMessage("Failed to delete key from redis")
 	}
 
 	deletePostDTOSocket := &postSocket.DeletePostDTO{
@@ -1682,15 +1985,22 @@ func (s *postService) ToggleLike(
 		s.db,
 		*postIDParse,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return "", nil, err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find post by id")
+		}
+
 		logs.Warn(err)
 		return "", nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Post by id %v is not found", *postIDParse))
 	}
+
+	var txCallbackErr bool
 
 	_, err = s.likeRepository.FindOfPost(
 		ctx,
@@ -1698,13 +2008,18 @@ func (s *postService) ToggleLike(
 		userID,
 		postByID.ID,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find like of post")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return "", nil, err
+		}
 
-	// กรณี like
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find like of post")
+		}
+
+		// กรณี like
 		var createNotificationDTO *models.Notification
 
 		if postByID.UserID != userID {
@@ -1728,6 +2043,13 @@ func (s *postService) ToggleLike(
 				createLike,
 			)
 			if err != nil {
+				txCallbackErr = true
+
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return err
+				}
+
 				logs.Error(err)
 				return errs.NewInternalServerErrorWithMessage("Failed to create like of post")
 			}
@@ -1740,6 +2062,7 @@ func (s *postService) ToggleLike(
 					createNotificationDTO,
 				)
 				if err != nil {
+					txCallbackErr = true
 					return err
 				}
 			}
@@ -1747,10 +2070,11 @@ func (s *postService) ToggleLike(
 			return nil
 		})
 		if err != nil {
-			_, ok := err.(*errs.AppError)
-			if !ok {
+			if !txCallbackErr {
 				logs.Error(err)
+				return "", nil, err
 			}
+
 			return "", nil, err
 		}
 
@@ -1761,6 +2085,11 @@ func (s *postService) ToggleLike(
 			postByID.ID,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return "", nil, err
+			}
+
 			logs.Error(err)
 			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find like of post with user relation")
 		}
@@ -1771,8 +2100,28 @@ func (s *postService) ToggleLike(
 			&createdLike.User,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return "", nil, err
+			}
+
 			logs.Error(err)
 			return "", nil, err
+		}
+
+		err = helpers.RedisDelete(
+			ctx,
+			s.redisClient,
+			fmt.Sprintf("post:find:%v", postByID.ID),
+		)
+		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return "", nil, err
+			}
+
+			logs.Error(err)
+			return "", nil, errs.NewInternalServerErrorWithMessage("Failed to delete key from redis")
 		}
 
 		secureUserLike := &dto.SecureUser{
@@ -1807,6 +2156,11 @@ func (s *postService) ToggleLike(
 				createNotificationDTO.ID,
 			)
 			if err != nil {
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return "", nil, err
+				}
+
 				logs.Error(err)
 				return "", nil, errs.NewInternalServerErrorWithMessage("Failed to find notification by id with sender relation")
 			}
@@ -1817,6 +2171,11 @@ func (s *postService) ToggleLike(
 				&createdNotification.Sender,
 			)
 			if err != nil {
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return "", nil, err
+				}
+
 				logs.Error(err)
 				return "", nil, err
 			}
@@ -1869,6 +2228,7 @@ func (s *postService) ToggleLike(
 	// กรณี unlike
 	deletedLike := &models.Like{}
 	deletedNotification := &models.Notification{}
+
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		deletedLike, err = s.likeRepository.DeleteOfPost(
 			ctx,
@@ -1877,6 +2237,13 @@ func (s *postService) ToggleLike(
 			postByID.ID,
 		)
 		if err != nil {
+			txCallbackErr = true
+
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return err
+			}
+
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to delete like of post")
 		}
@@ -1889,6 +2256,13 @@ func (s *postService) ToggleLike(
 			postByID.ID,
 		)
 		if err != nil {
+			txCallbackErr = true
+
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return err
+			}
+
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to delete notification of like post")
 		}
@@ -1896,11 +2270,27 @@ func (s *postService) ToggleLike(
 		return nil
 	})
 	if err != nil {
-		_, ok := err.(*errs.AppError)
-		if !ok {
+		if !txCallbackErr {
 			logs.Error(err)
+			return "", nil, err
 		}
+
 		return "", nil, err
+	}
+
+	err = helpers.RedisDelete(
+		ctx,
+		s.redisClient,
+		fmt.Sprintf("post:find:%v", postByID.ID),
+	)
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return "", nil, err
+		}
+
+		logs.Error(err)
+		return "", nil, errs.NewInternalServerErrorWithMessage("Failed to delete key from redis")
 	}
 
 	postLikeDTO := &postSocket.PostLikeDTO{

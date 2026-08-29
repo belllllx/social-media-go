@@ -320,13 +320,15 @@ func (h *authHandler) VerifyOTPForgotPassword(c *gin.Context) {
 //	@Failure		500		{object}	response.SwaggerResponse
 //	@Router			/auth/login [post]
 func (h *authHandler) Login(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	userID, ok := c.MustGet("userID").(*uuid.UUID)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
 	}
 
-	tokens, err := h.authService.CreateTokens(*userID)
+	tokens, err := h.authService.CreateTokens(ctx, *userID)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return
@@ -374,13 +376,15 @@ func (h *authHandler) Profile(c *gin.Context) {
 //	@Failure		500	{object}	response.SwaggerResponse
 //	@Router			/auth/refresh-token [post]
 func (h *authHandler) Refresh(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	userID, ok := c.MustGet("userID").(uuid.UUID)
 	if !ok {
 		response.AbortWithUnauthorized(c)
 		return
 	}
 
-	tokens, err := h.authService.CreateTokens(userID)
+	tokens, err := h.authService.CreateTokens(ctx, userID)
 	if err != nil {
 		helpers.HandleError(c, err)
 		return

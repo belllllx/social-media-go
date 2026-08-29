@@ -126,6 +126,11 @@ func (s *fileService) UploadFile(
 		fileDataDTO.ContentType,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to upload file to bucket")
 	}
@@ -136,6 +141,11 @@ func (s *fileService) UploadFile(
 		key,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to presign get file object")
 	}
@@ -150,16 +160,28 @@ func (s *fileService) UploadFile(
 		createFile,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 
-		if _, err := helpers.DeleteObject(
+		_, err = helpers.DeleteObject(
 			ctx,
 			s.s3Client,
 			key,
-		); err != nil {
+		)
+		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to create file and delete object")
 		}
+
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to create file")
 	}
 
@@ -210,6 +232,11 @@ func (s *fileService) UploadFiles(
 			fileDataDTO.ContentType,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to upload files to bucket")
 		}
@@ -220,6 +247,11 @@ func (s *fileService) UploadFiles(
 			key,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to presign get file object")
 		}
@@ -238,16 +270,28 @@ func (s *fileService) UploadFiles(
 		createFiles,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 
-		if _, err := helpers.DeleteObjects(
+		_, err = helpers.DeleteObjects(
 			ctx,
 			s.s3Client,
 			keys,
-		); err != nil {
+		)
+		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to create files and delete object")
 		}
+
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to create files")
 	}
 
@@ -272,12 +316,17 @@ func (s *fileService) DeleteFile(ctx context.Context, deleteFileDTO *DeleteFileD
 		filePath,
 		deleteFileDTO.FileType,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return errs.NewInternalServerErrorWithMessage("Failed to find file")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return err
+		}
 
-	if helpers.IsErrRecordNotFound(err) {
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return errs.NewInternalServerErrorWithMessage("Failed to find file")
+		}
+
 		logs.Warn(err)
 		return errs.NewNotFoundErrorWithMessage(fmt.Sprintf("File %s is not found", deleteFileDTO.FileURL))
 	}
@@ -288,6 +337,11 @@ func (s *fileService) DeleteFile(ctx context.Context, deleteFileDTO *DeleteFileD
 		file.Filename,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return err
+		}
+
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to delete file object")
 	}
@@ -300,6 +354,11 @@ func (s *fileService) DeleteFile(ctx context.Context, deleteFileDTO *DeleteFileD
 		file.FileType,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return err
+		}
+
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to delete file")
 	}
@@ -313,9 +372,16 @@ func (s *fileService) PresignGetFile(ctx context.Context, contentID uuid.UUID) (
 		s.db,
 		contentID,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return "", errs.NewInternalServerErrorWithMessage("Failed to find file")
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return "", err
+		}
+
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return "", errs.NewInternalServerErrorWithMessage("Failed to find file")
+		}
 	}
 
 	if file != nil {
@@ -325,6 +391,11 @@ func (s *fileService) PresignGetFile(ctx context.Context, contentID uuid.UUID) (
 			file.Filename,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return "", err
+			}
+
 			logs.Error(err)
 			return "", errs.NewInternalServerErrorWithMessage("Failed to presign get file object")
 		}
@@ -342,6 +413,11 @@ func (s *fileService) PresignGetFiles(ctx context.Context, contentID uuid.UUID) 
 		contentID,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to find files")
 	}
@@ -355,6 +431,11 @@ func (s *fileService) PresignGetFiles(ctx context.Context, contentID uuid.UUID) 
 				file.Filename,
 			)
 			if err != nil {
+				if helpers.IsErrContextCanceled(err) {
+					logs.Warn(err)
+					return nil, err
+				}
+
 				logs.Error(err)
 				return nil, errs.NewInternalServerErrorWithMessage("Failed to presign get file object")
 			}

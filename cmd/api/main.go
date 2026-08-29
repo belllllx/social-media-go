@@ -108,6 +108,7 @@ func main() {
 	)
 	userService := user.NewUserService(
 		app.DB,
+		app.RedisClient,
 		app.S3Client,
 		app.PresignClient,
 		userRepositoryDB,

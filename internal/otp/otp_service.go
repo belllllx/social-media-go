@@ -40,21 +40,33 @@ func (s *otpService) Verify(
 		db,
 		email,
 	)
-	if err != nil && !helpers.IsErrRecordNotFound(err) {
-		logs.Error(err)
-		return errs.NewInternalServerErrorWithMessage("Failed to verify otp")
-	}
+	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return err
+		}
 
-	// กรณี otp หมดอายุ
-	if helpers.IsErrRecordNotFound(err) {
-		if err := s.otpRepository.Delete(
+		if !helpers.IsErrRecordNotFound(err) {
+			logs.Error(err)
+			return errs.NewInternalServerErrorWithMessage("Failed to verify otp")
+		}
+
+		// กรณี otp หมดอายุ
+		err = s.otpRepository.Delete(
 			ctx,
 			db,
 			email,
-		); err != nil {
+		)
+		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return err
+			}
+
 			logs.Error(err)
 			return errs.NewInternalServerErrorWithMessage("Failed to delete expired otp")
 		}
+
 		return errs.NewBadRequestErrorWithMessage("OTP has expired")
 	}
 
@@ -70,8 +82,14 @@ func (s *otpService) Verify(
 func (s *otpService) DeleteWithExpired(ctx context.Context, db *gorm.DB) error {
 	err := s.otpRepository.DeleteByExpired(ctx, db)
 	if err != nil {
+		if helpers.IsErrContextDeadlineExceeded(err) {
+			logs.Warn(err)
+			return errs.NewRequestTimeoutError()
+		}
+
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to delete otp has expired")
 	}
+
 	return nil
 }

@@ -32,6 +32,10 @@ func RegisterEvents(
 			userID,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				return
+			}
+
 			err = socket.Emit("error", err.Error())
 			if err != nil {
 				logs.Error(err)

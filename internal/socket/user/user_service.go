@@ -14,7 +14,7 @@ import (
 )
 
 type activeUser struct {
-	SocketID   string    `json:"socketId"`
+	SocketID   string    `json:"-"`
 	ID         uuid.UUID `json:"id"`
 	Fullname   string    `json:"fullname"`
 	Email      string    `json:"email"`
@@ -38,6 +38,7 @@ type UserSocketService interface {
 		socketID,
 		userID string,
 	) ([]activeUser, error)
+	Disconnected(ctx context.Context, socketID string) ([]activeUser, error)
 }
 
 type userSocketService struct {
@@ -88,12 +89,17 @@ func (s *userSocketService) Connected(
 			s.db,
 			*userIDParse,
 		)
-		if err != nil && !helpers.IsErrRecordNotFound(err) {
-			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find user by id")
-		}
+		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
 
-		if helpers.IsErrRecordNotFound(err) {
+			if !helpers.IsErrRecordNotFound(err) {
+				logs.Error(err)
+				return nil, errs.NewInternalServerErrorWithMessage("Failed to find user by id")
+			}
+
 			logs.Warn(err)
 			return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("User by id %v is not found", *userIDParse))
 		}
@@ -104,6 +110,11 @@ func (s *userSocketService) Connected(
 			userByID,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, err
 		}
@@ -119,4 +130,14 @@ func (s *userSocketService) Connected(
 	}
 
 	return activeUsers, nil
+}
+
+func (s *userSocketService) Disconnected(ctx context.Context, socketID string) ([]activeUser, error) {
+	err := ctx.Err()
+	if err != nil {
+		logs.Warn(err)
+		return nil, err
+	}
+
+	return nil, nil
 }

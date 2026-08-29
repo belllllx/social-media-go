@@ -93,6 +93,11 @@ func (s *notificationService) CreateNotification(
 		createNotificationDTO,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return err
+		}
+
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to create notification")
 	}
@@ -111,6 +116,11 @@ func (s *notificationService) CreateNotifications(
 		createNotificationsDTO,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return err
+		}
+
 		logs.Error(err)
 		return errs.NewInternalServerErrorWithMessage("Failed to create notificaions")
 	}
@@ -162,6 +172,11 @@ func (s *notificationService) FindsWithReceiverIDCursorPagination(
 			limitInt,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notifications by receiver id cursor pagination with sender relation")
 		}
@@ -171,12 +186,17 @@ func (s *notificationService) FindsWithReceiverIDCursorPagination(
 			s.db,
 			*cursorID,
 		)
-		if err != nil && !helpers.IsErrRecordNotFound(err) {
-			logs.Error(err)
-			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification cursor by notification id")
-		}
+		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
 
-		if helpers.IsErrRecordNotFound(err) {
+			if !helpers.IsErrRecordNotFound(err) {
+				logs.Error(err)
+				return nil, errs.NewInternalServerErrorWithMessage("Failed to find notification cursor by notification id")
+			}
+
 			logs.Warn(err)
 			return nil, errs.NewNotFoundErrorWithMessage(fmt.Sprintf("Cursor by notification id %v is not found", *cursorID))
 		}
@@ -189,6 +209,11 @@ func (s *notificationService) FindsWithReceiverIDCursorPagination(
 			limitInt,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, errs.NewInternalServerErrorWithMessage("Failed to find notifications by receiver id cursor pagination with sender relation")
 		}
@@ -201,6 +226,11 @@ func (s *notificationService) FindsWithReceiverIDCursorPagination(
 			&notification.Sender,
 		)
 		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				logs.Warn(err)
+				return nil, err
+			}
+
 			logs.Error(err)
 			return nil, err
 		}
@@ -262,6 +292,11 @@ func (s *notificationService) UpdateIsRead(
 		notificationsID,
 	)
 	if err != nil {
+		if helpers.IsErrContextCanceled(err) {
+			logs.Warn(err)
+			return nil, err
+		}
+
 		logs.Error(err)
 		return nil, errs.NewInternalServerErrorWithMessage("Failed to update notifications")
 	}
