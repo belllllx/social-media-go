@@ -23,6 +23,7 @@ func RegisterEvents(
 			if err != nil {
 				logs.Error(err)
 			}
+
 			return
 		}
 
@@ -40,9 +41,34 @@ func RegisterEvents(
 			if err != nil {
 				logs.Error(err)
 			}
+
 			return
 		}
 
+		/*
+			ส่ง activeUsers ให้ทุก client
+			รวม client ที่เพิ่ง connected ด้วย
+		*/
 		io.Emit("activeUsers", activeUsers)
+	})
+
+	socket.On("disconnect", func(args ...any) {
+		activeUsers, err := userSocketService.Disconnected(
+			ctx,
+			string(socket.Id()),
+		)
+		if err != nil {
+			if helpers.IsErrContextCanceled(err) {
+				return
+			}
+
+			logs.Error(err)
+			return
+		}
+
+		/*
+			ส่ง state ล่าสุดให้ทุก client ยกเว้นตัวเอง
+		*/
+		socket.Broadcast().Emit("activeUsers", activeUsers)
 	})
 }
