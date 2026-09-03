@@ -4,14 +4,15 @@ import (
 	"fmt"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 var logger *zap.Logger
 
 func init() {
 	config := zap.NewDevelopmentConfig()
-	// config.EncoderConfig.TimeKey = "timestamp"
-	// config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	config.EncoderConfig.TimeKey = "timestamp"
+	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 
 	var err error
 	logger, err = config.Build(zap.AddCallerSkip(1))
