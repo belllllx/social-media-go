@@ -10,7 +10,7 @@ import (
 var logger *zap.Logger
 
 func init() {
-	config := zap.NewDevelopmentConfig()
+	config := zap.NewProductionConfig()
 	config.EncoderConfig.TimeKey = "timestamp"
 	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 

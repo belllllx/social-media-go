@@ -38,6 +38,8 @@ func NewApp() *App {
 	presignClient := s3.NewPresignClient(s3Client)
 
 	router := gin.New()
+	gin.SetMode(gin.ReleaseMode)
+
 	cron := cron.New()
 
 	return &App{
